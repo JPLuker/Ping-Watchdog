@@ -761,7 +761,7 @@ public sealed class MainForm : Form
         header.Controls.Add(titleBar, 0, 0);
         header.Controls.Add(new Label
         {
-            Text = "Multi-site ICMP monitoring • outage alerts • live command trace",
+            Text = "Multi-site ICMP monitoring • outage alerts • live command trace • Made by Joseph Luker",
             AutoSize = true,
             Font = new Font("Segoe UI", 9),
             Padding = new Padding(1, 0, 0, 0)
