@@ -15,7 +15,7 @@ internal static class Program
         {
             ApplicationConfiguration.Initialize();
             try { MainForm.RunSelfTests(); Environment.ExitCode = 0; }
-            catch { Environment.ExitCode = 1; }
+            catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
             return;
         }
 
@@ -157,9 +157,7 @@ public sealed class MainForm : Form
         Dock = DockStyle.Fill,
         Orientation = Orientation.Horizontal,
         Panel2Collapsed = true,
-        SplitterWidth = 6,
-        Panel1MinSize = 140,
-        Panel2MinSize = 120
+        SplitterWidth = 6
     };
 
     private readonly StatusStrip _statusStrip = new() { SizingGrip = false };
