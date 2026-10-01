@@ -515,7 +515,8 @@ public sealed class MainForm : Form
         form.ProcessResult(host, true, 1);
         Check(host.State == HostState.Online && !host.AlertedForCurrentOutage);
 
-        form._sites[0].Hosts.Add("127.0.0.1");
+        form._ipBox.Text = "127.0.0.1";
+        form.PersistCurrentEditor();
         form.SetNicknameValue("Test Site", "127.0.0.1", "Loopback");
         Check(form.GetNickname("Test Site", "127.0.0.1") == "Loopback");
 
