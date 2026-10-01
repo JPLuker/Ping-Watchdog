@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
+using Microsoft.Windows.AppNotifications;
+using Microsoft.Windows.AppNotifications.Builder;
 
 namespace PingWatchdog;
 
@@ -8,8 +10,38 @@ internal static class Program
     [STAThread]
     static void Main()
     {
+        var notificationsRegistered = false;
+
+        try
+        {
+            AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
+            AppNotificationManager.Default.Register();
+            notificationsRegistered = true;
+        }
+        catch
+        {
+            AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
+        }
+
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        Application.Run(new MainForm(notificationsRegistered));
+
+        if (notificationsRegistered)
+        {
+            AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
+            AppNotificationManager.Default.Unregister();
+        }
+    }
+
+    private static void OnNotificationInvoked(
+        AppNotificationManager sender,
+        AppNotificationActivatedEventArgs args)
+    {
+        var form = Application.OpenForms.Count > 0
+            ? Application.OpenForms[0] as MainForm
+            : null;
+
+        form?.BeginInvoke(form.RestoreFromTray);
     }
 }
 
@@ -95,13 +127,24 @@ public sealed class MainForm : Form
 
     private readonly StatusStrip _statusStrip = new();
     private readonly ToolStripStatusLabel _statusLabel = new("Idle");
-
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 500 };
-    private CancellationTokenSource? _cts;
     private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
 
-    public MainForm()
+    private readonly NotifyIcon _trayIcon;
+    private readonly ToolStripMenuItem _trayStopItem;
+
+    private CancellationTokenSource? _cts;
+    private bool _appNotificationsAvailable;
+
+    private int _monitorIntervalSeconds = 2;
+    private int _pingTimeoutMs = 1000;
+    private int _failureThresholdValue = 3;
+    private int _recoveryThresholdValue = 2;
+
+    public MainForm(bool appNotificationsAvailable)
     {
+        _appNotificationsAvailable = appNotificationsAvailable;
+
         Text = "Ping Watchdog";
         Width = 980;
         Height = 680;
@@ -110,14 +153,68 @@ public sealed class MainForm : Form
 
         BuildGrid();
         BuildLayout();
-
         _statusStrip.Items.Add(_statusLabel);
+
+        var trayMenu = new ContextMenuStrip();
+        var openItem = new ToolStripMenuItem("Open Ping Watchdog");
+        _trayStopItem = new ToolStripMenuItem("Stop Monitoring") { Enabled = false };
+        var exitItem = new ToolStripMenuItem("Exit");
+
+        openItem.Click += (_, _) => RestoreFromTray();
+        _trayStopItem.Click += (_, _) => StopMonitoring();
+        exitItem.Click += (_, _) => Close();
+
+        trayMenu.Items.Add(openItem);
+        trayMenu.Items.Add(_trayStopItem);
+        trayMenu.Items.Add(new ToolStripSeparator());
+        trayMenu.Items.Add(exitItem);
+
+        _trayIcon = new NotifyIcon
+        {
+            Icon = SystemIcons.Application,
+            Text = "Ping Watchdog",
+            Visible = true,
+            ContextMenuStrip = trayMenu
+        };
+
+        _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
 
         _startButton.Click += (_, _) => StartMonitoring();
         _stopButton.Click += (_, _) => StopMonitoring();
         _uiTimer.Tick += (_, _) => RefreshGrid();
 
-        FormClosing += (_, _) => StopMonitoring();
+        Resize += (_, _) =>
+        {
+            if (WindowState == FormWindowState.Minimized)
+            {
+                Hide();
+                _trayIcon.ShowBalloonTip(
+                    2500,
+                    "Ping Watchdog",
+                    _cts is null ? "Ping Watchdog is minimized." : "Monitoring continues in the background.",
+                    ToolTipIcon.Info);
+            }
+        };
+
+        FormClosing += (_, _) =>
+        {
+            StopMonitoring();
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+        };
+    }
+
+    public void RestoreFromTray()
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(RestoreFromTray);
+            return;
+        }
+
+        Show();
+        WindowState = FormWindowState.Normal;
+        Activate();
     }
 
     private void BuildGrid()
@@ -234,10 +331,18 @@ public sealed class MainForm : Form
 
         if (targets.Length == 0)
         {
-            MessageBox.Show("Enter at least one IP address or hostname.", "Ping Watchdog",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                "Enter at least one IP address or hostname.",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
             return;
         }
+
+        _monitorIntervalSeconds = (int)_intervalSeconds.Value;
+        _pingTimeoutMs = (int)_timeoutMs.Value;
+        _failureThresholdValue = (int)_failureThreshold.Value;
+        _recoveryThresholdValue = (int)_recoveryThreshold.Value;
 
         _hosts.Clear();
         foreach (var target in targets)
@@ -250,6 +355,7 @@ public sealed class MainForm : Form
         _timeoutMs.Enabled = false;
         _startButton.Enabled = false;
         _stopButton.Enabled = true;
+        _trayStopItem.Enabled = true;
 
         _cts = new CancellationTokenSource();
         _uiTimer.Start();
@@ -267,14 +373,18 @@ public sealed class MainForm : Form
 
         _uiTimer.Stop();
 
-        _ipBox.Enabled = true;
-        _intervalSeconds.Enabled = true;
-        _failureThreshold.Enabled = true;
-        _recoveryThreshold.Enabled = true;
-        _timeoutMs.Enabled = true;
-        _startButton.Enabled = true;
-        _stopButton.Enabled = false;
-        _statusLabel.Text = "Stopped";
+        if (!IsDisposed)
+        {
+            _ipBox.Enabled = true;
+            _intervalSeconds.Enabled = true;
+            _failureThreshold.Enabled = true;
+            _recoveryThreshold.Enabled = true;
+            _timeoutMs.Enabled = true;
+            _startButton.Enabled = true;
+            _stopButton.Enabled = false;
+            _trayStopItem.Enabled = false;
+            _statusLabel.Text = "Stopped";
+        }
     }
 
     private async Task MonitorHostAsync(HostMonitor host, CancellationToken token)
@@ -283,12 +393,12 @@ public sealed class MainForm : Form
 
         while (!token.IsCancellationRequested)
         {
-            bool success = false;
+            bool success;
             long? latency = null;
 
             try
             {
-                var reply = await ping.SendPingAsync(host.Address, (int)_timeoutMs.Value);
+                var reply = await ping.SendPingAsync(host.Address, _pingTimeoutMs);
                 success = reply.Status == IPStatus.Success;
 
                 if (success)
@@ -303,7 +413,7 @@ public sealed class MainForm : Form
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds((double)_intervalSeconds.Value), token);
+                await Task.Delay(TimeSpan.FromSeconds(_monitorIntervalSeconds), token);
             }
             catch (OperationCanceledException)
             {
@@ -314,104 +424,140 @@ public sealed class MainForm : Form
 
     private void ProcessResult(HostMonitor host, bool success, long? latency)
     {
-        if (success)
-        {
-            host.LastRoundTripMs = latency;
-            host.LastReply = DateTime.Now;
-            host.ConsecutiveFailures = 0;
-            host.ConsecutiveSuccesses++;
+        string? notificationTitle = null;
+        string? notificationBody = null;
+        ToolTipIcon fallbackIcon = ToolTipIcon.None;
 
-            if (host.State == HostState.Offline)
+        lock (host)
+        {
+            if (success)
             {
-                if (host.ConsecutiveSuccesses >= (int)_recoveryThreshold.Value)
+                host.LastRoundTripMs = latency;
+                host.LastReply = DateTime.Now;
+                host.ConsecutiveFailures = 0;
+                host.ConsecutiveSuccesses++;
+
+                if (host.State == HostState.Offline)
                 {
-                    var outageStarted = host.OutageStarted;
+                    if (host.ConsecutiveSuccesses >= _recoveryThresholdValue)
+                    {
+                        var outageStarted = host.OutageStarted;
+                        var duration = outageStarted.HasValue
+                            ? DateTime.Now - outageStarted.Value
+                            : (TimeSpan?)null;
+
+                        host.State = HostState.Online;
+                        host.OutageStarted = null;
+                        host.AlertedForCurrentOutage = false;
+
+                        notificationTitle = "Host Recovered";
+                        notificationBody = duration.HasValue
+                            ? $"{host.Address} is responding again. Outage duration: {FormatDuration(duration.Value)}."
+                            : $"{host.Address} is responding again.";
+                        fallbackIcon = ToolTipIcon.Info;
+                    }
+                }
+                else
+                {
                     host.State = HostState.Online;
-                    host.OutageStarted = null;
-                    host.AlertedForCurrentOutage = false;
-                    ShowRecoveryNotification(host.Address, outageStarted);
                 }
             }
             else
             {
-                host.State = HostState.Online;
-            }
+                host.LastRoundTripMs = null;
+                host.ConsecutiveSuccesses = 0;
+                host.ConsecutiveFailures++;
 
-            return;
-        }
-
-        host.LastRoundTripMs = null;
-        host.ConsecutiveSuccesses = 0;
-        host.ConsecutiveFailures++;
-
-        if (host.ConsecutiveFailures >= (int)_failureThreshold.Value)
-        {
-            if (host.State != HostState.Offline)
-            {
-                host.State = HostState.Offline;
-                host.OutageStarted ??= DateTime.Now;
-
-                if (!host.AlertedForCurrentOutage)
+                if (host.ConsecutiveFailures >= _failureThresholdValue)
                 {
-                    host.AlertedForCurrentOutage = true;
-                    ShowOutageNotification(host.Address, host.ConsecutiveFailures);
+                    if (host.State != HostState.Offline)
+                    {
+                        host.State = HostState.Offline;
+                        host.OutageStarted ??= DateTime.Now;
+
+                        if (!host.AlertedForCurrentOutage)
+                        {
+                            host.AlertedForCurrentOutage = true;
+                            notificationTitle = "Host Down";
+                            notificationBody =
+                                $"{host.Address} failed {host.ConsecutiveFailures} consecutive ping attempts and is now OFFLINE.";
+                            fallbackIcon = ToolTipIcon.Warning;
+                        }
+                    }
+                }
+                else
+                {
+                    host.State = HostState.Suspect;
                 }
             }
         }
-        else
+
+        if (notificationTitle is not null && notificationBody is not null)
         {
-            host.State = HostState.Suspect;
+            BeginInvoke(() => ShowNotification(notificationTitle, notificationBody, fallbackIcon));
         }
     }
 
-    private void ShowOutageNotification(string host, int failures)
+    private void ShowNotification(string title, string body, ToolTipIcon fallbackIcon)
     {
-        BeginInvoke(() =>
+        if (_appNotificationsAvailable)
         {
-            System.Media.SystemSounds.Exclamation.Play();
-            MessageBox.Show(
-                $"{host} has failed {failures} consecutive ping attempts and is being treated as DOWN.",
-                "Ping Watchdog - Host Down",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        });
+            try
+            {
+                var notification = new AppNotificationBuilder()
+                    .AddArgument("action", "open")
+                    .AddText(title)
+                    .AddText(body)
+                    .BuildNotification();
+
+                AppNotificationManager.Default.Show(notification);
+                return;
+            }
+            catch
+            {
+                _appNotificationsAvailable = false;
+            }
+        }
+
+        _trayIcon.ShowBalloonTip(5000, title, body, fallbackIcon);
     }
 
-    private void ShowRecoveryNotification(string host, DateTime? outageStarted)
+    private static string FormatDuration(TimeSpan duration)
     {
-        BeginInvoke(() =>
-        {
-            var duration = outageStarted.HasValue
-                ? $"\nOutage duration: {DateTime.Now - outageStarted.Value:g}"
-                : string.Empty;
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m {duration.Seconds}s";
 
-            MessageBox.Show(
-                $"{host} is responding again.{duration}",
-                "Ping Watchdog - Recovered",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-        });
+        if (duration.TotalMinutes >= 1)
+            return $"{duration.Minutes}m {duration.Seconds}s";
+
+        return $"{Math.Max(1, (int)duration.TotalSeconds)}s";
     }
 
     private void RefreshGrid()
     {
         var rows = _hosts.Values
-            .OrderBy(h => h.Address, StringComparer.OrdinalIgnoreCase)
-            .Select(h => new
+            .Select(h =>
             {
-                Host = h.Address,
-                Status = h.State switch
+                lock (h)
                 {
-                    HostState.Online => "ONLINE",
-                    HostState.Suspect => "SUSPECT",
-                    HostState.Offline => "OFFLINE",
-                    _ => "UNKNOWN"
-                },
-                Latency = h.LastRoundTripMs.HasValue ? $"{h.LastRoundTripMs} ms" : "—",
-                Failures = h.ConsecutiveFailures,
-                LastReply = h.LastReply?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—",
-                OutageSince = h.OutageStarted?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—"
+                    return new
+                    {
+                        Host = h.Address,
+                        Status = h.State switch
+                        {
+                            HostState.Online => "ONLINE",
+                            HostState.Suspect => "SUSPECT",
+                            HostState.Offline => "OFFLINE",
+                            _ => "UNKNOWN"
+                        },
+                        Latency = h.LastRoundTripMs.HasValue ? $"{h.LastRoundTripMs} ms" : "—",
+                        Failures = h.ConsecutiveFailures,
+                        LastReply = h.LastReply?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—",
+                        OutageSince = h.OutageStarted?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—"
+                    };
+                }
             })
+            .OrderBy(h => h.Host, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         _grid.DataSource = rows;
@@ -429,9 +575,9 @@ public sealed class MainForm : Form
             };
         }
 
-        int online = _hosts.Values.Count(h => h.State == HostState.Online);
-        int suspect = _hosts.Values.Count(h => h.State == HostState.Suspect);
-        int offline = _hosts.Values.Count(h => h.State == HostState.Offline);
+        int online = rows.Count(h => h.Status == "ONLINE");
+        int suspect = rows.Count(h => h.Status == "SUSPECT");
+        int offline = rows.Count(h => h.Status == "OFFLINE");
         _statusLabel.Text = $"Online: {online}   Suspect: {suspect}   Offline: {offline}";
     }
 }
