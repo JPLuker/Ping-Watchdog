@@ -1036,7 +1036,7 @@ public sealed class MainForm : Form
             File.WriteAllText(
                 _autoConfigPath,
                 JsonSerializer.Serialize(
-                    BuildConfig(),
+                    BuildConfig(captureEditor: false),
                     new JsonSerializerOptions { WriteIndented = true }));
         }
         catch
@@ -1285,9 +1285,10 @@ public sealed class MainForm : Form
         RebuildCommandView();
     }
 
-    private WatchdogConfig BuildConfig()
+    private WatchdogConfig BuildConfig(bool captureEditor = true)
     {
-        PersistCurrentEditor();
+        if (captureEditor)
+            PersistCurrentEditor();
 
         return new WatchdogConfig
         {
