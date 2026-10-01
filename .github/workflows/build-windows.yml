@@ -7,6 +7,7 @@ on:
     paths:
       - "**/*.cs"
       - "**/*.csproj"
+      - "Assets/**"
       - ".github/workflows/build-windows.yml"
 
 permissions:
@@ -43,5 +44,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "v1.0.1-build.${{ github.run_number }}"
-          gh release create $tag publish/PingWatchdog.exe --title "Ping Watchdog $tag" --notes "Standalone Windows x64 app. One alert after consecutive failed pings, plus recovery notification."
+          $tag = "v1.1.0-build.${{ github.run_number }}"
+          gh release create $tag publish/PingWatchdog.exe --title "Ping Watchdog $tag" --notes "Standalone Windows x64 app with dark mode, branded icon, and optional live CMD ping trace. Outage alerts still require consecutive failures."
