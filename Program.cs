@@ -8,8 +8,16 @@ namespace PingWatchdog;
 internal static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args.Contains("--self-test"))
+        {
+            ApplicationConfiguration.Initialize();
+            try { MainForm.RunSelfTests(); Environment.ExitCode = 0; }
+            catch { Environment.ExitCode = 1; }
+            return;
+        }
+
         var notificationsRegistered = false;
 
         try
@@ -88,7 +96,7 @@ public sealed class MainForm : Form
 
     private readonly NumericUpDown _failureThreshold = new()
     {
-        Minimum = 1,
+        Minimum = 2,
         Maximum = 20,
         Value = 3,
         Width = 70
@@ -204,6 +212,32 @@ public sealed class MainForm : Form
         };
     }
 
+    internal static void RunSelfTests()
+    {
+        using var form = new MainForm(false);
+        var host = new HostMonitor("127.0.0.1");
+        void Check(bool condition) { if (!condition) throw new InvalidOperationException("Alert state test failed."); }
+        form.ProcessResult(host, false, null);
+        Check(host.State == HostState.Suspect && !host.AlertedForCurrentOutage);
+        form.ProcessResult(host, true, 1);
+        Check(host.State == HostState.Online && host.ConsecutiveFailures == 0);
+        for (int i = 0; i < 3; i++) form.ProcessResult(host, false, null);
+        Check(host.State == HostState.Offline && host.AlertedForCurrentOutage);
+        var outage = host.OutageStarted;
+        form.ProcessResult(host, true, 1);
+        form.ProcessResult(host, false, null);
+        Check(host.State == HostState.Offline && host.OutageStarted == outage);
+        form.ProcessResult(host, true, 1);
+        form.ProcessResult(host, true, 1);
+        Check(host.State == HostState.Online && !host.AlertedForCurrentOutage);
+        for (int i = 0; i < 3; i++) form.ProcessResult(host, false, null);
+        Check(host.State == HostState.Offline && host.AlertedForCurrentOutage);
+        using var ping = new Ping();
+        Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
+        form._trayIcon.Visible = false;
+        form._trayIcon.Dispose();
+    }
+
     public void RestoreFromTray()
     {
         if (InvokeRequired)
@@ -274,7 +308,7 @@ public sealed class MainForm : Form
         };
 
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
 
@@ -290,7 +324,8 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
+            AutoScroll = true,
             Padding = new Padding(0, 8, 0, 0)
         };
 
@@ -323,7 +358,7 @@ public sealed class MainForm : Form
 
     private void StartMonitoring()
     {
-        var targets = _ipBox.Lines
+        var targets = _ipBox.Text.Split(new[] { '\r', '\n', ',', ';', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -409,6 +444,7 @@ public sealed class MainForm : Form
                 success = false;
             }
 
+            if (token.IsCancellationRequested || IsDisposed || Disposing) break;
             ProcessResult(host, success, latency);
 
             try
@@ -487,14 +523,17 @@ public sealed class MainForm : Form
                 }
                 else
                 {
-                    host.State = HostState.Suspect;
+                    if (host.State != HostState.Offline)
+                        host.State = HostState.Suspect;
                 }
             }
         }
 
         if (notificationTitle is not null && notificationBody is not null)
         {
-            BeginInvoke(() => ShowNotification(notificationTitle, notificationBody, fallbackIcon));
+            // Async ping continuations resume on the UI thread; deliver immediately so Stop cannot leave stale queued alerts.
+            if (!IsDisposed && !Disposing)
+                ShowNotification(notificationTitle, notificationBody, fallbackIcon);
         }
     }
 

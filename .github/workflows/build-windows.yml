@@ -9,6 +9,9 @@ on:
       - "**/*.csproj"
       - ".github/workflows/build-windows.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -22,6 +25,9 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Test alert behavior and localhost ping
+        run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
+
       - name: Publish self-contained EXE
         run: dotnet publish PingWatchdog.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o publish
 
@@ -31,3 +37,11 @@ jobs:
           name: PingWatchdog-win-x64
           path: publish/PingWatchdog.exe
           if-no-files-found: error
+
+      - name: Publish release download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "v1.0.1-build.${{ github.run_number }}"
+          gh release create $tag publish/PingWatchdog.exe --title "Ping Watchdog $tag" --notes "Standalone Windows x64 app. One alert after consecutive failed pings, plus recovery notification."

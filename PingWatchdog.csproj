@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PingWatchdog</AssemblyName>
     <RootNamespace>PingWatchdog</RootNamespace>
+    <Version>1.0.1</Version>
 
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>

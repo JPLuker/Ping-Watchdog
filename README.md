@@ -42,3 +42,6 @@ GitHub Actions builds a self-contained 64-bit Windows executable.
 Open the repository **Actions** tab, run **Build Windows EXE**, then download the **PingWatchdog-win-x64** artifact.
 
 The executable bundles the .NET runtime and Windows App SDK dependencies, so the target Windows PC does not need a separate .NET installation.
+
+
+Download the latest standalone EXE from [Releases](https://github.com/JPLuker/Ping-Watchdog/releases/latest). IPs can also be separated by commas, spaces, or semicolons. The executable is unsigned. ICMP filtering can make an otherwise working device appear offline. Closing the application stops monitoring; minimizing keeps it running.
