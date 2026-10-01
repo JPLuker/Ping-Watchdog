@@ -297,6 +297,7 @@ public sealed class MainForm : Form
     private readonly List<SiteDefinition> _sites = new();
     private readonly List<CommandLogEntry> _commandEntries = new();
     private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _hostTokens = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ListBox _siteList = new()
     {
@@ -311,7 +312,7 @@ public sealed class MainForm : Form
     private readonly Button _deleteSiteButton = new() { Text = "Delete Site", AutoSize = true };
     private readonly Label _autoSaveLabel = new()
     {
-        Text = "Hosts auto-save",
+        Text = "Auto-save • live apply",
         AutoSize = true,
         Padding = new Padding(0, 7, 0, 0)
     };
@@ -501,11 +502,13 @@ public sealed class MainForm : Form
 
         _ipBox.Leave += (_, _) =>
         {
-            if (_cts is null && _selectedSiteName is not null)
+            if (_selectedSiteName is not null)
             {
                 PersistCurrentEditor();
                 SaveSites();
+                ReconcileMonitoringWithConfig();
                 RefreshSiteList(_selectedSiteName);
+                RefreshGrid();
             }
         };
 
@@ -532,12 +535,8 @@ public sealed class MainForm : Form
 
         FormClosing += (_, _) =>
         {
-            if (_cts is null)
-            {
-                PersistCurrentEditor();
-                SaveSites();
-            }
-
+            PersistCurrentEditor();
+            SaveSites();
             StopMonitoring();
         };
 
@@ -629,6 +628,7 @@ public sealed class MainForm : Form
         Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
         Check(configRoundTrip?.PingIntervalSeconds == 2);
         Check(configRoundTrip?.FailureThreshold == 3);
+        Check(form.GetConfiguredTargets().Count == 1);
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -801,7 +801,7 @@ public sealed class MainForm : Form
         sitePanel.Controls.Add(siteButtons, 0, 2);
         sitePanel.Controls.Add(new Label
         {
-            Text = "Double-click a site to rename it. Host edits save automatically.",
+            Text = "Sites and hosts can be changed while monitoring. Changes apply automatically.",
             AutoSize = true,
             MaximumSize = new Size(205, 0),
             Padding = new Padding(2, 5, 2, 0)
@@ -1082,11 +1082,9 @@ public sealed class MainForm : Form
         if (_ignoreSiteSelection || _siteList.SelectedIndex < 0)
             return;
 
-        if (_cts is null)
-        {
-            PersistCurrentEditor();
-            SaveSites();
-        }
+        PersistCurrentEditor();
+        SaveSites();
+        ReconcileMonitoringWithConfig();
 
         _selectedSiteName = _siteList.SelectedIndex == 0
             ? null
@@ -1115,7 +1113,7 @@ public sealed class MainForm : Form
         var site = FindSite(_selectedSiteName);
 
         _siteHeaderLabel.Text = $"{_selectedSiteName.ToUpperInvariant()} • HOSTS";
-        _ipBox.ReadOnly = _cts is not null;
+        _ipBox.ReadOnly = false;
         _ipBox.Text = site is null
             ? string.Empty
             : string.Join(Environment.NewLine, site.Hosts);
@@ -1123,7 +1121,7 @@ public sealed class MainForm : Form
 
     private void PersistCurrentEditor()
     {
-        if (_selectedSiteName is null || _cts is not null)
+        if (_selectedSiteName is null)
             return;
 
         var site = FindSite(_selectedSiteName);
@@ -1289,8 +1287,7 @@ public sealed class MainForm : Form
 
     private WatchdogConfig BuildConfig()
     {
-        if (_cts is null)
-            PersistCurrentEditor();
+        PersistCurrentEditor();
 
         return new WatchdogConfig
         {
@@ -1458,9 +1455,6 @@ public sealed class MainForm : Form
 
     private void AddSite()
     {
-        if (_cts is not null)
-            return;
-
         using var dialog = new SiteNameDialog(
             "Add Site / Group",
             "Add Site");
@@ -1479,6 +1473,7 @@ public sealed class MainForm : Form
         _selectedSiteName = name;
 
         SaveSites();
+        ReconcileMonitoringWithConfig();
         RefreshSiteList(name);
         LoadHostEditor();
         RefreshGrid();
@@ -1487,7 +1482,7 @@ public sealed class MainForm : Form
 
     private void RenameSite()
     {
-        if (_cts is not null || _selectedSiteName is null)
+        if (_selectedSiteName is null)
             return;
 
         var site = FindSite(_selectedSiteName);
@@ -1513,6 +1508,7 @@ public sealed class MainForm : Form
         _selectedSiteName = newName;
 
         SaveSites();
+        ReconcileMonitoringWithConfig();
         RefreshSiteList(newName);
         LoadHostEditor();
         RefreshGrid();
@@ -1522,7 +1518,7 @@ public sealed class MainForm : Form
 
     private void DeleteSite()
     {
-        if (_cts is not null || _selectedSiteName is null)
+        if (_selectedSiteName is null)
             return;
 
         var site = FindSite(_selectedSiteName);
@@ -1546,6 +1542,7 @@ public sealed class MainForm : Form
         _selectedSiteName = _sites[0].Name;
 
         SaveSites();
+        ReconcileMonitoringWithConfig();
         RefreshSiteList(_selectedSiteName);
         LoadHostEditor();
         RefreshGrid();
@@ -1595,17 +1592,17 @@ public sealed class MainForm : Form
 
     private void UpdateActionState()
     {
-        bool editing = _cts is null;
+        bool monitoring = _cts is not null;
         bool specificSite = _selectedSiteName is not null;
 
-        _addSiteButton.Enabled = editing;
-        _renameSiteButton.Enabled = editing && specificSite;
-        _deleteSiteButton.Enabled = editing && specificSite;
-        _loadConfigButton.Enabled = editing;
+        _addSiteButton.Enabled = true;
+        _renameSiteButton.Enabled = specificSite;
+        _deleteSiteButton.Enabled = specificSite;
+        _loadConfigButton.Enabled = !monitoring;
         _saveConfigButton.Enabled = true;
 
-        _ipBox.Enabled = editing;
-        _ipBox.ReadOnly = !editing || !specificSite;
+        _ipBox.Enabled = true;
+        _ipBox.ReadOnly = !specificSite;
     }
 
     private void StartMonitoring()
@@ -1614,12 +1611,9 @@ public sealed class MainForm : Form
         SaveSites();
         RefreshSiteList(_selectedSiteName);
 
-        var targets = _sites
-            .SelectMany(site =>
-                site.Hosts.Select(host => new { Site = site.Name, Address = host }))
-            .ToArray();
+        var targets = GetConfiguredTargets();
 
-        if (targets.Length == 0)
+        if (targets.Count == 0)
         {
             MessageBox.Show(
                 "Add at least one IP address or hostname to a site.",
@@ -1635,13 +1629,10 @@ public sealed class MainForm : Form
         _recoveryThresholdValue = (int)_recoveryThreshold.Value;
 
         _hosts.Clear();
+        foreach (var token in _hostTokens.Values)
+            token.Dispose();
+        _hostTokens.Clear();
         ClearCommandLog();
-
-        foreach (var target in targets)
-        {
-            string key = BuildHostKey(target.Site, target.Address);
-            _hosts[key] = new HostMonitor(target.Site, target.Address);
-        }
 
         _intervalSeconds.Enabled = false;
         _failureThreshold.Enabled = false;
@@ -1652,19 +1643,33 @@ public sealed class MainForm : Form
         _trayStopItem.Enabled = true;
 
         _cts = new CancellationTokenSource();
+
+        foreach (var target in targets)
+        {
+            string key = BuildHostKey(target.Site, target.Address);
+            var host = new HostMonitor(target.Site, target.Address);
+            _hosts[key] = host;
+            StartHostWorker(key, host);
+        }
+
         UpdateActionState();
         LoadHostEditor();
 
         _uiTimer.Start();
-        _statusLabel.Text = $"Monitoring {targets.Length} host(s) across {_sites.Count} site(s)...";
-
-        foreach (var host in _hosts.Values)
-            _ = MonitorHostAsync(host, _cts.Token);
+        _statusLabel.Text = $"Monitoring {targets.Count} host(s) across {_sites.Count} site(s)...";
     }
 
     private void StopMonitoring()
     {
         _cts?.Cancel();
+
+        foreach (var pair in _hostTokens.ToArray())
+        {
+            pair.Value.Cancel();
+            pair.Value.Dispose();
+        }
+
+        _hostTokens.Clear();
         _cts?.Dispose();
         _cts = null;
 
@@ -1683,6 +1688,72 @@ public sealed class MainForm : Form
             UpdateActionState();
             LoadHostEditor();
             _statusLabel.Text = "Stopped";
+        }
+    }
+
+    private List<(string Site, string Address)> GetConfiguredTargets()
+    {
+        return _sites
+            .SelectMany(site =>
+                site.Hosts.Select(host => (Site: site.Name, Address: host)))
+            .ToList();
+    }
+
+    private void ReconcileMonitoringWithConfig()
+    {
+        if (_cts is null || _cts.IsCancellationRequested)
+            return;
+
+        var desired = GetConfiguredTargets()
+            .ToDictionary(
+                target => BuildHostKey(target.Site, target.Address),
+                target => target,
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in _hosts.Keys.ToArray())
+        {
+            if (desired.ContainsKey(key))
+                continue;
+
+            StopHostWorker(key);
+            _hosts.TryRemove(key, out _);
+        }
+
+        foreach (var pair in desired)
+        {
+            if (_hosts.ContainsKey(pair.Key))
+                continue;
+
+            var host = new HostMonitor(pair.Value.Site, pair.Value.Address);
+            _hosts[pair.Key] = host;
+            StartHostWorker(pair.Key, host);
+        }
+
+        _statusLabel.Text = $"Monitoring {_hosts.Count} host(s) across {_sites.Count} site(s)...";
+    }
+
+    private void StartHostWorker(string key, HostMonitor host)
+    {
+        if (_cts is null || _cts.IsCancellationRequested)
+            return;
+
+        var workerToken = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+
+        if (!_hostTokens.TryAdd(key, workerToken))
+        {
+            workerToken.Dispose();
+            return;
+        }
+
+        _ = MonitorHostAsync(host, workerToken.Token);
+    }
+
+    private void StopHostWorker(string key)
+    {
+        if (_hostTokens.TryRemove(key, out var token))
+        {
+            token.Cancel();
+            token.Dispose();
         }
     }
 

@@ -61,5 +61,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "v1.4.0-build.${{ github.run_number }}"
-          gh release create $tag PingWatchdog-win-x64.zip --title "Ping Watchdog $tag" --notes "Portable Windows x64 ZIP with PingWatchdog.exe, a first-launch default config, automatic local autosave, popup site management, host nicknames, multi-site grouping, dark mode, and the optional live CMD trace."
+          $tag = "v1.5.0-build.${{ github.run_number }}"
+          gh release create $tag PingWatchdog-win-x64.zip --title "Ping Watchdog $tag" --notes "Portable Windows x64 ZIP with live-editable Sites/Groups, automatic per-host ping-worker reconciliation, first-launch default config, local autosave, popup site management, host nicknames, dark mode, and optional live CMD trace."

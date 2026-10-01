@@ -96,3 +96,17 @@ Version 1.3 adds reusable scan definitions and host nicknames.
 - Fresh installs seed themselves from the bundled `default.pingwatch.json` file.
 - Releases are packaged as `PingWatchdog-win-x64.zip` with the EXE, starter config, and a quick-start text file.
 - Double-clicking a site is a shortcut to rename it.
+
+
+## Version 1.5 live site management
+
+Sites and host lists can be changed while monitoring is active.
+
+- Adding a host starts a new ping worker without interrupting unchanged hosts.
+- Removing a host cancels only that host's worker.
+- Renaming a site restarts only the hosts whose site identity changed.
+- Deleting a site stops only that site's workers.
+- Adding, renaming, deleting, and editing host lists stay available while the scan is running.
+- Existing hosts keep their current monitoring state when unrelated sites or hosts change.
+
+Timing and outage-threshold controls remain locked during an active scan so one scan uses consistent monitoring rules.
