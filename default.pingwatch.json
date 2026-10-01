@@ -1,0 +1,16 @@
+{
+  "FormatVersion": 1,
+  "Sites": [
+    {
+      "Name": "Default Site",
+      "Hosts": [],
+      "Labels": {}
+    }
+  ],
+  "PingIntervalSeconds": 2,
+  "PingTimeoutMs": 1000,
+  "FailureThreshold": 3,
+  "RecoveryThreshold": 2,
+  "ShowCommandView": false,
+  "SelectedSite": "Default Site"
+}

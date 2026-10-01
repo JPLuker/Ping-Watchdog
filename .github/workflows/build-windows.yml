@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows Package
 
 on:
   workflow_dispatch:
@@ -8,6 +8,8 @@ on:
       - "**/*.cs"
       - "**/*.csproj"
       - "Assets/**"
+      - "default.pingwatch.json"
+      - "README-FIRST.txt"
       - ".github/workflows/build-windows.yml"
 
 permissions:
@@ -26,17 +28,32 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Test alert behavior and localhost ping
+      - name: Validate starter config
+        shell: pwsh
+        run: |
+          $config = Get-Content default.pingwatch.json -Raw | ConvertFrom-Json
+          if (-not $config.Sites -or $config.Sites.Count -lt 1) { throw "Starter config must contain a site." }
+
+      - name: Test alert, config, and localhost behavior
         run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
 
       - name: Publish self-contained EXE
         run: dotnet publish PingWatchdog.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o publish
 
-      - name: Upload EXE
+      - name: Build portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item publish/PingWatchdog.exe package/PingWatchdog.exe
+          Copy-Item default.pingwatch.json package/default.pingwatch.json
+          Copy-Item README-FIRST.txt package/README-FIRST.txt
+          Compress-Archive -Path package/* -DestinationPath PingWatchdog-win-x64.zip -Force
+
+      - name: Upload ZIP
         uses: actions/upload-artifact@v4
         with:
           name: PingWatchdog-win-x64
-          path: publish/PingWatchdog.exe
+          path: PingWatchdog-win-x64.zip
           if-no-files-found: error
 
       - name: Publish release download
@@ -44,5 +61,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "v1.3.0-build.${{ github.run_number }}"
-          gh release create $tag publish/PingWatchdog.exe --title "Ping Watchdog $tag" --notes "Standalone Windows x64 app with persistent Sites/Groups, host nicknames, import/export scan configs, dark mode, site-filtered status grid, and optional live CMD ping trace."
+          $tag = "v1.4.0-build.${{ github.run_number }}"
+          gh release create $tag PingWatchdog-win-x64.zip --title "Ping Watchdog $tag" --notes "Portable Windows x64 ZIP with PingWatchdog.exe, a first-launch default config, automatic local autosave, popup site management, host nicknames, multi-site grouping, dark mode, and the optional live CMD trace."

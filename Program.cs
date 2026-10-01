@@ -169,6 +169,89 @@ internal sealed class NicknameDialog : Form
     }
 }
 
+internal sealed class SiteNameDialog : Form
+{
+    private readonly TextBox _box = new() { Dock = DockStyle.Fill };
+    public string SiteName => _box.Text.Trim();
+
+    public SiteNameDialog(string title, string actionText, string current = "")
+    {
+        Text = title;
+        Width = 430;
+        Height = 150;
+        MinimizeBox = false;
+        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition = FormStartPosition.CenterParent;
+        BackColor = Color.FromArgb(13, 17, 23);
+        ForeColor = Color.FromArgb(230, 237, 243);
+
+        _box.Text = current;
+        _box.BackColor = Color.FromArgb(22, 27, 34);
+        _box.ForeColor = Color.FromArgb(230, 237, 243);
+        _box.BorderStyle = BorderStyle.FixedSingle;
+        _box.SelectAll();
+
+        var ok = new Button
+        {
+            Text = actionText,
+            DialogResult = DialogResult.OK,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(35, 134, 96),
+            ForeColor = Color.White
+        };
+
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            DialogResult = DialogResult.Cancel,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(22, 27, 34),
+            ForeColor = Color.White
+        };
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false
+        };
+        buttons.Controls.Add(ok);
+        buttons.Controls.Add(cancel);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(12)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(new Label
+        {
+            Text = "Site / group name:",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(139, 148, 158)
+        }, 0, 0);
+        layout.Controls.Add(_box, 0, 1);
+        layout.Controls.Add(buttons, 0, 2);
+
+        Controls.Add(layout);
+        AcceptButton = ok;
+        CancelButton = cancel;
+
+        Shown += (_, _) =>
+        {
+            _box.Focus();
+            _box.SelectAll();
+        };
+    }
+}
+
 internal sealed class HostMonitor
 {
     public string Site { get; }
@@ -203,6 +286,13 @@ public sealed class MainForm : Form
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "PingWatchdog",
         "sites.json");
+    private readonly string _autoConfigPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "PingWatchdog",
+        "autosave.pingwatch.json");
+    private readonly string _bundledDefaultConfigPath = Path.Combine(
+        AppContext.BaseDirectory,
+        "default.pingwatch.json");
 
     private readonly List<SiteDefinition> _sites = new();
     private readonly List<CommandLogEntry> _commandEntries = new();
@@ -216,16 +306,15 @@ public sealed class MainForm : Form
         Font = new Font("Segoe UI", 10)
     };
 
-    private readonly TextBox _newSiteBox = new()
+    private readonly Button _addSiteButton = new() { Text = "+ Add Site", AutoSize = true };
+    private readonly Button _renameSiteButton = new() { Text = "Rename Site", AutoSize = true };
+    private readonly Button _deleteSiteButton = new() { Text = "Delete Site", AutoSize = true };
+    private readonly Label _autoSaveLabel = new()
     {
-        Dock = DockStyle.Top,
-        PlaceholderText = "Site name..."
+        Text = "Hosts auto-save",
+        AutoSize = true,
+        Padding = new Padding(0, 7, 0, 0)
     };
-
-    private readonly Button _addSiteButton = new() { Text = "Add", AutoSize = true };
-    private readonly Button _renameSiteButton = new() { Text = "Rename", AutoSize = true };
-    private readonly Button _deleteSiteButton = new() { Text = "Delete", AutoSize = true };
-    private readonly Button _saveHostsButton = new() { Text = "Save Hosts", AutoSize = true };
     private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
     private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
     private readonly ContextMenuStrip _gridMenu = new();
@@ -402,13 +491,23 @@ public sealed class MainForm : Form
         _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
 
         _siteList.SelectedIndexChanged += (_, _) => OnSiteSelectionChanged();
+        _siteList.DoubleClick += (_, _) => RenameSite();
         _addSiteButton.Click += (_, _) => AddSite();
         _renameSiteButton.Click += (_, _) => RenameSite();
         _deleteSiteButton.Click += (_, _) => DeleteSite();
-        _saveHostsButton.Click += (_, _) => SaveSelectedHosts();
         _saveConfigButton.Click += (_, _) => SaveConfigFile();
         _loadConfigButton.Click += (_, _) => LoadConfigFile();
         _grid.CellMouseDown += GridCellMouseDown;
+
+        _ipBox.Leave += (_, _) =>
+        {
+            if (_cts is null && _selectedSiteName is not null)
+            {
+                PersistCurrentEditor();
+                SaveSites();
+                RefreshSiteList(_selectedSiteName);
+            }
+        };
 
         _startButton.Click += (_, _) => StartMonitoring();
         _stopButton.Click += (_, _) => StopMonitoring();
@@ -454,7 +553,7 @@ public sealed class MainForm : Form
         if (_sites.Count == 0)
             _sites.Add(new SiteDefinition { Name = "Default Site" });
 
-        _selectedSiteName = _sites[0].Name;
+        _selectedSiteName ??= _sites[0].Name;
         RefreshSiteList(_selectedSiteName);
         LoadHostEditor();
         ApplyDarkTheme();
@@ -528,6 +627,8 @@ public sealed class MainForm : Form
         var configRoundTrip = JsonSerializer.Deserialize<WatchdogConfig>(configJson);
         Check(configRoundTrip?.Sites.Count == 1);
         Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
+        Check(configRoundTrip?.PingIntervalSeconds == 2);
+        Check(configRoundTrip?.FailureThreshold == 3);
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -675,8 +776,8 @@ public sealed class MainForm : Form
         };
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
         sitePanel.Controls.Add(new Label
         {
@@ -686,7 +787,6 @@ public sealed class MainForm : Form
             Padding = new Padding(2, 8, 0, 0)
         }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
-        sitePanel.Controls.Add(_newSiteBox, 0, 2);
 
         var siteButtons = new FlowLayoutPanel
         {
@@ -698,7 +798,14 @@ public sealed class MainForm : Form
         siteButtons.Controls.Add(_addSiteButton);
         siteButtons.Controls.Add(_renameSiteButton);
         siteButtons.Controls.Add(_deleteSiteButton);
-        sitePanel.Controls.Add(siteButtons, 0, 3);
+        sitePanel.Controls.Add(siteButtons, 0, 2);
+        sitePanel.Controls.Add(new Label
+        {
+            Text = "Double-click a site to rename it. Host edits save automatically.",
+            AutoSize = true,
+            MaximumSize = new Size(205, 0),
+            Padding = new Padding(2, 5, 2, 0)
+        }, 0, 3);
 
         var right = new TableLayoutPanel
         {
@@ -735,7 +842,7 @@ public sealed class MainForm : Form
             WrapContents = false
         };
         hostHeader.Controls.Add(_siteHeaderLabel);
-        hostHeader.Controls.Add(_saveHostsButton);
+        hostHeader.Controls.Add(_autoSaveLabel);
 
         hostEditor.Controls.Add(hostHeader, 0, 0);
         hostEditor.Controls.Add(_ipBox, 0, 1);
@@ -828,45 +935,84 @@ public sealed class MainForm : Form
 
         try
         {
-            if (!File.Exists(_settingsPath))
-                return;
-
-            var loaded = JsonSerializer.Deserialize<List<SiteDefinition>>(
-                File.ReadAllText(_settingsPath));
-
-            if (loaded is null)
-                return;
-
-            foreach (var site in loaded)
+            if (File.Exists(_autoConfigPath))
             {
-                var name = (site.Name ?? string.Empty).Trim();
+                var autoConfig = JsonSerializer.Deserialize<WatchdogConfig>(
+                    File.ReadAllText(_autoConfigPath));
 
-                if (string.IsNullOrWhiteSpace(name) ||
-                    name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase) ||
-                    _sites.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                if (autoConfig is not null)
                 {
-                    continue;
+                    ApplyConfig(autoConfig);
+                    return;
                 }
-
-                var hosts = (site.Hosts ?? new List<string>())
-                    .Select(h => h.Trim())
-                    .Where(h => !string.IsNullOrWhiteSpace(h))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                var labels = NormalizeLabels(site.Labels, hosts);
-
-                _sites.Add(new SiteDefinition
-                {
-                    Name = name,
-                    Hosts = hosts,
-                    Labels = labels
-                });
             }
         }
         catch
         {
-            // Corrupt or inaccessible settings should not prevent the monitor from starting.
+            // Fall through to legacy/default recovery.
+        }
+
+        try
+        {
+            if (File.Exists(_settingsPath))
+            {
+                var loaded = JsonSerializer.Deserialize<List<SiteDefinition>>(
+                    File.ReadAllText(_settingsPath));
+
+                if (loaded is not null)
+                {
+                    foreach (var site in loaded)
+                    {
+                        var name = (site.Name ?? string.Empty).Trim();
+
+                        if (string.IsNullOrWhiteSpace(name) ||
+                            name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase) ||
+                            _sites.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            continue;
+                        }
+
+                        var hosts = (site.Hosts ?? new List<string>())
+                            .Select(h => h.Trim())
+                            .Where(h => !string.IsNullOrWhiteSpace(h))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        _sites.Add(new SiteDefinition
+                        {
+                            Name = name,
+                            Hosts = hosts,
+                            Labels = NormalizeLabels(site.Labels, hosts)
+                        });
+                    }
+
+                    if (_sites.Count > 0)
+                        return;
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to bundled default.
+        }
+
+        try
+        {
+            if (!File.Exists(_bundledDefaultConfigPath))
+                return;
+
+            var defaultConfig = JsonSerializer.Deserialize<WatchdogConfig>(
+                File.ReadAllText(_bundledDefaultConfigPath));
+
+            if (defaultConfig is null)
+                return;
+
+            ApplyConfig(defaultConfig);
+            SaveSites();
+        }
+        catch
+        {
+            // A missing/corrupt starter config should never block the app.
         }
     }
 
@@ -885,6 +1031,12 @@ public sealed class MainForm : Form
                 _settingsPath,
                 JsonSerializer.Serialize(
                     _sites,
+                    new JsonSerializerOptions { WriteIndented = true }));
+
+            File.WriteAllText(
+                _autoConfigPath,
+                JsonSerializer.Serialize(
+                    BuildConfig(),
                     new JsonSerializerOptions { WriteIndented = true }));
         }
         catch
@@ -1309,7 +1461,14 @@ public sealed class MainForm : Form
         if (_cts is not null)
             return;
 
-        var name = _newSiteBox.Text.Trim();
+        using var dialog = new SiteNameDialog(
+            "Add Site / Group",
+            "Add Site");
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        string name = dialog.SiteName;
 
         if (!ValidateNewSiteName(name, existingSiteName: null))
             return;
@@ -1317,7 +1476,6 @@ public sealed class MainForm : Form
         PersistCurrentEditor();
 
         _sites.Add(new SiteDefinition { Name = name });
-        _newSiteBox.Clear();
         _selectedSiteName = name;
 
         SaveSites();
@@ -1332,28 +1490,27 @@ public sealed class MainForm : Form
         if (_cts is not null || _selectedSiteName is null)
             return;
 
-        var newName = _newSiteBox.Text.Trim();
+        var site = FindSite(_selectedSiteName);
+        if (site is null)
+            return;
+
+        using var dialog = new SiteNameDialog(
+            "Rename Site / Group",
+            "Rename",
+            site.Name);
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        string newName = dialog.SiteName;
 
         if (!ValidateNewSiteName(newName, _selectedSiteName))
             return;
 
         PersistCurrentEditor();
 
-        var site = FindSite(_selectedSiteName);
-        if (site is null)
-            return;
-
-        string oldName = site.Name;
         site.Name = newName;
-
-        foreach (var host in _hosts.Values.Where(h =>
-                     h.Site.Equals(oldName, StringComparison.OrdinalIgnoreCase)))
-        {
-            // Hosts cannot be renamed while monitoring because site controls are disabled.
-        }
-
         _selectedSiteName = newName;
-        _newSiteBox.Clear();
 
         SaveSites();
         RefreshSiteList(newName);
@@ -1387,7 +1544,6 @@ public sealed class MainForm : Form
             _sites.Add(new SiteDefinition { Name = "Default Site" });
 
         _selectedSiteName = _sites[0].Name;
-        _newSiteBox.Clear();
 
         SaveSites();
         RefreshSiteList(_selectedSiteName);
@@ -1442,11 +1598,9 @@ public sealed class MainForm : Form
         bool editing = _cts is null;
         bool specificSite = _selectedSiteName is not null;
 
-        _newSiteBox.Enabled = editing;
         _addSiteButton.Enabled = editing;
         _renameSiteButton.Enabled = editing && specificSite;
         _deleteSiteButton.Enabled = editing && specificSite;
-        _saveHostsButton.Enabled = editing && specificSite;
         _loadConfigButton.Enabled = editing;
         _saveConfigButton.Enabled = true;
 

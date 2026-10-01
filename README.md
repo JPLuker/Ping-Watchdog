@@ -86,3 +86,13 @@ Version 1.3 adds reusable scan definitions and host nicknames.
 - **Save Config** exports sites, hosts, labels, ping interval, timeout, failure threshold, recovery threshold, selected site, and CMD-view preference.
 - **Load Config** restores the complete scan definition so monitoring can be resumed immediately.
 - Config files use readable JSON with the `.pingwatch.json` extension.
+
+
+## Version 1.4 usability changes
+
+- **Add Site** and **Rename Site** now use focused popup dialogs; the permanent site-name textbox is gone.
+- Host-list changes auto-save when focus leaves the editor, when switching sites, when monitoring starts, and when the app closes.
+- Ping Watchdog now maintains a full automatic working-state config in the current user's AppData folder.
+- Fresh installs seed themselves from the bundled `default.pingwatch.json` file.
+- Releases are packaged as `PingWatchdog-win-x64.zip` with the EXE, starter config, and a quick-start text file.
+- Double-clicking a site is a shortcut to rename it.
