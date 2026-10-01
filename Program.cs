@@ -75,6 +75,98 @@ internal sealed class SiteDefinition
 {
     public string Name { get; set; } = string.Empty;
     public List<string> Hosts { get; set; } = new();
+    public Dictionary<string, string> Labels { get; set; } = new();
+}
+
+internal sealed class WatchdogConfig
+{
+    public int FormatVersion { get; set; } = 1;
+    public List<SiteDefinition> Sites { get; set; } = new();
+    public int PingIntervalSeconds { get; set; } = 2;
+    public int PingTimeoutMs { get; set; } = 1000;
+    public int FailureThreshold { get; set; } = 3;
+    public int RecoveryThreshold { get; set; } = 2;
+    public bool ShowCommandView { get; set; }
+    public string? SelectedSite { get; set; }
+}
+
+internal sealed class NicknameDialog : Form
+{
+    private readonly TextBox _box = new() { Dock = DockStyle.Fill };
+
+    public string Nickname => _box.Text.Trim();
+
+    public NicknameDialog(string host, string current)
+    {
+        Text = $"Set label • {host}";
+        Width = 430;
+        Height = 150;
+        MinimizeBox = false;
+        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition = FormStartPosition.CenterParent;
+        BackColor = Color.FromArgb(13, 17, 23);
+        ForeColor = Color.FromArgb(230, 237, 243);
+
+        _box.Text = current;
+        _box.BackColor = Color.FromArgb(22, 27, 34);
+        _box.ForeColor = Color.FromArgb(230, 237, 243);
+        _box.BorderStyle = BorderStyle.FixedSingle;
+        _box.SelectAll();
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false
+        };
+
+        var ok = new Button
+        {
+            Text = "Save Label",
+            DialogResult = DialogResult.OK,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(35, 134, 96),
+            ForeColor = Color.White
+        };
+
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            DialogResult = DialogResult.Cancel,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(22, 27, 34),
+            ForeColor = Color.White
+        };
+
+        buttons.Controls.Add(ok);
+        buttons.Controls.Add(cancel);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(12)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(new Label
+        {
+            Text = "Nickname / label:",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(139, 148, 158)
+        }, 0, 0);
+        layout.Controls.Add(_box, 0, 1);
+        layout.Controls.Add(buttons, 0, 2);
+
+        Controls.Add(layout);
+        AcceptButton = ok;
+        CancelButton = cancel;
+    }
 }
 
 internal sealed class HostMonitor
@@ -134,6 +226,9 @@ public sealed class MainForm : Form
     private readonly Button _renameSiteButton = new() { Text = "Rename", AutoSize = true };
     private readonly Button _deleteSiteButton = new() { Text = "Delete", AutoSize = true };
     private readonly Button _saveHostsButton = new() { Text = "Save Hosts", AutoSize = true };
+    private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
+    private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
+    private readonly ContextMenuStrip _gridMenu = new();
     private readonly Label _siteHeaderLabel = new()
     {
         Text = "HOSTS",
@@ -275,6 +370,7 @@ public sealed class MainForm : Form
 
         BuildGrid();
         BuildLayout();
+        BuildGridContextMenu();
         _statusStrip.Items.Add(_statusLabel);
 
         var trayMenu = new ContextMenuStrip
@@ -310,6 +406,9 @@ public sealed class MainForm : Form
         _renameSiteButton.Click += (_, _) => RenameSite();
         _deleteSiteButton.Click += (_, _) => DeleteSite();
         _saveHostsButton.Click += (_, _) => SaveSelectedHosts();
+        _saveConfigButton.Click += (_, _) => SaveConfigFile();
+        _loadConfigButton.Click += (_, _) => LoadConfigFile();
+        _grid.CellMouseDown += GridCellMouseDown;
 
         _startButton.Click += (_, _) => StartMonitoring();
         _stopButton.Click += (_, _) => StopMonitoring();
@@ -416,9 +515,18 @@ public sealed class MainForm : Form
         form.ProcessResult(host, true, 1);
         Check(host.State == HostState.Online && !host.AlertedForCurrentOutage);
 
+        form._sites[0].Hosts.Add("127.0.0.1");
+        form.SetNicknameValue("Test Site", "127.0.0.1", "Loopback");
+        Check(form.GetNickname("Test Site", "127.0.0.1") == "Loopback");
+
         form.AppendCommandLog("Test Site", "127.0.0.1", true, "Reply from 127.0.0.1: time=1ms TTL=128");
         form.AppendCommandLog("Test Site", "127.0.0.1", false, "FAILED (TimedOut)");
         Check(form._commandEntries.Count == 2);
+
+        var configJson = JsonSerializer.Serialize(form.BuildConfig());
+        var configRoundTrip = JsonSerializer.Deserialize<WatchdogConfig>(configJson);
+        Check(configRoundTrip?.Sites.Count == 1);
+        Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -445,6 +553,7 @@ public sealed class MainForm : Form
     {
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "SiteColumn",
             HeaderText = "Site",
             DataPropertyName = "Site",
             Width = 145
@@ -452,14 +561,25 @@ public sealed class MainForm : Form
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "HostColumn",
             HeaderText = "Host",
             DataPropertyName = "Host",
             AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 35
+            FillWeight = 32
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "LabelColumn",
+            HeaderText = "Label",
+            DataPropertyName = "Label",
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            FillWeight = 25
+        });
+
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "StatusColumn",
             HeaderText = "Status",
             DataPropertyName = "Status",
             Width = 95
@@ -467,6 +587,7 @@ public sealed class MainForm : Form
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "LatencyColumn",
             HeaderText = "Latency",
             DataPropertyName = "Latency",
             Width = 85
@@ -474,6 +595,7 @@ public sealed class MainForm : Form
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "FailuresColumn",
             HeaderText = "Failures",
             DataPropertyName = "Failures",
             Width = 75
@@ -481,6 +603,7 @@ public sealed class MainForm : Form
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "LastReplyColumn",
             HeaderText = "Last Reply",
             DataPropertyName = "LastReply",
             Width = 150
@@ -488,6 +611,7 @@ public sealed class MainForm : Form
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
+            Name = "OutageColumn",
             HeaderText = "Outage Since",
             DataPropertyName = "OutageSince",
             Width = 150
@@ -516,13 +640,23 @@ public sealed class MainForm : Form
         };
         header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         header.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-        header.Controls.Add(new Label
+        var titleBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0)
+        };
+        titleBar.Controls.Add(new Label
         {
             Text = "PING WATCHDOG",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold),
-            Padding = new Padding(0, 0, 0, 0)
-        }, 0, 0);
+            Padding = new Padding(0, 0, 16, 0)
+        });
+        titleBar.Controls.Add(_saveConfigButton);
+        titleBar.Controls.Add(_loadConfigButton);
+        header.Controls.Add(titleBar, 0, 0);
         header.Controls.Add(new Label
         {
             Text = "Multi-site ICMP monitoring • outage alerts • live command trace",
@@ -719,10 +853,13 @@ public sealed class MainForm : Form
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
+                var labels = NormalizeLabels(site.Labels, hosts);
+
                 _sites.Add(new SiteDefinition
                 {
                     Name = name,
-                    Hosts = hosts
+                    Hosts = hosts,
+                    Labels = labels
                 });
             }
         }
@@ -841,6 +978,30 @@ public sealed class MainForm : Form
             return;
 
         site.Hosts = ParseHosts(_ipBox.Text);
+        site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+    }
+
+    private static Dictionary<string, string> NormalizeLabels(
+        Dictionary<string, string>? labels,
+        IEnumerable<string> hosts)
+    {
+        var hostList = hosts.ToList();
+        var result = new Dictionary<string, string>();
+
+        if (labels is null)
+            return result;
+
+        foreach (var pair in labels)
+        {
+            string? host = hostList.FirstOrDefault(h =>
+                h.Equals(pair.Key, StringComparison.OrdinalIgnoreCase));
+            string label = pair.Value?.Trim() ?? string.Empty;
+
+            if (host is not null && !string.IsNullOrWhiteSpace(label))
+                result[host] = label;
+        }
+
+        return result;
     }
 
     private static List<string> ParseHosts(string text)
@@ -859,6 +1020,275 @@ public sealed class MainForm : Form
     {
         return _sites.FirstOrDefault(s =>
             s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetNickname(string siteName, string address)
+    {
+        var site = FindSite(siteName);
+        if (site?.Labels is null)
+            return string.Empty;
+
+        var pair = site.Labels.FirstOrDefault(p =>
+            p.Key.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+        return pair.Key is null ? string.Empty : pair.Value;
+    }
+
+    private void SetNicknameValue(string siteName, string address, string nickname)
+    {
+        var site = FindSite(siteName);
+        if (site is null)
+            return;
+
+        site.Labels ??= new Dictionary<string, string>();
+
+        var existingKey = site.Labels.Keys.FirstOrDefault(k =>
+            k.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+        if (existingKey is not null)
+            site.Labels.Remove(existingKey);
+
+        nickname = nickname.Trim();
+        if (!string.IsNullOrWhiteSpace(nickname))
+            site.Labels[address] = nickname;
+    }
+
+    private string DescribeHost(string siteName, string address)
+    {
+        string nickname = GetNickname(siteName, address);
+        return string.IsNullOrWhiteSpace(nickname)
+            ? address
+            : $"{nickname} ({address})";
+    }
+
+    private void BuildGridContextMenu()
+    {
+        _gridMenu.BackColor = Color.FromArgb(22, 27, 34);
+        _gridMenu.ForeColor = Color.FromArgb(230, 237, 243);
+
+        var setLabel = new ToolStripMenuItem("Set label / nickname");
+        var clearLabel = new ToolStripMenuItem("Clear label");
+
+        setLabel.Click += (_, _) => SetLabelForSelectedHost();
+        clearLabel.Click += (_, _) => ClearLabelForSelectedHost();
+
+        _gridMenu.Items.Add(setLabel);
+        _gridMenu.Items.Add(clearLabel);
+        _grid.ContextMenuStrip = _gridMenu;
+    }
+
+    private void GridCellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Right || e.RowIndex < 0)
+            return;
+
+        _grid.ClearSelection();
+        _grid.Rows[e.RowIndex].Selected = true;
+
+        if (e.ColumnIndex >= 0)
+            _grid.CurrentCell = _grid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+    }
+
+    private (string Site, string Host)? GetSelectedHostIdentity()
+    {
+        if (_grid.SelectedRows.Count == 0)
+            return null;
+
+        var row = _grid.SelectedRows[0];
+        string site = row.Cells["SiteColumn"].Value?.ToString() ?? string.Empty;
+        string host = row.Cells["HostColumn"].Value?.ToString() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(site) || string.IsNullOrWhiteSpace(host))
+            return null;
+
+        return (site, host);
+    }
+
+    private void SetLabelForSelectedHost()
+    {
+        var identity = GetSelectedHostIdentity();
+        if (identity is null)
+            return;
+
+        string current = GetNickname(identity.Value.Site, identity.Value.Host);
+
+        using var dialog = new NicknameDialog(identity.Value.Host, current);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        SetNicknameValue(identity.Value.Site, identity.Value.Host, dialog.Nickname);
+        SaveSites();
+        RefreshGrid();
+        RebuildCommandView();
+    }
+
+    private void ClearLabelForSelectedHost()
+    {
+        var identity = GetSelectedHostIdentity();
+        if (identity is null)
+            return;
+
+        SetNicknameValue(identity.Value.Site, identity.Value.Host, string.Empty);
+        SaveSites();
+        RefreshGrid();
+        RebuildCommandView();
+    }
+
+    private WatchdogConfig BuildConfig()
+    {
+        if (_cts is null)
+            PersistCurrentEditor();
+
+        return new WatchdogConfig
+        {
+            Sites = _sites.Select(site => new SiteDefinition
+            {
+                Name = site.Name,
+                Hosts = site.Hosts.ToList(),
+                Labels = new Dictionary<string, string>(site.Labels ?? new())
+            }).ToList(),
+            PingIntervalSeconds = (int)_intervalSeconds.Value,
+            PingTimeoutMs = (int)_timeoutMs.Value,
+            FailureThreshold = (int)_failureThreshold.Value,
+            RecoveryThreshold = (int)_recoveryThreshold.Value,
+            ShowCommandView = _showCommandView.Checked,
+            SelectedSite = _selectedSiteName
+        };
+    }
+
+    private void SaveConfigFile()
+    {
+        var config = BuildConfig();
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Save Ping Watchdog Config",
+            Filter = "Ping Watchdog Config (*.pingwatch.json)|*.pingwatch.json|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+            FileName = "ping-watchdog-config.pingwatch.json",
+            AddExtension = true,
+            DefaultExt = "pingwatch.json"
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            File.WriteAllText(
+                dialog.FileName,
+                JsonSerializer.Serialize(
+                    config,
+                    new JsonSerializerOptions { WriteIndented = true }));
+
+            _statusLabel.Text = $"Config saved: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not save config.\r\n\r\n{ex.Message}",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void LoadConfigFile()
+    {
+        if (_cts is not null)
+        {
+            MessageBox.Show(
+                "Stop monitoring before loading a config.",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Load Ping Watchdog Config",
+            Filter = "Ping Watchdog Config (*.pingwatch.json)|*.pingwatch.json|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            var config = JsonSerializer.Deserialize<WatchdogConfig>(
+                File.ReadAllText(dialog.FileName));
+
+            if (config is null)
+                throw new InvalidDataException("The config file was empty or invalid.");
+
+            ApplyConfig(config);
+            SaveSites();
+            _statusLabel.Text = $"Config loaded: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not load config.\r\n\r\n{ex.Message}",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void ApplyConfig(WatchdogConfig config)
+    {
+        var cleanedSites = new List<SiteDefinition>();
+
+        foreach (var source in config.Sites ?? new List<SiteDefinition>())
+        {
+            string name = (source.Name ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(name) ||
+                name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase) ||
+                cleanedSites.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var hosts = (source.Hosts ?? new List<string>())
+                .Select(h => h.Trim())
+                .Where(h => !string.IsNullOrWhiteSpace(h))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            cleanedSites.Add(new SiteDefinition
+            {
+                Name = name,
+                Hosts = hosts,
+                Labels = NormalizeLabels(source.Labels, hosts)
+            });
+        }
+
+        if (cleanedSites.Count == 0)
+            cleanedSites.Add(new SiteDefinition { Name = "Default Site" });
+
+        _sites.Clear();
+        _sites.AddRange(cleanedSites);
+
+        _intervalSeconds.Value = Math.Clamp(config.PingIntervalSeconds, (int)_intervalSeconds.Minimum, (int)_intervalSeconds.Maximum);
+        _timeoutMs.Value = Math.Clamp(config.PingTimeoutMs, (int)_timeoutMs.Minimum, (int)_timeoutMs.Maximum);
+        _failureThreshold.Value = Math.Clamp(config.FailureThreshold, (int)_failureThreshold.Minimum, (int)_failureThreshold.Maximum);
+        _recoveryThreshold.Value = Math.Clamp(config.RecoveryThreshold, (int)_recoveryThreshold.Minimum, (int)_recoveryThreshold.Maximum);
+        _showCommandView.Checked = config.ShowCommandView;
+
+        _selectedSiteName = config.SelectedSite is not null &&
+            _sites.Any(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase))
+            ? _sites.First(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase)).Name
+            : _sites[0].Name;
+
+        _hosts.Clear();
+        ClearCommandLog();
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
     }
 
     private void SaveSelectedHosts()
@@ -1016,6 +1446,8 @@ public sealed class MainForm : Form
         _renameSiteButton.Enabled = editing && specificSite;
         _deleteSiteButton.Enabled = editing && specificSite;
         _saveHostsButton.Enabled = editing && specificSite;
+        _loadConfigButton.Enabled = editing;
+        _saveConfigButton.Enabled = true;
 
         _ipBox.Enabled = editing;
         _ipBox.ReadOnly = !editing || !specificSite;
@@ -1188,9 +1620,10 @@ public sealed class MainForm : Form
                         host.AlertedForCurrentOutage = false;
 
                         notificationTitle = $"Host Recovered • {host.Site}";
+                        string displayHost = DescribeHost(host.Site, host.Address);
                         notificationBody = duration.HasValue
-                            ? $"{host.Address} is responding again. Outage duration: {FormatDuration(duration.Value)}."
-                            : $"{host.Address} is responding again.";
+                            ? $"{displayHost} is responding again. Outage duration: {FormatDuration(duration.Value)}."
+                            : $"{displayHost} is responding again.";
                         fallbackIcon = ToolTipIcon.Info;
                     }
                 }
@@ -1216,8 +1649,9 @@ public sealed class MainForm : Form
                         {
                             host.AlertedForCurrentOutage = true;
                             notificationTitle = $"Host Down • {host.Site}";
+                            string displayHost = DescribeHost(host.Site, host.Address);
                             notificationBody =
-                                $"{host.Address} failed {host.ConsecutiveFailures} consecutive ping attempts and is now OFFLINE.";
+                                $"{displayHost} failed {host.ConsecutiveFailures} consecutive ping attempts and is now OFFLINE.";
                             fallbackIcon = ToolTipIcon.Warning;
                         }
                     }
@@ -1336,8 +1770,13 @@ public sealed class MainForm : Form
         CommandLogEntry entry,
         bool scroll = true)
     {
+        string nickname = GetNickname(entry.Site, entry.Host);
+        string labelPart = string.IsNullOrWhiteSpace(nickname)
+            ? string.Empty
+            : $" [{nickname}]";
+
         string command =
-            $"{entry.Host}: [{entry.Site}] [{entry.Timestamp:HH:mm:ss}] ping {entry.Host} -n 1 -w {entry.TimeoutMs}  ->  {entry.ResultText}";
+            $"{entry.Host}: [{entry.Site}]{labelPart} [{entry.Timestamp:HH:mm:ss}] ping {entry.Host} -n 1 -w {entry.TimeoutMs}  ->  {entry.ResultText}";
 
         _commandBox.SelectionStart = _commandBox.TextLength;
         _commandBox.SelectionLength = 0;
@@ -1418,6 +1857,11 @@ public sealed class MainForm : Form
                     case ListBox list:
                         list.BackColor = panel;
                         list.ForeColor = text;
+                        break;
+
+                    case ContextMenuStrip menu:
+                        menu.BackColor = panel;
+                        menu.ForeColor = text;
                         break;
 
                     case FlowLayoutPanel flow:
@@ -1534,6 +1978,7 @@ public sealed class MainForm : Form
                     {
                         Site = h.Site,
                         Host = h.Address,
+                        Label = GetNickname(h.Site, h.Address),
                         Status = h.State switch
                         {
                             HostState.Online => "ONLINE",
@@ -1558,7 +2003,7 @@ public sealed class MainForm : Form
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
-            var status = row.Cells[2].Value?.ToString();
+            var status = row.Cells["StatusColumn"].Value?.ToString();
 
             row.DefaultCellStyle.BackColor = status switch
             {

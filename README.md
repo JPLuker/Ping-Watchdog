@@ -75,3 +75,14 @@ The command trace still keeps the host first on every line:
 \`192.168.1.50: [Main Office] [14:32:08] ping 192.168.1.50 -n 1 -w 1000 -> Reply from 192.168.1.50: time=2ms TTL=128\`
 
 Failed ping attempts are displayed in red.
+
+
+## Host labels and reusable configs
+
+Version 1.3 adds reusable scan definitions and host nicknames.
+
+- Right-click any host in the live table and choose **Set label / nickname**.
+- Labels persist with the site and are shown in the table, CMD trace, and outage/recovery notifications.
+- **Save Config** exports sites, hosts, labels, ping interval, timeout, failure threshold, recovery threshold, selected site, and CMD-view preference.
+- **Load Config** restores the complete scan definition so monitoring can be resumed immediately.
+- Config files use readable JSON with the `.pingwatch.json` extension.
