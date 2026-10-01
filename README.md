@@ -56,3 +56,22 @@ Enable **Show CMD view** to open a live console-style pane directly below the ho
 `192.168.1.50: [14:32:08] ping 192.168.1.50 -n 1 -w 1000 -> Reply from 192.168.1.50: time=2ms TTL=128`
 
 Failed attempts are highlighted in red. The pane keeps a rolling history and can be cleared without stopping monitoring.
+
+
+## Sites / Groups
+
+Version 1.2 reorganizes Ping Watchdog for multi-site use.
+
+- Create named sites or groups from the left navigation panel.
+- Each site stores its own IP addresses and hostnames.
+- Site definitions persist between launches in the current Windows user's AppData folder.
+- Monitoring starts across every saved site at once.
+- Select **All Sites** for the combined fleet view or select one site to filter the host table.
+- The live CMD view follows the same site filter.
+- Outage and recovery notifications include the site name.
+
+The command trace still keeps the host first on every line:
+
+\`192.168.1.50: [Main Office] [14:32:08] ping 192.168.1.50 -n 1 -w 1000 -> Reply from 192.168.1.50: time=2ms TTL=128\`
+
+Failed ping attempts are displayed in red.

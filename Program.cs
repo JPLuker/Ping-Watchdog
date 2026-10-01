@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -14,8 +15,16 @@ internal static class Program
         if (args.Contains("--self-test"))
         {
             ApplicationConfiguration.Initialize();
-            try { MainForm.RunSelfTests(); Environment.ExitCode = 0; }
-            catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
+            try
+            {
+                MainForm.RunSelfTests();
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex);
+                Environment.ExitCode = 1;
+            }
             return;
         }
 
@@ -62,8 +71,15 @@ internal enum HostState
     Offline
 }
 
+internal sealed class SiteDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public List<string> Hosts { get; set; } = new();
+}
+
 internal sealed class HostMonitor
 {
+    public string Site { get; }
     public string Address { get; }
     public HostState State { get; set; } = HostState.Unknown;
     public int ConsecutiveFailures { get; set; }
@@ -73,17 +89,65 @@ internal sealed class HostMonitor
     public DateTime? OutageStarted { get; set; }
     public bool AlertedForCurrentOutage { get; set; }
 
-    public HostMonitor(string address) => Address = address;
+    public HostMonitor(string site, string address)
+    {
+        Site = site;
+        Address = address;
+    }
 }
+
+internal sealed record CommandLogEntry(
+    string Site,
+    string Host,
+    DateTime Timestamp,
+    bool Success,
+    string ResultText,
+    int TimeoutMs);
 
 public sealed class MainForm : Form
 {
+    private const string AllSitesLabel = "All Sites";
+    private readonly string _settingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "PingWatchdog",
+        "sites.json");
+
+    private readonly List<SiteDefinition> _sites = new();
+    private readonly List<CommandLogEntry> _commandEntries = new();
+    private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ListBox _siteList = new()
+    {
+        Dock = DockStyle.Fill,
+        BorderStyle = BorderStyle.None,
+        IntegralHeight = false,
+        Font = new Font("Segoe UI", 10)
+    };
+
+    private readonly TextBox _newSiteBox = new()
+    {
+        Dock = DockStyle.Top,
+        PlaceholderText = "Site name..."
+    };
+
+    private readonly Button _addSiteButton = new() { Text = "Add", AutoSize = true };
+    private readonly Button _renameSiteButton = new() { Text = "Rename", AutoSize = true };
+    private readonly Button _deleteSiteButton = new() { Text = "Delete", AutoSize = true };
+    private readonly Button _saveHostsButton = new() { Text = "Save Hosts", AutoSize = true };
+    private readonly Label _siteHeaderLabel = new()
+    {
+        Text = "HOSTS",
+        AutoSize = true,
+        Font = new Font("Segoe UI", 9, FontStyle.Bold),
+        Padding = new Padding(0, 7, 12, 0)
+    };
+
     private readonly TextBox _ipBox = new()
     {
         Multiline = true,
         ScrollBars = ScrollBars.Vertical,
         Dock = DockStyle.Fill,
-        Font = new Font("Consolas", 10),
+        Font = new Font("Cascadia Mono", 9.5f),
         PlaceholderText = "One IP or hostname per line\r\n192.168.1.1\r\n8.8.8.8\r\nserver01"
     };
 
@@ -139,7 +203,8 @@ public sealed class MainForm : Form
         AutoGenerateColumns = false,
         RowHeadersVisible = false,
         SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-        BorderStyle = BorderStyle.None
+        BorderStyle = BorderStyle.None,
+        MultiSelect = false
     };
 
     private readonly RichTextBox _commandBox = new()
@@ -150,6 +215,15 @@ public sealed class MainForm : Form
         Font = new Font("Cascadia Mono", 9.5f),
         DetectUrls = false,
         HideSelection = false
+    };
+
+    private readonly SplitContainer _workspaceSplit = new()
+    {
+        Dock = DockStyle.Fill,
+        Orientation = Orientation.Vertical,
+        FixedPanel = FixedPanel.Panel1,
+        SplitterWidth = 6,
+        SplitterDistance = 220
     };
 
     private readonly SplitContainer _mainSplit = new()
@@ -163,7 +237,6 @@ public sealed class MainForm : Form
     private readonly StatusStrip _statusStrip = new() { SizingGrip = false };
     private readonly ToolStripStatusLabel _statusLabel = new("Idle");
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 500 };
-    private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _trayStopItem;
@@ -172,22 +245,28 @@ public sealed class MainForm : Form
     private CancellationTokenSource? _cts;
     private bool _appNotificationsAvailable;
     private readonly bool _suppressNotifications;
-    private int _commandLineCount;
+    private readonly bool _persistSites;
+    private bool _ignoreSiteSelection;
+    private string? _selectedSiteName;
 
     private int _monitorIntervalSeconds = 2;
     private int _pingTimeoutMs = 1000;
     private int _failureThresholdValue = 3;
     private int _recoveryThresholdValue = 2;
 
-    public MainForm(bool appNotificationsAvailable, bool suppressNotifications = false)
+    public MainForm(
+        bool appNotificationsAvailable,
+        bool suppressNotifications = false,
+        bool persistSites = true)
     {
         _appNotificationsAvailable = appNotificationsAvailable;
         _suppressNotifications = suppressNotifications;
+        _persistSites = persistSites;
 
         Text = "Ping Watchdog";
-        Width = 1040;
-        Height = 760;
-        MinimumSize = new Size(860, 560);
+        Width = 1180;
+        Height = 780;
+        MinimumSize = new Size(940, 600);
         StartPosition = FormStartPosition.CenterScreen;
 
         _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)
@@ -226,6 +305,12 @@ public sealed class MainForm : Form
 
         _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
 
+        _siteList.SelectedIndexChanged += (_, _) => OnSiteSelectionChanged();
+        _addSiteButton.Click += (_, _) => AddSite();
+        _renameSiteButton.Click += (_, _) => RenameSite();
+        _deleteSiteButton.Click += (_, _) => DeleteSite();
+        _saveHostsButton.Click += (_, _) => SaveSelectedHosts();
+
         _startButton.Click += (_, _) => StartMonitoring();
         _stopButton.Click += (_, _) => StopMonitoring();
         _showCommandView.CheckedChanged += (_, _) => ToggleCommandView();
@@ -240,12 +325,24 @@ public sealed class MainForm : Form
                 _trayIcon.ShowBalloonTip(
                     2500,
                     "Ping Watchdog",
-                    _cts is null ? "Ping Watchdog is minimized." : "Monitoring continues in the background.",
+                    _cts is null
+                        ? "Ping Watchdog is minimized."
+                        : "Monitoring continues in the background.",
                     ToolTipIcon.Info);
             }
         };
 
-        FormClosing += (_, _) => StopMonitoring();
+        FormClosing += (_, _) =>
+        {
+            if (_cts is null)
+            {
+                PersistCurrentEditor();
+                SaveSites();
+            }
+
+            StopMonitoring();
+        };
+
         FormClosed += (_, _) =>
         {
             _trayIcon.Visible = false;
@@ -253,7 +350,16 @@ public sealed class MainForm : Form
             _appIcon.Dispose();
         };
 
+        LoadSites();
+
+        if (_sites.Count == 0)
+            _sites.Add(new SiteDefinition { Name = "Default Site" });
+
+        _selectedSiteName = _sites[0].Name;
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
         ApplyDarkTheme();
+        UpdateActionState();
     }
 
     [DllImport("dwmapi.dll")]
@@ -277,26 +383,46 @@ public sealed class MainForm : Form
 
     internal static void RunSelfTests()
     {
-        using var form = new MainForm(false, suppressNotifications: true);
-        var host = new HostMonitor("127.0.0.1");
-        void Check(bool condition) { if (!condition) throw new InvalidOperationException("Alert state test failed."); }
+        using var form = new MainForm(
+            appNotificationsAvailable: false,
+            suppressNotifications: true,
+            persistSites: false);
+
+        var host = new HostMonitor("Test Site", "127.0.0.1");
+
+        void Check(bool condition)
+        {
+            if (!condition)
+                throw new InvalidOperationException("Ping Watchdog self-test failed.");
+        }
+
         form.ProcessResult(host, false, null);
         Check(host.State == HostState.Suspect && !host.AlertedForCurrentOutage);
+
         form.ProcessResult(host, true, 1);
         Check(host.State == HostState.Online && host.ConsecutiveFailures == 0);
-        for (int i = 0; i < 3; i++) form.ProcessResult(host, false, null);
+
+        for (int i = 0; i < 3; i++)
+            form.ProcessResult(host, false, null);
+
         Check(host.State == HostState.Offline && host.AlertedForCurrentOutage);
+
         var outage = host.OutageStarted;
         form.ProcessResult(host, true, 1);
         form.ProcessResult(host, false, null);
         Check(host.State == HostState.Offline && host.OutageStarted == outage);
+
         form.ProcessResult(host, true, 1);
         form.ProcessResult(host, true, 1);
         Check(host.State == HostState.Online && !host.AlertedForCurrentOutage);
-        for (int i = 0; i < 3; i++) form.ProcessResult(host, false, null);
-        Check(host.State == HostState.Offline && host.AlertedForCurrentOutage);
+
+        form.AppendCommandLog("Test Site", "127.0.0.1", true, "Reply from 127.0.0.1: time=1ms TTL=128");
+        form.AppendCommandLog("Test Site", "127.0.0.1", false, "FAILED (TimedOut)");
+        Check(form._commandEntries.Count == 2);
+
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
+
         form._trayIcon.Visible = false;
         form._trayIcon.Dispose();
         form._appIcon.Dispose();
@@ -317,6 +443,13 @@ public sealed class MainForm : Form
 
     private void BuildGrid()
     {
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Site",
+            DataPropertyName = "Site",
+            Width = 145
+        });
+
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             HeaderText = "Host",
@@ -367,22 +500,111 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 3,
             Padding = new Padding(12)
         };
-
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 142));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
 
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0)
+        };
+        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        header.Controls.Add(new Label
+        {
+            Text = "PING WATCHDOG",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold),
+            Padding = new Padding(0, 0, 0, 0)
+        }, 0, 0);
+        header.Controls.Add(new Label
+        {
+            Text = "Multi-site ICMP monitoring • outage alerts • live command trace",
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9),
+            Padding = new Padding(1, 0, 0, 0)
+        }, 0, 1);
+
+        var sitePanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(0, 0, 8, 0)
+        };
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+
+        sitePanel.Controls.Add(new Label
+        {
+            Text = "SITES / GROUPS",
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Padding = new Padding(2, 8, 0, 0)
+        }, 0, 0);
+        sitePanel.Controls.Add(_siteList, 0, 1);
+        sitePanel.Controls.Add(_newSiteBox, 0, 2);
+
+        var siteButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Padding = new Padding(0, 5, 0, 0)
+        };
+        siteButtons.Controls.Add(_addSiteButton);
+        siteButtons.Controls.Add(_renameSiteButton);
+        siteButtons.Controls.Add(_deleteSiteButton);
+        sitePanel.Controls.Add(siteButtons, 0, 3);
+
+        var right = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(8, 0, 0, 0)
+        };
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 102));
+        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
         var inputGroup = new GroupBox
         {
-            Text = " MONITORED HOSTS ",
+            Text = " HOSTS ",
             Dock = DockStyle.Fill,
             Padding = new Padding(10)
         };
-        inputGroup.Controls.Add(_ipBox);
+
+        var hostEditor = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0)
+        };
+        hostEditor.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        hostEditor.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var hostHeader = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false
+        };
+        hostHeader.Controls.Add(_siteHeaderLabel);
+        hostHeader.Controls.Add(_saveHostsButton);
+
+        hostEditor.Controls.Add(hostHeader, 0, 0);
+        hostEditor.Controls.Add(_ipBox, 0, 1);
+        inputGroup.Controls.Add(hostEditor);
 
         var controls = new FlowLayoutPanel
         {
@@ -390,7 +612,7 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true,
             AutoScroll = true,
-            Padding = new Padding(2, 10, 2, 4)
+            Padding = new Padding(2, 11, 2, 4)
         };
 
         controls.Controls.Add(new Label { Text = "Ping every:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
@@ -434,7 +656,7 @@ public sealed class MainForm : Form
         };
         commandHeader.Controls.Add(new Label
         {
-            Text = "LIVE CMD VIEW  •  every ping attempt",
+            Text = "LIVE CMD VIEW  •  filtered with selected site",
             AutoSize = true,
             Font = new Font("Segoe UI", 9, FontStyle.Bold),
             Padding = new Padding(0, 7, 12, 0)
@@ -445,26 +667,375 @@ public sealed class MainForm : Form
         commandPanel.Controls.Add(_commandBox, 0, 1);
         _mainSplit.Panel2.Controls.Add(commandPanel);
 
-        root.Controls.Add(inputGroup, 0, 0);
-        root.Controls.Add(controls, 0, 1);
-        root.Controls.Add(_mainSplit, 0, 2);
-        root.Controls.Add(_statusStrip, 0, 3);
+        right.Controls.Add(inputGroup, 0, 0);
+        right.Controls.Add(controls, 0, 1);
+        right.Controls.Add(_mainSplit, 0, 2);
+
+        _workspaceSplit.Panel1.Controls.Add(sitePanel);
+        _workspaceSplit.Panel2.Controls.Add(right);
+
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(_workspaceSplit, 0, 1);
+        root.Controls.Add(_statusStrip, 0, 2);
 
         Controls.Add(root);
     }
 
-    private void StartMonitoring()
+    private void LoadSites()
     {
-        var targets = _ipBox.Text.Split(new[] { '\r', '\n', ',', ';', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+        _sites.Clear();
+
+        if (!_persistSites)
+        {
+            _sites.Add(new SiteDefinition { Name = "Test Site" });
+            return;
+        }
+
+        try
+        {
+            if (!File.Exists(_settingsPath))
+                return;
+
+            var loaded = JsonSerializer.Deserialize<List<SiteDefinition>>(
+                File.ReadAllText(_settingsPath));
+
+            if (loaded is null)
+                return;
+
+            foreach (var site in loaded)
+            {
+                var name = (site.Name ?? string.Empty).Trim();
+
+                if (string.IsNullOrWhiteSpace(name) ||
+                    name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase) ||
+                    _sites.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                var hosts = (site.Hosts ?? new List<string>())
+                    .Select(h => h.Trim())
+                    .Where(h => !string.IsNullOrWhiteSpace(h))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                _sites.Add(new SiteDefinition
+                {
+                    Name = name,
+                    Hosts = hosts
+                });
+            }
+        }
+        catch
+        {
+            // Corrupt or inaccessible settings should not prevent the monitor from starting.
+        }
+    }
+
+    private void SaveSites()
+    {
+        if (!_persistSites)
+            return;
+
+        try
+        {
+            var directory = Path.GetDirectoryName(_settingsPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            File.WriteAllText(
+                _settingsPath,
+                JsonSerializer.Serialize(
+                    _sites,
+                    new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch
+        {
+            // Monitoring should remain usable even if persistence fails.
+        }
+    }
+
+    private void RefreshSiteList(string? selectedName)
+    {
+        _ignoreSiteSelection = true;
+
+        try
+        {
+            _siteList.Items.Clear();
+
+            int totalHosts = _sites.Sum(s => s.Hosts.Count);
+            _siteList.Items.Add($"{AllSitesLabel} ({totalHosts})");
+
+            foreach (var site in _sites)
+                _siteList.Items.Add($"{site.Name} ({site.Hosts.Count})");
+
+            if (selectedName is null)
+            {
+                _siteList.SelectedIndex = 0;
+            }
+            else
+            {
+                int index = _sites.FindIndex(s =>
+                    s.Name.Equals(selectedName, StringComparison.OrdinalIgnoreCase));
+
+                _siteList.SelectedIndex = index >= 0 ? index + 1 : 0;
+            }
+        }
+        finally
+        {
+            _ignoreSiteSelection = false;
+        }
+    }
+
+    private void OnSiteSelectionChanged()
+    {
+        if (_ignoreSiteSelection || _siteList.SelectedIndex < 0)
+            return;
+
+        if (_cts is null)
+        {
+            PersistCurrentEditor();
+            SaveSites();
+        }
+
+        _selectedSiteName = _siteList.SelectedIndex == 0
+            ? null
+            : _sites[_siteList.SelectedIndex - 1].Name;
+
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+    }
+
+    private void LoadHostEditor()
+    {
+        if (_selectedSiteName is null)
+        {
+            _siteHeaderLabel.Text = "ALL SITES • READ-ONLY SUMMARY";
+            _ipBox.ReadOnly = true;
+            _ipBox.Text = string.Join(
+                Environment.NewLine,
+                _sites.SelectMany(site =>
+                    site.Hosts.Select(host => $"[{site.Name}] {host}")));
+            return;
+        }
+
+        var site = FindSite(_selectedSiteName);
+
+        _siteHeaderLabel.Text = $"{_selectedSiteName.ToUpperInvariant()} • HOSTS";
+        _ipBox.ReadOnly = _cts is not null;
+        _ipBox.Text = site is null
+            ? string.Empty
+            : string.Join(Environment.NewLine, site.Hosts);
+    }
+
+    private void PersistCurrentEditor()
+    {
+        if (_selectedSiteName is null || _cts is not null)
+            return;
+
+        var site = FindSite(_selectedSiteName);
+        if (site is null)
+            return;
+
+        site.Hosts = ParseHosts(_ipBox.Text);
+    }
+
+    private static List<string> ParseHosts(string text)
+    {
+        return text
+            .Split(
+                new[] { '\r', '\n', ',', ';', ' ', '\t' },
+                StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private SiteDefinition? FindSite(string name)
+    {
+        return _sites.FirstOrDefault(s =>
+            s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void SaveSelectedHosts()
+    {
+        if (_selectedSiteName is null || _cts is not null)
+            return;
+
+        PersistCurrentEditor();
+        SaveSites();
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+    }
+
+    private void AddSite()
+    {
+        if (_cts is not null)
+            return;
+
+        var name = _newSiteBox.Text.Trim();
+
+        if (!ValidateNewSiteName(name, existingSiteName: null))
+            return;
+
+        PersistCurrentEditor();
+
+        _sites.Add(new SiteDefinition { Name = name });
+        _newSiteBox.Clear();
+        _selectedSiteName = name;
+
+        SaveSites();
+        RefreshSiteList(name);
+        LoadHostEditor();
+        RefreshGrid();
+        UpdateActionState();
+    }
+
+    private void RenameSite()
+    {
+        if (_cts is not null || _selectedSiteName is null)
+            return;
+
+        var newName = _newSiteBox.Text.Trim();
+
+        if (!ValidateNewSiteName(newName, _selectedSiteName))
+            return;
+
+        PersistCurrentEditor();
+
+        var site = FindSite(_selectedSiteName);
+        if (site is null)
+            return;
+
+        string oldName = site.Name;
+        site.Name = newName;
+
+        foreach (var host in _hosts.Values.Where(h =>
+                     h.Site.Equals(oldName, StringComparison.OrdinalIgnoreCase)))
+        {
+            // Hosts cannot be renamed while monitoring because site controls are disabled.
+        }
+
+        _selectedSiteName = newName;
+        _newSiteBox.Clear();
+
+        SaveSites();
+        RefreshSiteList(newName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+    }
+
+    private void DeleteSite()
+    {
+        if (_cts is not null || _selectedSiteName is null)
+            return;
+
+        var site = FindSite(_selectedSiteName);
+        if (site is null)
+            return;
+
+        var result = MessageBox.Show(
+            $"Delete site \"{site.Name}\" and its {site.Hosts.Count} saved host(s)?",
+            "Ping Watchdog",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+
+        if (result != DialogResult.Yes)
+            return;
+
+        _sites.Remove(site);
+
+        if (_sites.Count == 0)
+            _sites.Add(new SiteDefinition { Name = "Default Site" });
+
+        _selectedSiteName = _sites[0].Name;
+        _newSiteBox.Clear();
+
+        SaveSites();
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+    }
+
+    private bool ValidateNewSiteName(string name, string? existingSiteName)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            MessageBox.Show(
+                "Enter a site name first.",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return false;
+        }
+
+        if (name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "\"All Sites\" is reserved for the combined view.",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return false;
+        }
+
+        bool duplicate = _sites.Any(s =>
+            s.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
+            (existingSiteName is null ||
+             !s.Name.Equals(existingSiteName, StringComparison.OrdinalIgnoreCase)));
+
+        if (duplicate)
+        {
+            MessageBox.Show(
+                "A site with that name already exists.",
+                "Ping Watchdog",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void UpdateActionState()
+    {
+        bool editing = _cts is null;
+        bool specificSite = _selectedSiteName is not null;
+
+        _newSiteBox.Enabled = editing;
+        _addSiteButton.Enabled = editing;
+        _renameSiteButton.Enabled = editing && specificSite;
+        _deleteSiteButton.Enabled = editing && specificSite;
+        _saveHostsButton.Enabled = editing && specificSite;
+
+        _ipBox.Enabled = editing;
+        _ipBox.ReadOnly = !editing || !specificSite;
+    }
+
+    private void StartMonitoring()
+    {
+        PersistCurrentEditor();
+        SaveSites();
+        RefreshSiteList(_selectedSiteName);
+
+        var targets = _sites
+            .SelectMany(site =>
+                site.Hosts.Select(host => new { Site = site.Name, Address = host }))
             .ToArray();
 
         if (targets.Length == 0)
         {
             MessageBox.Show(
-                "Enter at least one IP address or hostname.",
+                "Add at least one IP address or hostname to a site.",
                 "Ping Watchdog",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -478,10 +1049,13 @@ public sealed class MainForm : Form
 
         _hosts.Clear();
         ClearCommandLog();
-        foreach (var target in targets)
-            _hosts[target] = new HostMonitor(target);
 
-        _ipBox.Enabled = false;
+        foreach (var target in targets)
+        {
+            string key = BuildHostKey(target.Site, target.Address);
+            _hosts[key] = new HostMonitor(target.Site, target.Address);
+        }
+
         _intervalSeconds.Enabled = false;
         _failureThreshold.Enabled = false;
         _recoveryThreshold.Enabled = false;
@@ -491,11 +1065,14 @@ public sealed class MainForm : Form
         _trayStopItem.Enabled = true;
 
         _cts = new CancellationTokenSource();
-        _uiTimer.Start();
-        _statusLabel.Text = $"Monitoring {targets.Length} host(s)...";
+        UpdateActionState();
+        LoadHostEditor();
 
-        foreach (var target in targets)
-            _ = MonitorHostAsync(_hosts[target], _cts.Token);
+        _uiTimer.Start();
+        _statusLabel.Text = $"Monitoring {targets.Length} host(s) across {_sites.Count} site(s)...";
+
+        foreach (var host in _hosts.Values)
+            _ = MonitorHostAsync(host, _cts.Token);
     }
 
     private void StopMonitoring()
@@ -508,7 +1085,6 @@ public sealed class MainForm : Form
 
         if (!IsDisposed)
         {
-            _ipBox.Enabled = true;
             _intervalSeconds.Enabled = true;
             _failureThreshold.Enabled = true;
             _recoveryThreshold.Enabled = true;
@@ -516,8 +1092,16 @@ public sealed class MainForm : Form
             _startButton.Enabled = true;
             _stopButton.Enabled = false;
             _trayStopItem.Enabled = false;
+
+            UpdateActionState();
+            LoadHostEditor();
             _statusLabel.Text = "Stopped";
         }
+    }
+
+    private static string BuildHostKey(string site, string address)
+    {
+        return $"{site}\u001f{address}";
     }
 
     private async Task MonitorHostAsync(HostMonitor host, CancellationToken token)
@@ -538,8 +1122,12 @@ public sealed class MainForm : Form
                 if (success)
                 {
                     latency = reply.RoundtripTime;
-                    var ttl = reply.Options is null ? string.Empty : $" TTL={reply.Options.Ttl}";
-                    resultText = $"Reply from {reply.Address}: time={reply.RoundtripTime}ms{ttl}";
+                    var ttl = reply.Options is null
+                        ? string.Empty
+                        : $" TTL={reply.Options.Ttl}";
+
+                    resultText =
+                        $"Reply from {reply.Address}: time={reply.RoundtripTime}ms{ttl}";
                 }
                 else
                 {
@@ -555,12 +1143,14 @@ public sealed class MainForm : Form
             if (token.IsCancellationRequested || IsDisposed || Disposing)
                 break;
 
-            AppendCommandLog(host.Address, success, resultText);
+            AppendCommandLog(host.Site, host.Address, success, resultText);
             ProcessResult(host, success, latency);
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(_monitorIntervalSeconds), token);
+                await Task.Delay(
+                    TimeSpan.FromSeconds(_monitorIntervalSeconds),
+                    token);
             }
             catch (OperationCanceledException)
             {
@@ -597,7 +1187,7 @@ public sealed class MainForm : Form
                         host.OutageStarted = null;
                         host.AlertedForCurrentOutage = false;
 
-                        notificationTitle = "Host Recovered";
+                        notificationTitle = $"Host Recovered • {host.Site}";
                         notificationBody = duration.HasValue
                             ? $"{host.Address} is responding again. Outage duration: {FormatDuration(duration.Value)}."
                             : $"{host.Address} is responding again.";
@@ -625,26 +1215,29 @@ public sealed class MainForm : Form
                         if (!host.AlertedForCurrentOutage)
                         {
                             host.AlertedForCurrentOutage = true;
-                            notificationTitle = "Host Down";
+                            notificationTitle = $"Host Down • {host.Site}";
                             notificationBody =
                                 $"{host.Address} failed {host.ConsecutiveFailures} consecutive ping attempts and is now OFFLINE.";
                             fallbackIcon = ToolTipIcon.Warning;
                         }
                     }
                 }
-                else
+                else if (host.State != HostState.Offline)
                 {
-                    if (host.State != HostState.Offline)
-                        host.State = HostState.Suspect;
+                    host.State = HostState.Suspect;
                 }
             }
         }
 
-        if (!_suppressNotifications && notificationTitle is not null && notificationBody is not null)
+        if (!_suppressNotifications &&
+            notificationTitle is not null &&
+            notificationBody is not null)
         {
-            // Async ping continuations resume on the UI thread; deliver immediately so Stop cannot leave stale queued alerts.
             if (!IsDisposed && !Disposing)
-                ShowNotification(notificationTitle, notificationBody, fallbackIcon);
+                ShowNotification(
+                    notificationTitle,
+                    notificationBody,
+                    fallbackIcon);
         }
     }
 
@@ -660,52 +1253,102 @@ public sealed class MainForm : Form
                     return;
 
                 int height = _mainSplit.ClientSize.Height;
-                if (height > 330)
-                    _mainSplit.SplitterDistance = Math.Max(160, (int)(height * 0.60));
 
-                _commandBox.SelectionStart = _commandBox.TextLength;
-                _commandBox.ScrollToCaret();
+                if (height > 330)
+                    _mainSplit.SplitterDistance =
+                        Math.Max(160, (int)(height * 0.58));
+
+                RebuildCommandView();
             });
         }
     }
 
     private void ClearCommandLog()
     {
+        _commandEntries.Clear();
         _commandBox.Clear();
-        _commandLineCount = 0;
     }
 
-    private void AppendCommandLog(string host, bool success, string resultText)
+    private void AppendCommandLog(
+        string site,
+        string host,
+        bool success,
+        string resultText)
     {
         if (InvokeRequired)
         {
-            BeginInvoke(() => AppendCommandLog(host, success, resultText));
+            BeginInvoke(() =>
+                AppendCommandLog(site, host, success, resultText));
             return;
         }
 
-        if (_commandLineCount >= 2000)
+        var entry = new CommandLogEntry(
+            site,
+            host,
+            DateTime.Now,
+            success,
+            resultText,
+            _pingTimeoutMs);
+
+        _commandEntries.Add(entry);
+
+        bool trimmed = false;
+
+        if (_commandEntries.Count > 2000)
         {
-            int cutAt = _commandBox.GetFirstCharIndexFromLine(500);
-            if (cutAt > 0)
-            {
-                _commandBox.Select(0, cutAt);
-                _commandBox.SelectedText = string.Empty;
-                _commandLineCount -= 500;
-            }
+            _commandEntries.RemoveRange(0, 500);
+            trimmed = true;
         }
 
-        string command = $"{host}: [{DateTime.Now:HH:mm:ss}] ping {host} -n 1 -w {_pingTimeoutMs}  ->  {resultText}";
+        if (trimmed)
+        {
+            RebuildCommandView();
+            return;
+        }
+
+        if (CommandEntryMatchesFilter(entry))
+            AppendCommandEntryToView(entry);
+    }
+
+    private bool CommandEntryMatchesFilter(CommandLogEntry entry)
+    {
+        return _selectedSiteName is null ||
+               entry.Site.Equals(
+                   _selectedSiteName,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RebuildCommandView()
+    {
+        _commandBox.Clear();
+
+        foreach (var entry in _commandEntries)
+        {
+            if (CommandEntryMatchesFilter(entry))
+                AppendCommandEntryToView(entry, scroll: false);
+        }
+
+        _commandBox.SelectionStart = _commandBox.TextLength;
+        _commandBox.ScrollToCaret();
+    }
+
+    private void AppendCommandEntryToView(
+        CommandLogEntry entry,
+        bool scroll = true)
+    {
+        string command =
+            $"{entry.Host}: [{entry.Site}] [{entry.Timestamp:HH:mm:ss}] ping {entry.Host} -n 1 -w {entry.TimeoutMs}  ->  {entry.ResultText}";
 
         _commandBox.SelectionStart = _commandBox.TextLength;
         _commandBox.SelectionLength = 0;
-        _commandBox.SelectionColor = success
+        _commandBox.SelectionColor = entry.Success
             ? Color.FromArgb(126, 231, 135)
             : Color.FromArgb(255, 123, 114);
+
         _commandBox.AppendText(command + Environment.NewLine);
         _commandBox.SelectionColor = _commandBox.ForeColor;
-        _commandLineCount++;
 
-        if (_showCommandView.Checked)
+        if (scroll && _showCommandView.Checked)
         {
             _commandBox.SelectionStart = _commandBox.TextLength;
             _commandBox.ScrollToCaret();
@@ -772,6 +1415,11 @@ public sealed class MainForm : Form
                         check.ForeColor = text;
                         break;
 
+                    case ListBox list:
+                        list.BackColor = panel;
+                        list.ForeColor = text;
+                        break;
+
                     case FlowLayoutPanel flow:
                         flow.BackColor = window;
                         break;
@@ -795,21 +1443,30 @@ public sealed class MainForm : Form
         Theme(this);
 
         _startButton.BackColor = Color.FromArgb(35, 134, 96);
-        _startButton.FlatAppearance.BorderColor = Color.FromArgb(46, 160, 107);
+        _startButton.FlatAppearance.BorderColor =
+            Color.FromArgb(46, 160, 107);
+
         _stopButton.BackColor = Color.FromArgb(92, 35, 39);
-        _stopButton.FlatAppearance.BorderColor = Color.FromArgb(139, 55, 62);
+        _stopButton.FlatAppearance.BorderColor =
+            Color.FromArgb(139, 55, 62);
+
+        _deleteSiteButton.BackColor = Color.FromArgb(64, 28, 34);
 
         _grid.EnableHeadersVisualStyles = false;
         _grid.BackgroundColor = panel;
         _grid.GridColor = border;
         _grid.DefaultCellStyle.BackColor = panel;
         _grid.DefaultCellStyle.ForeColor = text;
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(38, 79, 120);
+        _grid.DefaultCellStyle.SelectionBackColor =
+            Color.FromArgb(38, 79, 120);
         _grid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 36, 44);
+        _grid.ColumnHeadersDefaultCellStyle.BackColor =
+            Color.FromArgb(30, 36, 44);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = text;
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(30, 36, 44);
-        _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor =
+            Color.FromArgb(30, 36, 44);
+        _grid.ColumnHeadersBorderStyle =
+            DataGridViewHeaderBorderStyle.Single;
 
         _statusStrip.BackColor = Color.FromArgb(17, 22, 29);
         _statusStrip.ForeColor = muted;
@@ -819,7 +1476,10 @@ public sealed class MainForm : Form
         _commandBox.ForeColor = Color.FromArgb(201, 209, 217);
     }
 
-    private void ShowNotification(string title, string body, ToolTipIcon fallbackIcon)
+    private void ShowNotification(
+        string title,
+        string body,
+        ToolTipIcon fallbackIcon)
     {
         if (_appNotificationsAvailable)
         {
@@ -840,7 +1500,11 @@ public sealed class MainForm : Form
             }
         }
 
-        _trayIcon.ShowBalloonTip(5000, title, body, fallbackIcon);
+        _trayIcon.ShowBalloonTip(
+            5000,
+            title,
+            body,
+            fallbackIcon);
     }
 
     private static string FormatDuration(TimeSpan duration)
@@ -857,12 +1521,18 @@ public sealed class MainForm : Form
     private void RefreshGrid()
     {
         var rows = _hosts.Values
+            .Where(h =>
+                _selectedSiteName is null ||
+                h.Site.Equals(
+                    _selectedSiteName,
+                    StringComparison.OrdinalIgnoreCase))
             .Select(h =>
             {
                 lock (h)
                 {
                     return new
                     {
+                        Site = h.Site,
                         Host = h.Address,
                         Status = h.State switch
                         {
@@ -871,21 +1541,24 @@ public sealed class MainForm : Form
                             HostState.Offline => "OFFLINE",
                             _ => "UNKNOWN"
                         },
-                        Latency = h.LastRoundTripMs.HasValue ? $"{h.LastRoundTripMs} ms" : "—",
+                        Latency = h.LastRoundTripMs.HasValue
+                            ? $"{h.LastRoundTripMs} ms"
+                            : "—",
                         Failures = h.ConsecutiveFailures,
                         LastReply = h.LastReply?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—",
                         OutageSince = h.OutageStarted?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—"
                     };
                 }
             })
-            .OrderBy(h => h.Host, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(h => h.Site, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(h => h.Host, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         _grid.DataSource = rows;
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
-            var status = row.Cells[1].Value?.ToString();
+            var status = row.Cells[2].Value?.ToString();
 
             row.DefaultCellStyle.BackColor = status switch
             {
@@ -894,12 +1567,18 @@ public sealed class MainForm : Form
                 "ONLINE" => Color.FromArgb(24, 61, 45),
                 _ => Color.FromArgb(22, 27, 34)
             };
-            row.DefaultCellStyle.ForeColor = Color.FromArgb(230, 237, 243);
+
+            row.DefaultCellStyle.ForeColor =
+                Color.FromArgb(230, 237, 243);
         }
 
         int online = rows.Count(h => h.Status == "ONLINE");
         int suspect = rows.Count(h => h.Status == "SUSPECT");
         int offline = rows.Count(h => h.Status == "OFFLINE");
-        _statusLabel.Text = $"Online: {online}   Suspect: {suspect}   Offline: {offline}";
+
+        string view = _selectedSiteName ?? AllSitesLabel;
+
+        _statusLabel.Text =
+            $"View: {view}   |   Online: {online}   Suspect: {suspect}   Offline: {offline}";
     }
 }

@@ -44,5 +44,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "v1.1.0-build.${{ github.run_number }}"
-          gh release create $tag publish/PingWatchdog.exe --title "Ping Watchdog $tag" --notes "Standalone Windows x64 app with dark mode, branded icon, and optional live CMD ping trace. Outage alerts still require consecutive failures."
+          $tag = "v1.2.0-build.${{ github.run_number }}"
+          gh release create $tag publish/PingWatchdog.exe --title "Ping Watchdog $tag" --notes "Standalone Windows x64 app with persistent Sites/Groups, dark mode, branded icon, site-filtered status grid, and optional live CMD ping trace."
