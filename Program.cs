@@ -808,6 +808,12 @@ public sealed class MainForm : Form
         form.ClientSize = new Size(1320, 840);
         form.ApplyResponsiveLayout();
         Check(form._workspaceSplit.SplitterDistance >= 220);
+        Check(form._addSiteButton.Text == "+ Add Site");
+        Check(form._renameSiteButton.Text == "Rename Site");
+        Check(form._deleteSiteButton.Text == "Delete Site");
+        Check(form._addSiteButton.MinimumSize.Height >= 32);
+        Check(form._renameSiteButton.MinimumSize.Height >= 32);
+        Check(form._deleteSiteButton.MinimumSize.Height >= 32);
 
         form.SetUpdateReadyUi("9.9.9");
         Check(form._checkUpdateButton.Text == "Restart to Update");
@@ -1004,15 +1010,17 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 6,
             Padding = new Padding(0),
             Margin = new Padding(0),
             Tag = "nav"
         };
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         sitePanel.Controls.Add(new Label
         {
@@ -1024,47 +1032,38 @@ public sealed class MainForm : Form
         }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
 
-        var siteActions = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = new Padding(0),
-            Tag = "nav"
-        };
-        siteActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        siteActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-
-        _addSiteButton.Dock = DockStyle.Fill;
-        _addSiteButton.Margin = new Padding(0, 6, 3, 2);
-        _renameSiteButton.Dock = DockStyle.Fill;
-        _renameSiteButton.Margin = new Padding(3, 6, 0, 2);
-        _renameSiteButton.Text = "Rename";
-        siteActions.Controls.Add(_addSiteButton, 0, 0);
-        siteActions.Controls.Add(_renameSiteButton, 1, 0);
-        sitePanel.Controls.Add(siteActions, 0, 2);
-
-        var siteFooter = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = new Padding(0),
-            Tag = "nav"
-        };
-        siteFooter.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        siteFooter.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        siteFooter.Controls.Add(new Label
+        var liveApplyLabel = new Label
         {
             Text = "Changes apply live",
-            AutoSize = true,
-            Padding = new Padding(3, 13, 0, 0),
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(4, 0, 0, 0),
             Tag = "muted"
-        }, 0, 0);
-        _deleteSiteButton.Text = "Delete";
-        _deleteSiteButton.Margin = new Padding(5, 7, 0, 0);
-        siteFooter.Controls.Add(_deleteSiteButton, 1, 0);
-        sitePanel.Controls.Add(siteFooter, 0, 3);
+        };
+        sitePanel.Controls.Add(liveApplyLabel, 0, 2);
+
+        _addSiteButton.Text = "+ Add Site";
+        _addSiteButton.AutoSize = false;
+        _addSiteButton.Dock = DockStyle.Fill;
+        _addSiteButton.MinimumSize = new Size(0, 32);
+        _addSiteButton.Margin = new Padding(0, 3, 0, 3);
+
+        _renameSiteButton.Text = "Rename Site";
+        _renameSiteButton.AutoSize = false;
+        _renameSiteButton.Dock = DockStyle.Fill;
+        _renameSiteButton.MinimumSize = new Size(0, 32);
+        _renameSiteButton.Margin = new Padding(0, 3, 0, 3);
+
+        _deleteSiteButton.Text = "Delete Site";
+        _deleteSiteButton.AutoSize = false;
+        _deleteSiteButton.Dock = DockStyle.Fill;
+        _deleteSiteButton.MinimumSize = new Size(0, 32);
+        _deleteSiteButton.Margin = new Padding(0, 3, 0, 3);
+
+        sitePanel.Controls.Add(_addSiteButton, 0, 3);
+        sitePanel.Controls.Add(_renameSiteButton, 0, 4);
+        sitePanel.Controls.Add(_deleteSiteButton, 0, 5);
 
         var right = new TableLayoutPanel
         {
