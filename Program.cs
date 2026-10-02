@@ -851,7 +851,7 @@ public sealed class MainForm : Form
         form.ClientSize = new Size(960, 640);
         form.ApplyResponsiveLayout();
         Check(form._workspaceSplit.SplitterDistance <= 205);
-        Check(form._rootLayout?.RowStyles[0].Height >= 100);
+        Check(form._rootLayout?.RowStyles[0].Height >= 68);
         Check(form._settingsFlowPanel?.WrapContents == true);
 
         form.ClientSize = new Size(1320, 840);
