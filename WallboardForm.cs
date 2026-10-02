@@ -3,21 +3,104 @@ namespace PingWatchdog;
 internal sealed class WallboardForm : Form
 {
     private readonly Func<WallboardSnapshot> _snapshotProvider;
+    private readonly Func<WallboardControlSnapshot> _controlProvider;
+    private readonly WallboardActions _actions;
     private readonly WallboardCanvas _canvas = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
     private readonly Action _cycleHistoryWindow;
     private readonly Action _toggleSuspectHistory;
+
+    private readonly Panel _drawer = new()
+    {
+        Dock = DockStyle.Right,
+        Width = 420,
+        Visible = false,
+        Padding = new Padding(14),
+        BackColor = Color.FromArgb(10, 16, 23)
+    };
+
+    private readonly ComboBox _siteCombo = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 350
+    };
+
+    private readonly TextBox _hostEditor = new()
+    {
+        Multiline = true,
+        ScrollBars = ScrollBars.Vertical,
+        Width = 372,
+        Height = 120,
+        Font = new Font("Cascadia Mono", 9)
+    };
+
+    private readonly DataGridView _hostGrid = new()
+    {
+        Width = 372,
+        Height = 190,
+        ReadOnly = true,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        AllowUserToResizeRows = false,
+        AutoGenerateColumns = false,
+        RowHeadersVisible = false,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        MultiSelect = false,
+        BorderStyle = BorderStyle.None
+    };
+
+    private readonly NumericUpDown _interval = Number(1, 300, 2, 1, 72);
+    private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250, 88);
+    private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 72);
+    private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 72);
+
+    private readonly Button _monitorButton = ToolbarButton("Start Monitoring", 112);
+    private readonly Button _operationsButton = ToolbarButton("Operations", 88);
+    private readonly Button _cliButton = ToolbarButton("CLI", 58);
+    private readonly Button _historyButton = ToolbarButton("History", 72);
+    private readonly Button _settingsButton = ToolbarButton("Settings", 74);
+    private readonly Button _updateButton = ToolbarButton("Check Updates", 112);
+    private readonly Button _screenButton = ToolbarButton("Screen", 66);
+    private readonly Button _mainButton = ToolbarButton("Main Window", 92);
+
+    private readonly Button _applyHostsButton = DrawerButton("Apply Hosts");
+    private readonly Button _addSiteButton = DrawerButton("+ Add Site");
+    private readonly Button _renameSiteButton = DrawerButton("Rename");
+    private readonly Button _deleteSiteButton = DrawerButton("Delete");
+    private readonly Button _editLabelButton = DrawerButton("Edit Label");
+    private readonly Button _clearLabelButton = DrawerButton("Clear Label");
+    private readonly Button _applyMonitoringButton = DrawerButton("Apply Monitoring Defaults");
+    private readonly Button _exportButton = DrawerButton("Export Config");
+    private readonly Button _importButton = DrawerButton("Import Config");
+    private readonly Button _clearCliButton = DrawerButton("Clear CLI");
+    private readonly Button _closeDrawerButton = DrawerButton("Close Operations");
+
+    private readonly Label _updateStatusLabel = new()
+    {
+        AutoSize = false,
+        Width = 372,
+        Height = 42,
+        ForeColor = Color.FromArgb(139, 158, 178)
+    };
+
     private int _screenIndex;
     private bool _showCli = true;
+    private bool _loadingControls;
+    private bool _hostEditorDirty;
+    private string _hostGridSignature = string.Empty;
 
     public WallboardForm(
         Func<WallboardSnapshot> snapshotProvider,
+        Func<WallboardControlSnapshot> controlProvider,
+        WallboardActions actions,
         Screen targetScreen,
         Action cycleHistoryWindow,
         Action toggleSuspectHistory,
         bool showCliByDefault)
     {
         _snapshotProvider = snapshotProvider;
+        _controlProvider = controlProvider;
+        _actions = actions;
         _cycleHistoryWindow = cycleHistoryWindow;
         _toggleSuspectHistory = toggleSuspectHistory;
         _showCli = showCliByDefault;
@@ -33,7 +116,7 @@ internal sealed class WallboardForm : Form
         var screens = Screen.AllScreens;
         _screenIndex = Array.FindIndex(
             screens,
-            s => s.DeviceName.Equals(
+            screen => screen.DeviceName.Equals(
                 targetScreen.DeviceName,
                 StringComparison.OrdinalIgnoreCase));
 
@@ -42,49 +125,24 @@ internal sealed class WallboardForm : Form
 
         Bounds = screens[_screenIndex].Bounds;
 
-        _canvas.Dock = DockStyle.Fill;
-        _canvas.ShowCli = _showCli;
-        Controls.Add(_canvas);
+        BuildHostGrid();
+        BuildShell();
+        WireActions();
+        ApplyControlTheme();
 
-        KeyDown += (_, e) =>
+        KeyDown += OnWallboardKeyDown;
+        _timer.Tick += (_, _) =>
         {
-            if (e.KeyCode is Keys.Escape or Keys.F11)
-            {
-                e.Handled = true;
-                Close();
-            }
-            else if (e.KeyCode == Keys.M)
-            {
-                e.Handled = true;
-                MoveToNextScreen();
-            }
-            else if (e.KeyCode == Keys.C)
-            {
-                e.Handled = true;
-                _showCli = !_showCli;
-                _canvas.ShowCli = _showCli;
-                _canvas.Invalidate();
-            }
-            else if (e.KeyCode == Keys.H)
-            {
-                e.Handled = true;
-                _cycleHistoryWindow();
-                RefreshSnapshot();
-            }
-            else if (e.KeyCode == Keys.S)
-            {
-                e.Handled = true;
-                _toggleSuspectHistory();
-                RefreshSnapshot();
-            }
+            RefreshSnapshot();
+            RefreshControlState();
         };
-
-        _timer.Tick += (_, _) => RefreshSnapshot();
 
         Shown += (_, _) =>
         {
             Bounds = Screen.AllScreens[_screenIndex].Bounds;
+            _drawer.Width = Math.Clamp(ClientSize.Width / 3, 360, 440);
             RefreshSnapshot();
+            RefreshControlState(force: true);
             _timer.Start();
             Activate();
         };
@@ -95,6 +153,647 @@ internal sealed class WallboardForm : Form
             _timer.Dispose();
             _canvas.Dispose();
         };
+    }
+
+    private static NumericUpDown Number(
+        decimal minimum,
+        decimal maximum,
+        decimal value,
+        decimal increment,
+        int width)
+    {
+        return new NumericUpDown
+        {
+            Minimum = minimum,
+            Maximum = maximum,
+            Value = value,
+            Increment = increment,
+            Width = width,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+    }
+
+    private static Button ToolbarButton(string text, int width)
+    {
+        return new Button
+        {
+            Text = text,
+            Width = width,
+            Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            Margin = new Padding(3, 5, 3, 4)
+        };
+    }
+
+    private static Button DrawerButton(string text)
+    {
+        return new Button
+        {
+            Text = text,
+            AutoSize = true,
+            Height = 32,
+            FlatStyle = FlatStyle.Flat,
+            Margin = new Padding(0, 2, 6, 2)
+        };
+    }
+
+    private void BuildShell()
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            BackColor = Color.FromArgb(5, 9, 14)
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var toolbar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(14, 0, 10, 0),
+            Margin = new Padding(0),
+            BackColor = Color.FromArgb(9, 15, 22)
+        };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        toolbar.Controls.Add(new Label
+        {
+            Text = "PING WATCHDOG • WALLBOARD",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(191, 211, 231),
+            Margin = new Padding(4, 12, 0, 0)
+        }, 0, 0);
+
+        var actions = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0),
+            BackColor = Color.Transparent
+        };
+
+        foreach (var button in new[]
+        {
+            _monitorButton,
+            _operationsButton,
+            _cliButton,
+            _historyButton,
+            _settingsButton,
+            _updateButton,
+            _screenButton,
+            _mainButton
+        })
+        {
+            actions.Controls.Add(button);
+        }
+
+        toolbar.Controls.Add(actions, 1, 0);
+
+        var content = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            BackColor = Color.FromArgb(5, 9, 14)
+        };
+
+        _canvas.Dock = DockStyle.Fill;
+        _canvas.ShowCli = _showCli;
+
+        BuildOperationsDrawer();
+
+        content.Controls.Add(_canvas);
+        content.Controls.Add(_drawer);
+        _drawer.BringToFront();
+
+        root.Controls.Add(toolbar, 0, 0);
+        root.Controls.Add(content, 0, 1);
+        Controls.Add(root);
+    }
+
+    private void BuildOperationsDrawer()
+    {
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+
+        stack.Controls.Add(SectionTitle("Operations"));
+        stack.Controls.Add(SectionNote(
+            "Wallboard controls the same live Ping Watchdog session as the main window."));
+
+        stack.Controls.Add(SectionTitle("Site"));
+        stack.Controls.Add(_siteCombo);
+
+        var siteButtons = Row(_addSiteButton, _renameSiteButton, _deleteSiteButton);
+        stack.Controls.Add(siteButtons);
+
+        stack.Controls.Add(SectionTitle("Hosts"));
+        stack.Controls.Add(_hostEditor);
+        stack.Controls.Add(_applyHostsButton);
+
+        stack.Controls.Add(SectionTitle("Live host status"));
+        stack.Controls.Add(_hostGrid);
+        stack.Controls.Add(Row(_editLabelButton, _clearLabelButton));
+
+        stack.Controls.Add(SectionTitle("Monitoring defaults"));
+        stack.Controls.Add(MonitorRow("Interval", _interval, "sec"));
+        stack.Controls.Add(MonitorRow("Timeout", _timeout, "ms"));
+        stack.Controls.Add(MonitorRow("Down after", _downAfter, "fails"));
+        stack.Controls.Add(MonitorRow("Recover after", _recoverAfter, "successes"));
+        stack.Controls.Add(_applyMonitoringButton);
+
+        stack.Controls.Add(SectionTitle("Configuration"));
+        stack.Controls.Add(Row(_exportButton, _importButton, _clearCliButton));
+
+        stack.Controls.Add(SectionTitle("Update status"));
+        stack.Controls.Add(_updateStatusLabel);
+
+        _closeDrawerButton.Width = 160;
+        stack.Controls.Add(_closeDrawerButton);
+
+        _drawer.Controls.Add(stack);
+    }
+
+    private static Label SectionTitle(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            Width = 372,
+            Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(225, 235, 245),
+            Margin = new Padding(0, 12, 0, 5)
+        };
+    }
+
+    private static Label SectionNote(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            MaximumSize = new Size(372, 0),
+            ForeColor = Color.FromArgb(126, 143, 160),
+            Margin = new Padding(0, 0, 0, 7)
+        };
+    }
+
+    private static FlowLayoutPanel Row(params Control[] controls)
+    {
+        var row = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Width = 372,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = new Padding(0, 2, 0, 4)
+        };
+        foreach (var control in controls)
+            row.Controls.Add(control);
+        return row;
+    }
+
+    private static FlowLayoutPanel MonitorRow(
+        string label,
+        Control input,
+        string suffix)
+    {
+        var row = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Width = 372,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 1, 0, 2)
+        };
+        row.Controls.Add(new Label
+        {
+            Text = label,
+            Width = 115,
+            Height = 30,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(185, 199, 214)
+        });
+        input.Margin = new Padding(0, 3, 7, 0);
+        row.Controls.Add(input);
+        row.Controls.Add(new Label
+        {
+            Text = suffix,
+            AutoSize = true,
+            Padding = new Padding(0, 8, 0, 0),
+            ForeColor = Color.FromArgb(126, 143, 160)
+        });
+        return row;
+    }
+
+    private void BuildHostGrid()
+    {
+        _hostGrid.RowTemplate.Height = 28;
+        _hostGrid.ColumnHeadersHeight = 32;
+        _hostGrid.EnableHeadersVisualStyles = false;
+
+        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "SiteColumn",
+            HeaderText = "Site",
+            DataPropertyName = "Site",
+            Width = 78
+        });
+        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "HostColumn",
+            HeaderText = "Host",
+            DataPropertyName = "Address",
+            Width = 112
+        });
+        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "LabelColumn",
+            HeaderText = "Label",
+            DataPropertyName = "Label",
+            Width = 82
+        });
+        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "StatusColumn",
+            HeaderText = "Status",
+            DataPropertyName = "State",
+            Width = 67
+        });
+        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "LatencyColumn",
+            HeaderText = "ms",
+            DataPropertyName = "LatencyMs",
+            Width = 48
+        });
+    }
+
+    private void WireActions()
+    {
+        _monitorButton.Click += (_, _) =>
+        {
+            if (_controlProvider().Monitoring)
+                _actions.StopMonitoring();
+            else
+                _actions.StartMonitoring();
+
+            RefreshControlState(force: true);
+            RefreshSnapshot();
+        };
+
+        _operationsButton.Click += (_, _) => ToggleDrawer();
+        _cliButton.Click += (_, _) => ToggleCli();
+        _historyButton.Click += (_, _) => _actions.OpenHistory();
+        _settingsButton.Click += (_, _) => _actions.OpenSettings();
+        _updateButton.Click += async (_, _) =>
+        {
+            _updateButton.Enabled = false;
+            try { await _actions.RunUpdateAction(); }
+            finally
+            {
+                if (!IsDisposed && !Disposing)
+                    _updateButton.Enabled = true;
+                RefreshControlState(force: true);
+            }
+        };
+        _screenButton.Click += (_, _) => MoveToNextScreen();
+        _mainButton.Click += (_, _) => Close();
+
+        _siteCombo.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loadingControls || _siteCombo.SelectedIndex < 0)
+                return;
+
+            string? site = _siteCombo.SelectedIndex == 0
+                ? null
+                : _siteCombo.SelectedItem?.ToString();
+
+            _hostEditorDirty = false;
+            _actions.SelectSite(site);
+            RefreshControlState(force: true);
+            RefreshSnapshot();
+        };
+
+        _hostEditor.TextChanged += (_, _) =>
+        {
+            if (!_loadingControls)
+                _hostEditorDirty = true;
+        };
+
+        _applyHostsButton.Click += (_, _) =>
+        {
+            var state = _controlProvider();
+            if (state.SelectedSite is null)
+                return;
+
+            string? error = _actions.SaveHosts(state.SelectedSite, _hostEditor.Text);
+            ShowOperationError(error);
+            if (error is null)
+            {
+                _hostEditorDirty = false;
+                RefreshControlState(force: true);
+                RefreshSnapshot();
+            }
+        };
+
+        _addSiteButton.Click += (_, _) =>
+        {
+            using var dialog = new SiteNameDialog("Add Site / Group", "Add Site");
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            string? error = _actions.AddSite(dialog.SiteName);
+            ShowOperationError(error);
+            if (error is null)
+            {
+                _hostEditorDirty = false;
+                RefreshControlState(force: true);
+                RefreshSnapshot();
+            }
+        };
+
+        _renameSiteButton.Click += (_, _) =>
+        {
+            var state = _controlProvider();
+            if (state.SelectedSite is null)
+                return;
+
+            using var dialog = new SiteNameDialog(
+                "Rename Site / Group",
+                "Rename",
+                state.SelectedSite);
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            string? error = _actions.RenameSite(state.SelectedSite, dialog.SiteName);
+            ShowOperationError(error);
+            if (error is null)
+            {
+                _hostEditorDirty = false;
+                RefreshControlState(force: true);
+                RefreshSnapshot();
+            }
+        };
+
+        _deleteSiteButton.Click += (_, _) =>
+        {
+            var state = _controlProvider();
+            if (state.SelectedSite is null)
+                return;
+
+            var answer = MessageBox.Show(
+                this,
+                $"Delete site \"{state.SelectedSite}\" and its saved hosts?",
+                "Ping Watchdog",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (answer != DialogResult.Yes)
+                return;
+
+            string? error = _actions.DeleteSite(state.SelectedSite);
+            ShowOperationError(error);
+            if (error is null)
+            {
+                _hostEditorDirty = false;
+                RefreshControlState(force: true);
+                RefreshSnapshot();
+            }
+        };
+
+        _editLabelButton.Click += (_, _) => EditSelectedLabel(clear: false);
+        _clearLabelButton.Click += (_, _) => EditSelectedLabel(clear: true);
+
+        _applyMonitoringButton.Click += (_, _) =>
+        {
+            string? error = _actions.ApplyMonitoringSettings(
+                (int)_interval.Value,
+                (int)_timeout.Value,
+                (int)_downAfter.Value,
+                (int)_recoverAfter.Value);
+            ShowOperationError(error);
+            RefreshControlState(force: true);
+        };
+
+        _exportButton.Click += (_, _) => _actions.SaveConfig();
+        _importButton.Click += (_, _) =>
+        {
+            _actions.LoadConfig();
+            _hostEditorDirty = false;
+            RefreshControlState(force: true);
+            RefreshSnapshot();
+        };
+        _clearCliButton.Click += (_, _) =>
+        {
+            _actions.ClearCommandLog();
+            RefreshSnapshot();
+        };
+        _closeDrawerButton.Click += (_, _) => ToggleDrawer(forceClosed: true);
+    }
+
+    private void EditSelectedLabel(bool clear)
+    {
+        if (_hostGrid.SelectedRows.Count == 0)
+            return;
+
+        var row = _hostGrid.SelectedRows[0];
+        string site = row.Cells["SiteColumn"].Value?.ToString() ?? string.Empty;
+        string host = row.Cells["HostColumn"].Value?.ToString() ?? string.Empty;
+        string current = row.Cells["LabelColumn"].Value?.ToString() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(site) || string.IsNullOrWhiteSpace(host))
+            return;
+
+        string label = string.Empty;
+
+        if (!clear)
+        {
+            using var dialog = new NicknameDialog(host, current);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+            label = dialog.Nickname;
+        }
+
+        string? error = _actions.SetLabel(site, host, label);
+        ShowOperationError(error);
+        if (error is null)
+            RefreshControlState(force: true);
+    }
+
+    private void ShowOperationError(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+            return;
+
+        MessageBox.Show(
+            this,
+            error,
+            "Ping Watchdog",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    private void ApplyControlTheme()
+    {
+        var border = Color.FromArgb(39, 53, 67);
+        var button = Color.FromArgb(20, 29, 39);
+        var text = Color.FromArgb(230, 238, 246);
+        var input = Color.FromArgb(7, 12, 18);
+
+        foreach (var control in new Button[]
+        {
+            _monitorButton,
+            _operationsButton,
+            _cliButton,
+            _historyButton,
+            _settingsButton,
+            _updateButton,
+            _screenButton,
+            _mainButton,
+            _applyHostsButton,
+            _addSiteButton,
+            _renameSiteButton,
+            _deleteSiteButton,
+            _editLabelButton,
+            _clearLabelButton,
+            _applyMonitoringButton,
+            _exportButton,
+            _importButton,
+            _clearCliButton,
+            _closeDrawerButton
+        })
+        {
+            control.FlatStyle = FlatStyle.Flat;
+            control.FlatAppearance.BorderColor = border;
+            control.FlatAppearance.BorderSize = 1;
+            control.BackColor = button;
+            control.ForeColor = text;
+        }
+
+        _operationsButton.BackColor = Color.FromArgb(19, 58, 79);
+        _operationsButton.FlatAppearance.BorderColor = Color.FromArgb(48, 119, 150);
+
+        _siteCombo.BackColor = input;
+        _siteCombo.ForeColor = text;
+        _siteCombo.FlatStyle = FlatStyle.Flat;
+
+        _hostEditor.BackColor = input;
+        _hostEditor.ForeColor = Color.FromArgb(207, 221, 234);
+        _hostEditor.BorderStyle = BorderStyle.FixedSingle;
+
+        foreach (var numeric in new[] { _interval, _timeout, _downAfter, _recoverAfter })
+        {
+            numeric.BackColor = input;
+            numeric.ForeColor = text;
+        }
+
+        _hostGrid.BackgroundColor = Color.FromArgb(7, 12, 18);
+        _hostGrid.GridColor = Color.FromArgb(31, 43, 55);
+        _hostGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(19, 28, 38);
+        _hostGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(139, 158, 178);
+        _hostGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(19, 28, 38);
+        _hostGrid.DefaultCellStyle.BackColor = Color.FromArgb(10, 16, 23);
+        _hostGrid.DefaultCellStyle.ForeColor = text;
+        _hostGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(31, 74, 102);
+        _hostGrid.DefaultCellStyle.SelectionForeColor = Color.White;
+        _hostGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(8, 14, 20);
+    }
+
+    private void OnWallboardKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode is Keys.Escape or Keys.F11)
+        {
+            e.Handled = true;
+            Close();
+        }
+        else if (e.Control && e.KeyCode == Keys.H)
+        {
+            e.Handled = true;
+            _actions.OpenHistory();
+        }
+        else if (e.Control && e.KeyCode == Keys.Oemcomma)
+        {
+            e.Handled = true;
+            _actions.OpenSettings();
+        }
+        else if (e.KeyCode == Keys.O)
+        {
+            e.Handled = true;
+            ToggleDrawer();
+        }
+        else if (e.KeyCode == Keys.P)
+        {
+            e.Handled = true;
+            if (_controlProvider().Monitoring)
+                _actions.StopMonitoring();
+            else
+                _actions.StartMonitoring();
+            RefreshControlState(force: true);
+            RefreshSnapshot();
+        }
+        else if (e.KeyCode == Keys.M)
+        {
+            e.Handled = true;
+            MoveToNextScreen();
+        }
+        else if (e.KeyCode == Keys.C)
+        {
+            e.Handled = true;
+            ToggleCli();
+        }
+        else if (e.KeyCode == Keys.H)
+        {
+            e.Handled = true;
+            _cycleHistoryWindow();
+            RefreshSnapshot();
+        }
+        else if (e.KeyCode == Keys.S)
+        {
+            e.Handled = true;
+            _toggleSuspectHistory();
+            RefreshSnapshot();
+        }
+    }
+
+    private void ToggleCli()
+    {
+        _showCli = !_showCli;
+        _canvas.ShowCli = _showCli;
+        _cliButton.Text = _showCli ? "Hide CLI" : "Show CLI";
+        _cliButton.Width = 74;
+        _canvas.Invalidate();
+    }
+
+    private void ToggleDrawer(bool forceClosed = false)
+    {
+        _drawer.Visible = forceClosed ? false : !_drawer.Visible;
+        _operationsButton.Text = _drawer.Visible ? "Close Ops" : "Operations";
+
+        if (_drawer.Visible)
+        {
+            _drawer.BringToFront();
+            _hostEditorDirty = false;
+            RefreshControlState(force: true);
+        }
+
+        _canvas.Invalidate();
     }
 
     private void RefreshSnapshot()
@@ -109,7 +808,157 @@ internal sealed class WallboardForm : Form
         }
         catch
         {
-            // The monitoring UI must remain available even if one wallboard refresh fails.
+            // A failed refresh must not interrupt monitoring or Wallboard controls.
+        }
+    }
+
+    private void RefreshControlState(bool force = false)
+    {
+        if (IsDisposed || Disposing)
+            return;
+
+        WallboardControlSnapshot state;
+        try
+        {
+            state = _controlProvider();
+        }
+        catch
+        {
+            return;
+        }
+
+        _loadingControls = true;
+        try
+        {
+            _monitorButton.Text = state.Monitoring ? "Stop Monitoring" : "Start Monitoring";
+            _monitorButton.BackColor = state.Monitoring
+                ? Color.FromArgb(87, 35, 43)
+                : Color.FromArgb(28, 99, 68);
+            _monitorButton.FlatAppearance.BorderColor = state.Monitoring
+                ? Color.FromArgb(151, 59, 70)
+                : Color.FromArgb(51, 157, 108);
+
+            _cliButton.Text = _showCli ? "Hide CLI" : "Show CLI";
+            _cliButton.Width = 74;
+
+            _updateButton.Text = state.UpdateActionText;
+            _updateStatusLabel.Text = $"{state.Version}\r\n{state.UpdateStatus}";
+
+            RefreshSiteCombo(state);
+            RefreshHostGrid(state, force);
+
+            bool specificSite = state.SelectedSite is not null;
+            _renameSiteButton.Enabled = specificSite;
+            _deleteSiteButton.Enabled = specificSite;
+            _applyHostsButton.Enabled = specificSite;
+            _hostEditor.ReadOnly = !specificSite;
+
+            if ((force || !_hostEditorDirty) && !_hostEditor.Focused)
+            {
+                _hostEditor.Text = specificSite
+                    ? string.Join(Environment.NewLine, state.Hosts.Select(host => host.Address))
+                    : string.Join(
+                        Environment.NewLine,
+                        state.Hosts.Select(host => $"[{host.Site}] {host.Address}"));
+                _hostEditorDirty = false;
+            }
+
+            bool settingsEditable = !state.Monitoring;
+            foreach (var numeric in new Control[] { _interval, _timeout, _downAfter, _recoverAfter })
+                numeric.Enabled = settingsEditable;
+            _applyMonitoringButton.Enabled = settingsEditable;
+
+            if (settingsEditable)
+            {
+                _interval.Value = Math.Clamp(state.PingIntervalSeconds, (int)_interval.Minimum, (int)_interval.Maximum);
+                _timeout.Value = Math.Clamp(state.PingTimeoutMs, (int)_timeout.Minimum, (int)_timeout.Maximum);
+                _downAfter.Value = Math.Clamp(state.FailureThreshold, (int)_downAfter.Minimum, (int)_downAfter.Maximum);
+                _recoverAfter.Value = Math.Clamp(state.RecoveryThreshold, (int)_recoverAfter.Minimum, (int)_recoverAfter.Maximum);
+            }
+        }
+        finally
+        {
+            _loadingControls = false;
+        }
+    }
+
+    private void RefreshSiteCombo(WallboardControlSnapshot state)
+    {
+        var expected = new[] { "All Sites" }.Concat(state.Sites).ToArray();
+        bool rebuild = _siteCombo.Items.Count != expected.Length;
+
+        if (!rebuild)
+        {
+            for (int i = 0; i < expected.Length; i++)
+            {
+                if (!string.Equals(
+                    _siteCombo.Items[i]?.ToString(),
+                    expected[i],
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    rebuild = true;
+                    break;
+                }
+            }
+        }
+
+        if (rebuild)
+        {
+            _siteCombo.Items.Clear();
+            _siteCombo.Items.AddRange(expected);
+        }
+
+        int selectedIndex = state.SelectedSite is null
+            ? 0
+            : Array.FindIndex(
+                expected,
+                item => item.Equals(state.SelectedSite, StringComparison.OrdinalIgnoreCase));
+
+        if (selectedIndex < 0)
+            selectedIndex = 0;
+
+        if (_siteCombo.SelectedIndex != selectedIndex)
+            _siteCombo.SelectedIndex = selectedIndex;
+    }
+
+    private void RefreshHostGrid(WallboardControlSnapshot state, bool force)
+    {
+        string signature = string.Join(
+            "|",
+            state.Hosts.Select(host =>
+                $"{host.Site}\u001f{host.Address}\u001f{host.Label}\u001f{host.State}\u001f{host.LatencyMs}\u001f{host.Failures}"));
+
+        if (!force && signature == _hostGridSignature)
+            return;
+
+        string? selectedHost = _hostGrid.SelectedRows.Count > 0
+            ? _hostGrid.SelectedRows[0].Cells["HostColumn"].Value?.ToString()
+            : null;
+        string? selectedSite = _hostGrid.SelectedRows.Count > 0
+            ? _hostGrid.SelectedRows[0].Cells["SiteColumn"].Value?.ToString()
+            : null;
+
+        _hostGridSignature = signature;
+        _hostGrid.DataSource = state.Hosts.ToList();
+
+        foreach (DataGridViewRow row in _hostGrid.Rows)
+        {
+            string status = row.Cells["StatusColumn"].Value?.ToString() ?? string.Empty;
+            row.Cells["StatusColumn"].Style.ForeColor = status switch
+            {
+                "Online" => Color.FromArgb(78, 216, 143),
+                "Suspect" => Color.FromArgb(245, 191, 71),
+                "Offline" => Color.FromArgb(255, 101, 111),
+                _ => Color.FromArgb(139, 158, 178)
+            };
+
+            if (selectedHost is not null &&
+                selectedSite is not null &&
+                string.Equals(row.Cells["HostColumn"].Value?.ToString(), selectedHost, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(row.Cells["SiteColumn"].Value?.ToString(), selectedSite, StringComparison.OrdinalIgnoreCase))
+            {
+                row.Selected = true;
+            }
         }
     }
 
@@ -122,6 +971,7 @@ internal sealed class WallboardForm : Form
 
         _screenIndex = (_screenIndex + 1) % screens.Length;
         Bounds = screens[_screenIndex].Bounds;
+        _drawer.Width = Math.Clamp(ClientSize.Width / 3, 360, 440);
         Activate();
     }
 }
@@ -891,8 +1741,8 @@ internal sealed class WallboardCanvas : Control
     {
         using var mutedBrush = new SolidBrush(Color.FromArgb(90, 107, 125));
         string left = ShowCli
-            ? "ESC Exit   M Monitor   C Hide CLI   H History range   S Suspects"
-            : "ESC Exit   M Monitor   C Show CLI   H History range   S Suspects";
+            ? "ESC Main   O Operations   P Start/Stop   C Hide CLI   H Range   S Suspects"
+            : "ESC Main   O Operations   P Start/Stop   C Show CLI   H Range   S Suspects";
         string right = "© 2026 Joseph Luker • All rights reserved.";
 
         g.DrawString(left, _tinyFont, mutedBrush, 23, ClientSize.Height - 25);

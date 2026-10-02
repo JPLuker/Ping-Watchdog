@@ -70,3 +70,12 @@ The Settings window controls tray behavior, notifications, CLI/Wallboard prefere
 monitoring defaults, outage-history defaults, and automatic update checks.
 A manual Check for Updates button is always available in Settings even if automatic checks are disabled.
 The main app bar also keeps its Updates button permanently visible.
+
+
+FULL-CONTROL WALLBOARD
+Wallboard is no longer display-only.
+Use the top toolbar or press O to open Operations.
+From Wallboard you can start/stop monitoring, manage sites and hosts, edit labels,
+change stopped-session monitoring defaults, import/export config, clear CLI,
+open History/Settings, check for updates, switch monitors, and return to the main window.
+All Wallboard actions use the same live session and autosaved configuration as the main window.

@@ -31,7 +31,7 @@ jobs:
       - name: Set release version
         shell: pwsh
         run: |
-          "WATCHDOG_VERSION=1.11.${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WATCHDOG_VERSION=1.12.${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install matching Velopack CLI
         shell: pwsh
@@ -71,6 +71,7 @@ jobs:
           - Version 1.9 modern desktop shell: stable app bar, always-visible updater state, overflow menu for secondary actions, tighter hierarchy, larger host workspace, and responsive navigation.
           - Persistent outage history with saved 24h / 7d / 30d / all-time filters, optional suspect suppression, full desktop history viewer, and Wallboard history integration.
           - Full Settings window for app behavior, monitoring defaults, history, Wallboard/CLI preferences, notifications, tray behavior, and permanent manual update checks.
+          - Full-control Wallboard operations mode: start/stop monitoring, site selection and management, live host editing, host labels, monitoring defaults, config import/export, CLI clearing, history, settings, updates, and monitor switching from the fullscreen NOC UI.
           - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
           - Copyright © 2026 Joseph Luker. All rights reserved.
 

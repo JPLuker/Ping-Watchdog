@@ -320,6 +320,46 @@ internal sealed record AppSettingsSnapshot(
     string UpdateStatus,
     string UpdateActionText);
 
+internal sealed record WallboardControlHost(
+    string Site,
+    string Address,
+    string Label,
+    HostState State,
+    long? LatencyMs,
+    int Failures,
+    DateTime? LastReply,
+    DateTime? OutageStarted);
+
+internal sealed record WallboardControlSnapshot(
+    bool Monitoring,
+    string? SelectedSite,
+    IReadOnlyList<string> Sites,
+    IReadOnlyList<WallboardControlHost> Hosts,
+    int PingIntervalSeconds,
+    int PingTimeoutMs,
+    int FailureThreshold,
+    int RecoveryThreshold,
+    string Version,
+    string UpdateStatus,
+    string UpdateActionText);
+
+internal sealed record WallboardActions(
+    Action StartMonitoring,
+    Action StopMonitoring,
+    Action<string?> SelectSite,
+    Func<string, string?> AddSite,
+    Func<string, string, string?> RenameSite,
+    Func<string, string?> DeleteSite,
+    Func<string, string, string?> SaveHosts,
+    Func<string, string, string, string?> SetLabel,
+    Func<int, int, int, int, string?> ApplyMonitoringSettings,
+    Action OpenSettings,
+    Action OpenHistory,
+    Func<Task> RunUpdateAction,
+    Action SaveConfig,
+    Action LoadConfig,
+    Action ClearCommandLog);
+
 internal sealed record WallboardHostSnapshot(
     string Site,
     string Address,
@@ -893,6 +933,22 @@ public sealed class MainForm : Form
         Check(wallboardSnapshot.Sites[0].Hosts.Count == 1);
         Check(wallboardSnapshot.Commands.Count == 2);
         Check(wallboardSnapshot.Commands[0].Text.Contains("ping 127.0.0.1", StringComparison.Ordinal));
+
+        var wallboardControls = form.BuildWallboardControlSnapshot();
+        Check(wallboardControls.Sites.Count == 1);
+        Check(wallboardControls.Hosts.Count == 1);
+        Check(wallboardControls.SelectedSite == "Test Site");
+        Check(form.WallboardAddSite("Branch") is null);
+        Check(form.WallboardSaveHosts("Branch", "10.0.0.1\r\n10.0.0.2") is null);
+        Check(form.WallboardRenameSite("Branch", "Branch Renamed") is null);
+        Check(form.WallboardSetLabel("Branch Renamed", "10.0.0.1", "Router") is null);
+        var editedWallboardControls = form.BuildWallboardControlSnapshot();
+        Check(editedWallboardControls.SelectedSite == "Branch Renamed");
+        Check(editedWallboardControls.Hosts.Count == 2);
+        Check(editedWallboardControls.Hosts.Any(h => h.Label == "Router"));
+        Check(form.WallboardDeleteSite("Branch Renamed") is null);
+        form.WallboardSelectSite("Test Site");
+        Check(form.BuildWallboardControlSnapshot().Sites.Count == 1);
 
         var majorityOnlineSite = new WallboardSiteSnapshot(
             "Majority Online",
@@ -2049,7 +2105,7 @@ public sealed class MainForm : Form
         };
     }
 
-    private void SaveConfigFile()
+    private void SaveConfigFile(IWin32Window? owner = null)
     {
         var config = BuildConfig();
 
@@ -2062,7 +2118,7 @@ public sealed class MainForm : Form
             DefaultExt = "pingwatch.json"
         };
 
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        if (dialog.ShowDialog(owner ?? this) != DialogResult.OK)
             return;
 
         try
@@ -2085,7 +2141,7 @@ public sealed class MainForm : Form
         }
     }
 
-    private void LoadConfigFile()
+    private void LoadConfigFile(IWin32Window? owner = null)
     {
         if (_cts is not null)
         {
@@ -2104,7 +2160,7 @@ public sealed class MainForm : Form
             CheckFileExists = true
         };
 
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        if (dialog.ShowDialog(owner ?? this) != DialogResult.OK)
             return;
 
         try
@@ -2844,7 +2900,7 @@ public sealed class MainForm : Form
         SaveSites();
     }
 
-    private void OpenEventHistory()
+    private void OpenEventHistory(IWin32Window? owner = null)
     {
         if (_eventHistoryForm is not null && !_eventHistoryForm.IsDisposed)
         {
@@ -2859,7 +2915,7 @@ public sealed class MainForm : Form
             SetEventHistoryPreferences);
 
         _eventHistoryForm.FormClosed += (_, _) => _eventHistoryForm = null;
-        _eventHistoryForm.Show(this);
+        _eventHistoryForm.Show(owner ?? this);
     }
 
     private WallboardSnapshot BuildWallboardSnapshot()
@@ -2949,6 +3005,243 @@ public sealed class MainForm : Form
             _hideSuspectEvents);
     }
 
+    private WallboardControlSnapshot BuildWallboardControlSnapshot()
+    {
+        var selectedSites = _selectedSiteName is null
+            ? _sites
+            : _sites
+                .Where(site => site.Name.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        var hosts = new List<WallboardControlHost>();
+
+        foreach (var site in selectedSites)
+        {
+            foreach (var address in site.Hosts)
+            {
+                string key = BuildHostKey(site.Name, address);
+
+                if (_hosts.TryGetValue(key, out var active))
+                {
+                    lock (active)
+                    {
+                        hosts.Add(new WallboardControlHost(
+                            site.Name,
+                            address,
+                            active.Label,
+                            active.State,
+                            active.LastRoundTripMs,
+                            active.ConsecutiveFailures,
+                            active.LastReply,
+                            active.OutageStarted));
+                    }
+                }
+                else
+                {
+                    hosts.Add(new WallboardControlHost(
+                        site.Name,
+                        address,
+                        GetNickname(site.Name, address),
+                        HostState.Unknown,
+                        null,
+                        0,
+                        null,
+                        null));
+                }
+            }
+        }
+
+        return new WallboardControlSnapshot(
+            _cts is not null,
+            _selectedSiteName,
+            _sites.Select(site => site.Name).ToList(),
+            hosts,
+            (int)_intervalSeconds.Value,
+            (int)_timeoutMs.Value,
+            (int)_failureThreshold.Value,
+            (int)_recoveryThreshold.Value,
+            GetDisplayVersion(),
+            GetUpdateStatusText(),
+            GetUpdateActionText());
+    }
+
+    private void WallboardSelectSite(string? siteName)
+    {
+        PersistCurrentEditor();
+
+        if (siteName is not null && FindSite(siteName) is null)
+            return;
+
+        _selectedSiteName = siteName;
+        SaveSites();
+        ReconcileMonitoringWithConfig();
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+    }
+
+    private string? GetWallboardSiteNameError(string name, string? existingSiteName = null)
+    {
+        name = name.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+            return "Enter a site name first.";
+
+        if (name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase))
+            return "\"All Sites\" is reserved for the combined view.";
+
+        bool duplicate = _sites.Any(site =>
+            site.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
+            (existingSiteName is null ||
+             !site.Name.Equals(existingSiteName, StringComparison.OrdinalIgnoreCase)));
+
+        return duplicate
+            ? "A site with that name already exists."
+            : null;
+    }
+
+    private string? WallboardAddSite(string name)
+    {
+        name = name.Trim();
+        string? error = GetWallboardSiteNameError(name);
+        if (error is not null)
+            return error;
+
+        PersistCurrentEditor();
+        _sites.Add(new SiteDefinition { Name = name });
+        _selectedSiteName = name;
+
+        SaveSites();
+        ReconcileMonitoringWithConfig();
+        RefreshSiteList(name);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+        return null;
+    }
+
+    private string? WallboardRenameSite(string oldName, string newName)
+    {
+        var site = FindSite(oldName);
+        if (site is null)
+            return "That site no longer exists.";
+
+        newName = newName.Trim();
+        string? error = GetWallboardSiteNameError(newName, oldName);
+        if (error is not null)
+            return error;
+
+        PersistCurrentEditor();
+        site.Name = newName;
+
+        if (_selectedSiteName?.Equals(oldName, StringComparison.OrdinalIgnoreCase) == true)
+            _selectedSiteName = newName;
+
+        SaveSites();
+        ReconcileMonitoringWithConfig();
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+        return null;
+    }
+
+    private string? WallboardDeleteSite(string siteName)
+    {
+        var site = FindSite(siteName);
+        if (site is null)
+            return "That site no longer exists.";
+
+        PersistCurrentEditor();
+        _sites.Remove(site);
+
+        if (_sites.Count == 0)
+            _sites.Add(new SiteDefinition { Name = "Default Site" });
+
+        if (_selectedSiteName?.Equals(siteName, StringComparison.OrdinalIgnoreCase) == true)
+            _selectedSiteName = _sites[0].Name;
+
+        SaveSites();
+        ReconcileMonitoringWithConfig();
+        RefreshSiteList(_selectedSiteName);
+        LoadHostEditor();
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+        return null;
+    }
+
+    private string? WallboardSaveHosts(string siteName, string hostText)
+    {
+        var site = FindSite(siteName);
+        if (site is null)
+            return "That site no longer exists.";
+
+        site.Hosts = ParseHosts(hostText);
+        site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+
+        if (_selectedSiteName?.Equals(siteName, StringComparison.OrdinalIgnoreCase) == true)
+            _ipBox.Text = string.Join(Environment.NewLine, site.Hosts);
+
+        SaveSites();
+        ReconcileMonitoringWithConfig();
+        RefreshSiteList(_selectedSiteName);
+        RefreshGrid();
+        RebuildCommandView();
+        UpdateActionState();
+        return null;
+    }
+
+    private string? WallboardSetLabel(string siteName, string host, string label)
+    {
+        var site = FindSite(siteName);
+        if (site is null)
+            return "That site no longer exists.";
+
+        if (!site.Hosts.Any(address => address.Equals(host, StringComparison.OrdinalIgnoreCase)))
+            return "That host no longer exists in the site.";
+
+        SetNicknameValue(siteName, host, label);
+        SaveSites();
+        RefreshGrid();
+        RebuildCommandView();
+        return null;
+    }
+
+    private string? WallboardApplyMonitoringSettings(
+        int intervalSeconds,
+        int timeoutMs,
+        int failureThreshold,
+        int recoveryThreshold)
+    {
+        if (_cts is not null)
+            return "Stop monitoring before changing timing or outage thresholds.";
+
+        _intervalSeconds.Value = Math.Clamp(
+            intervalSeconds,
+            (int)_intervalSeconds.Minimum,
+            (int)_intervalSeconds.Maximum);
+        _timeoutMs.Value = Math.Clamp(
+            timeoutMs,
+            (int)_timeoutMs.Minimum,
+            (int)_timeoutMs.Maximum);
+        _failureThreshold.Value = Math.Clamp(
+            failureThreshold,
+            (int)_failureThreshold.Minimum,
+            (int)_failureThreshold.Maximum);
+        _recoveryThreshold.Value = Math.Clamp(
+            recoveryThreshold,
+            (int)_recoveryThreshold.Minimum,
+            (int)_recoveryThreshold.Maximum);
+
+        SaveSites();
+        return null;
+    }
+
     private void OpenWallboard()
     {
         if (_wallboardForm is not null && !_wallboardForm.IsDisposed)
@@ -2965,6 +3258,23 @@ public sealed class MainForm : Form
 
         _wallboardForm = new WallboardForm(
             BuildWallboardSnapshot,
+            BuildWallboardControlSnapshot,
+            new WallboardActions(
+                StartMonitoring,
+                StopMonitoring,
+                WallboardSelectSite,
+                WallboardAddSite,
+                WallboardRenameSite,
+                WallboardDeleteSite,
+                WallboardSaveHosts,
+                WallboardSetLabel,
+                WallboardApplyMonitoringSettings,
+                () => OpenSettings(_wallboardForm),
+                () => OpenEventHistory(_wallboardForm),
+                RunUpdateActionAsync,
+                () => SaveConfigFile(_wallboardForm),
+                () => LoadConfigFile(_wallboardForm),
+                ClearCommandLog),
             target,
             CycleEventHistoryWindow,
             ToggleSuspectHistory,
@@ -3093,7 +3403,7 @@ public sealed class MainForm : Form
         _statusLabel.Text = "Settings saved.";
     }
 
-    private void OpenSettings()
+    private void OpenSettings(IWin32Window? owner = null)
     {
         if (_settingsForm is not null && !_settingsForm.IsDisposed)
         {
@@ -3107,10 +3417,10 @@ public sealed class MainForm : Form
             GetAppSettingsSnapshot,
             ApplyAppSettings,
             RunUpdateActionAsync,
-            OpenEventHistory);
+            () => OpenEventHistory(owner));
 
         _settingsForm.FormClosed += (_, _) => _settingsForm = null;
-        _settingsForm.Show(this);
+        _settingsForm.Show(owner ?? this);
     }
 
     private void RestoreAfterWallboard()

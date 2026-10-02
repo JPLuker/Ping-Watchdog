@@ -244,3 +244,19 @@ Ping Watchdog now has a dedicated Settings window rather than forcing every pref
 - Disabling automatic checks never disables the manual Check for Updates button.
 - All Settings preferences persist in Ping Watchdog's normal autosave config.
 - On very narrow windows the redundant MONITORING/IDLE badge may hide first; Updates, Wallboard, Settings, and the overflow menu remain visible.
+
+
+## Version 1.12 full-control Wallboard
+
+Wallboard is now a second operational control surface rather than a read-only display.
+
+- A permanent Wallboard toolbar provides Start/Stop Monitoring, Operations, CLI, History, Settings, Updates, monitor switching, and return-to-main controls.
+- **Operations** opens an in-Wallboard drawer without leaving fullscreen.
+- The drawer can select **All Sites** or a specific site, add/rename/delete sites, edit that site's host list, and apply changes live.
+- A live host table exposes site, host, label, current state, and latency while the topology continues updating.
+- Host labels/nicknames can be edited or cleared directly from Wallboard.
+- Ping interval, timeout, DOWN threshold, and recovery threshold can be changed from Wallboard when monitoring is stopped.
+- Configuration import/export and CLI-log clearing are available from the drawer.
+- Outage History, full Settings, and GitHub update checks can be opened directly over Wallboard.
+- All actions operate on the same MainForm state, worker set, autosave configuration, event history, and updater. There is no separate Wallboard configuration to drift out of sync.
+- Keyboard controls remain available: **O** operations, **P** start/stop, **C** CLI, **M** move monitor, **H** history range, **S** suspects, **Ctrl+H** full history, **Ctrl+,** settings, and **Esc/F11** return to the main window.
