@@ -171,3 +171,12 @@ Wallboard now includes the same live ping-command trace used by the main interfa
 - The newest output stays at the bottom like a terminal.
 - The Wallboard snapshot carries only a bounded recent slice of command history.
 - Press **C** at any time to hide or restore the CLI panel without leaving fullscreen mode.
+
+
+## Update restart and Wallboard polish
+
+- After an update finishes downloading, the update button changes to **Restart to Update** instead of forcing an immediate restart.
+- The same restart action is available from the tray menu.
+- If monitoring is active, Watchdog clearly warns that the session will stop, saves the working configuration, stops monitoring cleanly, applies the already-downloaded update, and relaunches.
+- Wallboard clock/date/status spacing was corrected so the date no longer overlaps the monitoring badge.
+- Site names are now constrained to their topology nodes, with intelligent two-line splitting and smaller fallback fonts for long names.

@@ -495,6 +495,7 @@ public sealed class MainForm : Form
 
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _trayStopItem;
+    private readonly ToolStripMenuItem _trayUpdateItem;
     private readonly Icon _appIcon;
     private readonly Font _siteItemFont = new("Segoe UI Semibold", 9.5f);
     private readonly Font _statusCellFont = new("Segoe UI Semibold", 8.5f, FontStyle.Bold);
@@ -512,6 +513,9 @@ public sealed class MainForm : Form
     private readonly bool _persistSites;
     private bool _ignoreSiteSelection;
     private bool _updateCheckInProgress;
+    private UpdateManager? _pendingUpdateManager;
+    private UpdateInfo? _pendingUpdateInfo;
+    private string? _pendingUpdateVersion;
     private string? _selectedSiteName;
 
     private int _monitorIntervalSeconds = 2;
@@ -573,16 +577,23 @@ public sealed class MainForm : Form
         };
         var openItem = new ToolStripMenuItem("Open Ping Watchdog");
         var wallboardItem = new ToolStripMenuItem("Open Wallboard");
+        _trayUpdateItem = new ToolStripMenuItem("Restart to Update")
+        {
+            Visible = false,
+            Enabled = false
+        };
         _trayStopItem = new ToolStripMenuItem("Stop Monitoring") { Enabled = false };
         var exitItem = new ToolStripMenuItem("Exit");
 
         openItem.Click += (_, _) => RestoreFromTray();
         wallboardItem.Click += (_, _) => OpenWallboard();
+        _trayUpdateItem.Click += (_, _) => RestartToApplyPendingUpdate();
         _trayStopItem.Click += (_, _) => StopMonitoring();
         exitItem.Click += (_, _) => Close();
 
         trayMenu.Items.Add(openItem);
         trayMenu.Items.Add(wallboardItem);
+        trayMenu.Items.Add(_trayUpdateItem);
         trayMenu.Items.Add(_trayStopItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(exitItem);
@@ -607,7 +618,13 @@ public sealed class MainForm : Form
         _deleteSiteButton.Click += (_, _) => DeleteSite();
         _saveConfigButton.Click += (_, _) => SaveConfigFile();
         _loadConfigButton.Click += (_, _) => LoadConfigFile();
-        _checkUpdateButton.Click += async (_, _) => await CheckForUpdatesAsync(userInitiated: true);
+        _checkUpdateButton.Click += async (_, _) =>
+        {
+            if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
+                RestartToApplyPendingUpdate();
+            else
+                await CheckForUpdatesAsync(userInitiated: true);
+        };
         _wallboardButton.Click += (_, _) => OpenWallboard();
         _grid.CellMouseDown += GridCellMouseDown;
 
@@ -791,6 +808,12 @@ public sealed class MainForm : Form
         form.ClientSize = new Size(1320, 840);
         form.ApplyResponsiveLayout();
         Check(form._workspaceSplit.SplitterDistance >= 220);
+
+        form.SetUpdateReadyUi("9.9.9");
+        Check(form._checkUpdateButton.Text == "Restart to Update");
+        Check(form._trayUpdateItem.Visible);
+        Check(form._trayUpdateItem.Text.Contains("9.9.9", StringComparison.Ordinal));
+        form.ClearPendingUpdateUi();
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -2535,8 +2558,89 @@ public sealed class MainForm : Form
         _wallboardForm.Activate();
     }
 
+    private void SetUpdateReadyUi(string version)
+    {
+        _pendingUpdateVersion = version;
+        _checkUpdateButton.Text = "Restart to Update";
+        _checkUpdateButton.Enabled = true;
+
+        _trayUpdateItem.Text = $"Restart to Update ({version})";
+        _trayUpdateItem.Visible = true;
+        _trayUpdateItem.Enabled = true;
+
+        _statusLabel.Text = $"Update {version} downloaded • restart when ready";
+    }
+
+    private void ClearPendingUpdateUi()
+    {
+        _pendingUpdateManager = null;
+        _pendingUpdateInfo = null;
+        _pendingUpdateVersion = null;
+        _trayUpdateItem.Visible = false;
+        _trayUpdateItem.Enabled = false;
+    }
+
+    private void RestartToApplyPendingUpdate()
+    {
+        if (_pendingUpdateManager is null || _pendingUpdateInfo is null)
+            return;
+
+        string version = _pendingUpdateVersion ?? "the downloaded version";
+        bool monitoring = _cts is not null;
+
+        var result = MessageBox.Show(
+            monitoring
+                ? $"Version {version} is downloaded and ready.\r\n\r\nRestarting now will stop the current monitoring session, save your sites and settings, apply the update, and reopen Ping Watchdog.\r\n\r\nRestart now?"
+                : $"Version {version} is downloaded and ready.\r\n\r\nPing Watchdog will save your current setup, apply the update, and reopen automatically.\r\n\r\nRestart now?",
+            "Restart to Update",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Information,
+            MessageBoxDefaultButton.Button1);
+
+        if (result != DialogResult.Yes)
+            return;
+
+        try
+        {
+            _wallboardForm?.Close();
+            PersistCurrentEditor();
+            SaveSites();
+
+            if (_cts is not null)
+                StopMonitoring();
+
+            _checkUpdateButton.Enabled = false;
+            _checkUpdateButton.Text = "Restarting...";
+            _trayUpdateItem.Enabled = false;
+            _statusLabel.Text = $"Applying update {version}...";
+
+            _pendingUpdateManager.ApplyUpdatesAndRestart(_pendingUpdateInfo);
+        }
+        catch (Exception ex)
+        {
+            _checkUpdateButton.Enabled = true;
+            _checkUpdateButton.Text = "Restart to Update";
+            _trayUpdateItem.Enabled = true;
+            _statusLabel.Text = "Update restart failed.";
+
+            MessageBox.Show(
+                $"The update is still downloaded, but Ping Watchdog could not restart to apply it.\r\n\r\n{ex.Message}",
+                "Ping Watchdog Update",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
     private async Task CheckForUpdatesAsync(bool userInitiated)
     {
+        if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
+        {
+            if (userInitiated)
+                _statusLabel.Text = $"Update {_pendingUpdateVersion ?? string.Empty} is already downloaded and ready.";
+
+            return;
+        }
+
         if (_updateCheckInProgress || IsDisposed || Disposing)
             return;
 
@@ -2573,6 +2677,7 @@ public sealed class MainForm : Form
 
             if (update is null)
             {
+                ClearPendingUpdateUi();
                 _checkUpdateButton.Text = "Up to date";
 
                 if (userInitiated)
@@ -2598,24 +2703,19 @@ public sealed class MainForm : Form
                     });
                 });
 
-            if (_cts is null)
-            {
-                PersistCurrentEditor();
-                SaveSites();
-                _checkUpdateButton.Text = $"Restarting to {version}...";
-                manager.ApplyUpdatesAndRestart(update);
-                return;
-            }
+            _pendingUpdateManager = manager;
+            _pendingUpdateInfo = update;
+            SetUpdateReadyUi(version);
 
-            _checkUpdateButton.Text = $"{version} ready";
             ShowNotification(
                 "Ping Watchdog update ready",
-                $"Version {version} was downloaded. It will be applied the next time Ping Watchdog restarts.",
+                $"Version {version} was downloaded. Click Restart to Update when you are ready to apply it.",
                 ToolTipIcon.Info);
         }
         catch (Exception ex)
         {
-            _checkUpdateButton.Text = "Check Updates";
+            if (_pendingUpdateManager is null)
+                _checkUpdateButton.Text = "Check Updates";
 
             if (userInitiated)
             {

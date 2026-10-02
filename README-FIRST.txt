@@ -33,3 +33,8 @@ Press Esc or F11 to close Wallboard.
 WALLBOARD CLI
 The live CLI/CMD trace is shown at the bottom of Wallboard by default.
 Press C to hide/show the CLI panel without leaving Wallboard.
+
+
+APPLYING DOWNLOADED UPDATES
+When an update is downloaded, click "Restart to Update".
+Watchdog saves your current setup, stops monitoring if necessary, applies the downloaded update, and reopens automatically.

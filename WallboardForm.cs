@@ -116,6 +116,8 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _statLabelFont = new("Segoe UI Semibold", 8, FontStyle.Bold);
     private readonly Font _sectionFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
     private readonly Font _siteFont = new("Segoe UI Semibold", 9.5f, FontStyle.Bold);
+    private readonly Font _siteSmallFont = new("Segoe UI Semibold", 8f, FontStyle.Bold);
+    private readonly Font _siteTinyFont = new("Segoe UI Semibold", 6.75f, FontStyle.Bold);
     private readonly Font _smallFont = new("Segoe UI", 8.5f);
     private readonly Font _tinyFont = new("Segoe UI", 7.5f);
     private readonly Font _coreFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
@@ -149,6 +151,8 @@ internal sealed class WallboardCanvas : Control
             _statLabelFont.Dispose();
             _sectionFont.Dispose();
             _siteFont.Dispose();
+            _siteSmallFont.Dispose();
+            _siteTinyFont.Dispose();
             _smallFont.Dispose();
             _tinyFont.Dispose();
             _coreFont.Dispose();
@@ -273,11 +277,11 @@ internal sealed class WallboardCanvas : Control
             _dateFont,
             mutedBrush,
             ClientSize.Width - dateSize.Width - 26,
-            53);
+            43);
 
         var stateRect = new Rectangle(
             ClientSize.Width - 240,
-            67,
+            66,
             214,
             22);
 
@@ -507,7 +511,7 @@ internal sealed class WallboardCanvas : Control
         int index)
     {
         var state = AggregateSiteState(site);
-        int radius = 34;
+        int radius = 38;
         Color color = StateColor(state, 255);
 
         if (state == HostState.Offline)
@@ -531,11 +535,21 @@ internal sealed class WallboardCanvas : Control
         g.FillEllipse(fillBrush, center.X - radius, center.Y - radius, radius * 2, radius * 2);
         g.DrawEllipse(borderPen, center.X - radius, center.Y - radius, radius * 2, radius * 2);
 
-        var nameRect = new Rectangle(center.X - 72, center.Y - 14, 144, 20);
-        DrawCenteredText(g, site.Name, _siteFont, nameBrush, nameRect);
+        var nameRect = new Rectangle(
+            center.X - radius + 5,
+            center.Y - 24,
+            (radius - 5) * 2,
+            36);
+
+        DrawSiteNodeName(g, site.Name, nameBrush, nameRect);
 
         int online = site.Hosts.Count(h => h.State == HostState.Online);
-        var countRect = new Rectangle(center.X - 65, center.Y + 7, 130, 18);
+        var countRect = new Rectangle(
+            center.X - radius + 5,
+            center.Y + 11,
+            (radius - 5) * 2,
+            16);
+
         DrawCenteredText(
             g,
             $"{online}/{site.Hosts.Count} online",
@@ -544,6 +558,69 @@ internal sealed class WallboardCanvas : Control
             countRect);
 
         DrawHostDots(g, site, center, radius + 14);
+    }
+
+    private void DrawSiteNodeName(
+        Graphics g,
+        string name,
+        Brush brush,
+        Rectangle rect)
+    {
+        string formatted = FormatSiteNodeName(name);
+
+        Font font = _siteFont;
+        var size = g.MeasureString(formatted, font, rect.Width);
+
+        if (size.Width > rect.Width || size.Height > rect.Height)
+        {
+            font = _siteSmallFont;
+            size = g.MeasureString(formatted, font, rect.Width);
+        }
+
+        if (size.Width > rect.Width || size.Height > rect.Height)
+            font = _siteTinyFont;
+
+        using var format = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center,
+            Trimming = StringTrimming.EllipsisCharacter
+        };
+
+        g.DrawString(formatted, font, brush, rect, format);
+    }
+
+    private static string FormatSiteNodeName(string name)
+    {
+        name = name.Trim();
+
+        if (name.Length <= 9)
+            return name;
+
+        int midpoint = name.Length / 2;
+        var candidates = new List<int>();
+
+        for (int i = 1; i < name.Length; i++)
+        {
+            if (char.IsWhiteSpace(name[i]))
+                candidates.Add(i);
+            else if (char.IsUpper(name[i]) && char.IsLower(name[i - 1]))
+                candidates.Add(i);
+        }
+
+        if (candidates.Count == 0)
+            return name;
+
+        int split = candidates
+            .OrderBy(i => Math.Abs(i - midpoint))
+            .First();
+
+        string first = name[..split].Trim();
+        string second = name[split..].Trim();
+
+        return string.IsNullOrWhiteSpace(second)
+            ? name
+            : $"{first}\n{second}";
     }
 
     private void DrawHostDots(
