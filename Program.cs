@@ -1020,7 +1020,7 @@ public sealed class MainForm : Form
         Check(form.FindSite("Test Site")?.FolderPath == "Indiana/Northwest");
         Check(form.MoveOrganizationSite("Test Site", "") is null);
         Check(form.DeleteOrganizationFolder("Indiana/Northwest") is null);
-        Check(form.NormalizeFolderPath(@" Indiana\\South / Branches ") == "Indiana/South/Branches");
+        Check(NormalizeFolderPath(@" Indiana\\South / Branches ") == "Indiana/South/Branches");
 
         var majorityOnlineSite = new WallboardSiteSnapshot(
             "Majority Online",
