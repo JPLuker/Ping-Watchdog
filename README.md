@@ -275,3 +275,28 @@ Update management is no longer a primary-navigation feature for normal users.
 - Wallboard's dedicated update toolbar button is also hidden by default.
 - Settings → Updates includes **Developer: show update control in the main UI**. Enabling it restores the visible updater controls on both the main app bar and Wallboard toolbar for development/testing.
 - The developer preference is persisted in the normal autosave configuration and defaults to off for new users.
+
+
+## Version 1.14 organization tree and host topology nodes
+
+Site organization is now hierarchical rather than a flat list.
+
+- Every site can live at the root or inside a folder path.
+- Folders can contain sites and nested subfolders.
+- Empty folders persist in saved configuration.
+- The main Sites rail shows each site's folder path.
+- Open **Organize** for a filesystem-style tree with New Site, New Folder, Rename, Move, Delete, and Open Site actions.
+- Moving a folder moves all descendant folders and sites with it.
+- Deleting a folder is intentionally non-destructive: its contents move to the parent folder instead of deleting sites.
+- Existing configs remain compatible; older sites simply start at the root.
+- Manual config export/import preserves folders and site placement.
+- Wallboard Operations includes a **Folders / Organization** action that opens the same organization tree over fullscreen Wallboard.
+
+Wallboard topology now exposes the devices behind each site:
+
+- Site hubs remain the larger topology nodes.
+- Individual IP/hostname nodes orbit their site and connect back to it.
+- Host nodes use their actual live state color: green, yellow, red, or neutral/unknown.
+- If a host has a nickname/label, the node shows the label with the IP/hostname underneath.
+- Unlabeled hosts show the IP/hostname directly.
+- Larger sites use two host rings; the renderer shows up to 12 labeled endpoints around a site and summarizes additional endpoints as +N more to keep the NOC view readable.

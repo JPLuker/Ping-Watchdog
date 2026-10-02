@@ -87,3 +87,15 @@ When an update is ready, choose Restart Now or Later.
 Manual update controls always remain in Settings > Updates and in the tray when an update is staged.
 The main-screen/Wallboard update controls are hidden by default.
 Developers can restore them from Settings > Updates > "Developer: show update control in the main UI".
+
+
+SITE ORGANIZATION
+Use the Organize button to open the filesystem-style site tree.
+Create folders and nested folders, create/move sites, rename/move folders, and reorganize freely.
+Deleting a folder does not delete its sites; the contents move to the parent folder.
+Existing ungrouped sites remain at the root.
+
+WALLBOARD HOST NODES
+The topology now shows individual endpoint nodes around each site.
+Labeled endpoints show the nickname first and the IP/hostname underneath.
+Endpoint node colors reflect the host's real ONLINE / SUSPECT / OFFLINE state.

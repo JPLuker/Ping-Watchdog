@@ -19,5 +19,6 @@
   "MinimizeToTray": true,
   "NotificationsEnabled": true,
   "WallboardShowCli": true,
-  "ShowUpdateControlOnHome": false
+  "ShowUpdateControlOnHome": false,
+  "SiteFolders": []
 }

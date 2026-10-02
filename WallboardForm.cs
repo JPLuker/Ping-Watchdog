@@ -67,6 +67,7 @@ internal sealed class WallboardForm : Form
     private readonly Button _addSiteButton = DrawerButton("+ Add Site");
     private readonly Button _renameSiteButton = DrawerButton("Rename");
     private readonly Button _deleteSiteButton = DrawerButton("Delete");
+    private readonly Button _organizeButton = DrawerButton("Folders / Organization");
     private readonly Button _editLabelButton = DrawerButton("Edit Label");
     private readonly Button _clearLabelButton = DrawerButton("Clear Label");
     private readonly Button _applyMonitoringButton = DrawerButton("Apply Monitoring Defaults");
@@ -300,6 +301,7 @@ internal sealed class WallboardForm : Form
 
         var siteButtons = Row(_addSiteButton, _renameSiteButton, _deleteSiteButton);
         stack.Controls.Add(siteButtons);
+        stack.Controls.Add(_organizeButton);
 
         stack.Controls.Add(SectionTitle("Hosts"));
         stack.Controls.Add(_hostEditor);
@@ -458,6 +460,7 @@ internal sealed class WallboardForm : Form
         };
 
         _operationsButton.Click += (_, _) => ToggleDrawer();
+        _organizeButton.Click += (_, _) => _actions.OpenOrganization();
         _cliButton.Click += (_, _) => ToggleCli();
         _historyButton.Click += (_, _) => _actions.OpenHistory();
         _settingsButton.Click += (_, _) => _actions.OpenSettings();
@@ -671,6 +674,7 @@ internal sealed class WallboardForm : Form
             _addSiteButton,
             _renameSiteButton,
             _deleteSiteButton,
+            _organizeButton,
             _editLabelButton,
             _clearLabelButton,
             _applyMonitoringButton,
@@ -989,6 +993,8 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _siteFont = new("Segoe UI Semibold", 9.5f, FontStyle.Bold);
     private readonly Font _siteSmallFont = new("Segoe UI Semibold", 8f, FontStyle.Bold);
     private readonly Font _siteTinyFont = new("Segoe UI Semibold", 6.75f, FontStyle.Bold);
+    private readonly Font _hostLabelFont = new("Segoe UI Semibold", 7.5f, FontStyle.Bold);
+    private readonly Font _hostIpFont = new("Cascadia Mono", 6.8f);
     private readonly Font _smallFont = new("Segoe UI", 8.5f);
     private readonly Font _tinyFont = new("Segoe UI", 7.5f);
     private readonly Font _coreFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
@@ -1024,6 +1030,8 @@ internal sealed class WallboardCanvas : Control
             _siteFont.Dispose();
             _siteSmallFont.Dispose();
             _siteTinyFont.Dispose();
+            _hostLabelFont.Dispose();
+            _hostIpFont.Dispose();
             _smallFont.Dispose();
             _tinyFont.Dispose();
             _coreFont.Dispose();
@@ -1230,7 +1238,7 @@ internal sealed class WallboardCanvas : Control
         Rectangle rect)
     {
         using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
-        g.DrawString("LIVE SITE TOPOLOGY", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
+        g.DrawString("LIVE SITE / HOST TOPOLOGY", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
 
         var content = new Rectangle(
             rect.X + 18,
@@ -1284,6 +1292,7 @@ internal sealed class WallboardCanvas : Control
                 g,
                 snapshot.Sites[i],
                 sitePoints[i],
+                content,
                 i);
         }
     }
@@ -1381,6 +1390,7 @@ internal sealed class WallboardCanvas : Control
         Graphics g,
         WallboardSiteSnapshot site,
         Point center,
+        Rectangle topologyBounds,
         int index)
     {
         var state = AggregateSiteState(site);
@@ -1430,7 +1440,7 @@ internal sealed class WallboardCanvas : Control
             countBrush,
             countRect);
 
-        DrawHostDots(g, site, center, radius + 14);
+        DrawHostNodes(g, site, center, topologyBounds, radius + 30);
     }
 
     private void DrawSiteNodeName(
@@ -1496,33 +1506,158 @@ internal sealed class WallboardCanvas : Control
             : $"{first}\n{second}";
     }
 
-    private void DrawHostDots(
+    private void DrawHostNodes(
         Graphics g,
         WallboardSiteSnapshot site,
-        Point center,
-        int orbitRadius)
+        Point siteCenter,
+        Rectangle topologyBounds,
+        int baseOrbitRadius)
     {
-        int visible = Math.Min(site.Hosts.Count, 16);
+        int visible = Math.Min(site.Hosts.Count, 12);
+
+        if (visible == 0)
+            return;
 
         for (int i = 0; i < visible; i++)
         {
-            double angle = Math.PI * 2 * i / Math.Max(1, visible);
-            int x = center.X + (int)(Math.Cos(angle) * orbitRadius);
-            int y = center.Y + (int)(Math.Sin(angle) * orbitRadius);
-            using var brush = new SolidBrush(StateColor(site.Hosts[i].State, 240));
-            g.FillEllipse(brush, x - 3, y - 3, 6, 6);
+            var host = site.Hosts[i];
+            bool outerRing = visible > 7 && i >= 6;
+            int ringIndex = outerRing ? i - 6 : i;
+            int ringCount = outerRing ? visible - 6 : Math.Min(visible, 6);
+            int orbitRadius = baseOrbitRadius + (outerRing ? 44 : 0);
+
+            double angleOffset = outerRing ? Math.PI / Math.Max(1, ringCount) : 0;
+            double angle =
+                (-Math.PI / 2) +
+                (Math.PI * 2 * ringIndex / Math.Max(1, ringCount)) +
+                angleOffset;
+
+            var point = new Point(
+                siteCenter.X + (int)(Math.Cos(angle) * orbitRadius),
+                siteCenter.Y + (int)(Math.Sin(angle) * orbitRadius));
+
+            Color stateColor = StateColor(host.State, 255);
+
+            using var connectorPen = new Pen(StateColor(host.State, 75), 1);
+            g.DrawLine(connectorPen, siteCenter, point);
+
+            if (host.State == HostState.Offline)
+            {
+                using var alertRing = new Pen(StateColor(host.State, 100), 1.5f);
+                g.DrawEllipse(alertRing, point.X - 8, point.Y - 8, 16, 16);
+            }
+
+            using var nodeBrush = new SolidBrush(stateColor);
+            using var nodeBorder = new Pen(Color.FromArgb(225, 236, 246), 1);
+            g.FillEllipse(nodeBrush, point.X - 5, point.Y - 5, 10, 10);
+            g.DrawEllipse(nodeBorder, point.X - 5, point.Y - 5, 10, 10);
+
+            DrawHostNodeCaption(g, host, point, angle, topologyBounds);
         }
 
         if (site.Hosts.Count > visible)
         {
-            using var moreBrush = new SolidBrush(Color.FromArgb(137, 154, 171));
-            g.DrawString(
-                $"+{site.Hosts.Count - visible}",
-                _tinyFont,
-                moreBrush,
-                center.X + orbitRadius - 3,
-                center.Y + orbitRadius - 3);
+            using var moreBrush = new SolidBrush(Color.FromArgb(152, 169, 186));
+            string more = $"+{site.Hosts.Count - visible} more";
+            var size = g.MeasureString(more, _tinyFont);
+
+            var rect = ClampToBounds(
+                new Rectangle(
+                    siteCenter.X - (int)size.Width / 2 - 4,
+                    siteCenter.Y + baseOrbitRadius + 18,
+                    (int)size.Width + 8,
+                    (int)size.Height + 4),
+                topologyBounds);
+
+            using var fill = new SolidBrush(Color.FromArgb(205, 8, 14, 20));
+            g.FillRectangle(fill, rect);
+            g.DrawString(more, _tinyFont, moreBrush, rect.X + 4, rect.Y + 2);
         }
+    }
+
+    private void DrawHostNodeCaption(
+        Graphics g,
+        WallboardHostSnapshot host,
+        Point point,
+        double angle,
+        Rectangle topologyBounds)
+    {
+        var lines = FormatHostNodeLines(host);
+        string primary = lines.Primary;
+        string? secondary = lines.Secondary;
+
+        var primarySize = g.MeasureString(primary, _hostLabelFont);
+        var secondarySize = secondary is null
+            ? SizeF.Empty
+            : g.MeasureString(secondary, _hostIpFont);
+
+        int width = Math.Clamp(
+            (int)Math.Ceiling(Math.Max(primarySize.Width, secondarySize.Width)) + 12,
+            62,
+            124);
+        int height = secondary is null ? 22 : 34;
+
+        bool rightSide = Math.Cos(angle) >= 0;
+        int x = rightSide
+            ? point.X + 9
+            : point.X - width - 9;
+        int y = point.Y - height / 2;
+
+        var rect = ClampToBounds(
+            new Rectangle(x, y, width, height),
+            topologyBounds);
+
+        using var fill = new SolidBrush(Color.FromArgb(220, 7, 13, 19));
+        using var border = new Pen(StateColor(host.State, 115), 1);
+        using var primaryBrush = new SolidBrush(Color.FromArgb(232, 240, 247));
+        using var secondaryBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
+
+        g.FillRectangle(fill, rect);
+        g.DrawRectangle(border, rect);
+
+        TextRenderer.DrawText(
+            g,
+            primary,
+            _hostLabelFont,
+            new Rectangle(rect.X + 5, rect.Y + 3, rect.Width - 10, 14),
+            primaryBrush.Color,
+            TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+
+        if (secondary is not null)
+        {
+            TextRenderer.DrawText(
+                g,
+                secondary,
+                _hostIpFont,
+                new Rectangle(rect.X + 5, rect.Y + 17, rect.Width - 10, 13),
+                secondaryBrush.Color,
+                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        }
+    }
+
+    internal static (string Primary, string? Secondary) FormatHostNodeLines(
+        WallboardHostSnapshot host)
+    {
+        string address = host.Address.Trim();
+        string label = host.Label.Trim();
+
+        return string.IsNullOrWhiteSpace(label)
+            ? (address, null)
+            : (label, address);
+    }
+
+    private static Rectangle ClampToBounds(Rectangle rect, Rectangle bounds)
+    {
+        int x = Math.Clamp(
+            rect.X,
+            bounds.Left + 2,
+            Math.Max(bounds.Left + 2, bounds.Right - rect.Width - 2));
+        int y = Math.Clamp(
+            rect.Y,
+            bounds.Top + 2,
+            Math.Max(bounds.Top + 2, bounds.Bottom - rect.Height - 2));
+
+        return new Rectangle(x, y, rect.Width, rect.Height);
     }
 
     private void DrawSidebar(
