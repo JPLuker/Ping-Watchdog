@@ -98,6 +98,7 @@ internal sealed class WatchdogConfig
     public bool MinimizeToTray { get; set; } = true;
     public bool NotificationsEnabled { get; set; } = true;
     public bool WallboardShowCli { get; set; } = true;
+    public bool ShowUpdateControlOnHome { get; set; }
 }
 
 internal sealed class NicknameDialog : Form
@@ -313,6 +314,7 @@ internal sealed record AppSettingsSnapshot(
     bool MinimizeToTray,
     bool NotificationsEnabled,
     bool AutoCheckUpdates,
+    bool ShowUpdateControlOnHome,
     int EventHistoryHours,
     bool HideSuspectEvents,
     bool MonitoringActive,
@@ -339,6 +341,7 @@ internal sealed record WallboardControlSnapshot(
     int PingTimeoutMs,
     int FailureThreshold,
     int RecoveryThreshold,
+    bool ShowUpdateControl,
     string Version,
     string UpdateStatus,
     string UpdateActionText);
@@ -614,6 +617,7 @@ public sealed class MainForm : Form
     private bool _minimizeToTray = true;
     private bool _notificationsEnabled = true;
     private bool _wallboardShowCli = true;
+    private bool _showUpdateControlOnHome;
 
     private static Label CreateStatValueLabel()
     {
@@ -908,6 +912,7 @@ public sealed class MainForm : Form
         Check(configRoundTrip?.MinimizeToTray == true);
         Check(configRoundTrip?.NotificationsEnabled == true);
         Check(configRoundTrip?.WallboardShowCli == true);
+        Check(configRoundTrip?.ShowUpdateControlOnHome == false);
         Check(form.GetConfiguredTargets().Count == 1);
         Check(UpdateRepoUrl.EndsWith("/JPLuker/Ping-Watchdog", StringComparison.Ordinal));
         Check(form._stateEvents.Any(e => e.Kind == "DOWN"));
@@ -1020,6 +1025,7 @@ public sealed class MainForm : Form
         Check(settingsSnapshot.MinimizeToTray);
         Check(settingsSnapshot.NotificationsEnabled);
         Check(settingsSnapshot.WallboardShowCli);
+        Check(!settingsSnapshot.ShowUpdateControlOnHome);
         Check(settingsSnapshot.UpdateActionText == "Check for Updates");
 
         form.SetUpdateReadyUi("9.9.9");
@@ -1626,7 +1632,7 @@ public sealed class MainForm : Form
             _headerActionsPanel.WrapContents = false;
             _headerActionsPanel.MaximumSize = Size.Empty;
             _monitorStateLabel.Visible = !veryNarrow;
-            _checkUpdateButton.Visible = true;
+            _checkUpdateButton.Visible = _showUpdateControlOnHome;
             _wallboardButton.Visible = true;
             _settingsButton.Visible = true;
             _moreButton.Visible = true;
@@ -2101,7 +2107,8 @@ public sealed class MainForm : Form
             AutoCheckUpdates = _autoCheckUpdates,
             MinimizeToTray = _minimizeToTray,
             NotificationsEnabled = _notificationsEnabled,
-            WallboardShowCli = _wallboardShowCli
+            WallboardShowCli = _wallboardShowCli,
+            ShowUpdateControlOnHome = _showUpdateControlOnHome
         };
     }
 
@@ -2231,6 +2238,7 @@ public sealed class MainForm : Form
         _minimizeToTray = config.MinimizeToTray;
         _notificationsEnabled = config.NotificationsEnabled;
         _wallboardShowCli = config.WallboardShowCli;
+        _showUpdateControlOnHome = config.ShowUpdateControlOnHome;
 
         _selectedSiteName = config.SelectedSite is not null &&
             _sites.Any(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase))
@@ -3060,6 +3068,7 @@ public sealed class MainForm : Form
             (int)_timeoutMs.Value,
             (int)_failureThreshold.Value,
             (int)_recoveryThreshold.Value,
+            _showUpdateControlOnHome,
             GetDisplayVersion(),
             GetUpdateStatusText(),
             GetUpdateActionText());
@@ -3304,6 +3313,7 @@ public sealed class MainForm : Form
             _minimizeToTray,
             _notificationsEnabled,
             _autoCheckUpdates,
+            _showUpdateControlOnHome,
             _eventHistoryHours,
             _hideSuspectEvents,
             _cts is not null,
@@ -3359,6 +3369,7 @@ public sealed class MainForm : Form
         _minimizeToTray = settings.MinimizeToTray;
         _notificationsEnabled = settings.NotificationsEnabled;
         _wallboardShowCli = settings.WallboardShowCli;
+        _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
 
@@ -3397,6 +3408,7 @@ public sealed class MainForm : Form
             _updateTimer.Stop();
         }
 
+        ApplyResponsiveLayout();
         SaveSites();
         _eventHistoryForm?.RefreshNow();
         _settingsForm?.RefreshRuntimeState();
@@ -3471,6 +3483,36 @@ public sealed class MainForm : Form
         _settingsForm?.RefreshRuntimeState();
     }
 
+    private void PromptForDownloadedUpdate(string version)
+    {
+        if (IsDisposed || Disposing ||
+            _pendingUpdateManager is null ||
+            _pendingUpdateInfo is null)
+        {
+            return;
+        }
+
+        IWin32Window owner =
+            _wallboardForm is not null && !_wallboardForm.IsDisposed
+                ? _wallboardForm
+                : this;
+
+        bool monitoring = _cts is not null;
+
+        var result = MessageBox.Show(
+            owner,
+            monitoring
+                ? $"Ping Watchdog {version} has been downloaded in the background.\r\n\r\nRestarting now will stop the current monitoring session, save your configuration, install the update, and reopen Ping Watchdog.\r\n\r\nRestart now?"
+                : $"Ping Watchdog {version} has been downloaded in the background.\r\n\r\nRestart now to install it and reopen Ping Watchdog?",
+            "Ping Watchdog Update Ready",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Information,
+            MessageBoxDefaultButton.Button2);
+
+        if (result == DialogResult.Yes)
+            ApplyPendingUpdateAndRestart();
+    }
+
     private void RestartToApplyPendingUpdate()
     {
         if (_pendingUpdateManager is null || _pendingUpdateInfo is null)
@@ -3479,17 +3521,31 @@ public sealed class MainForm : Form
         string version = _pendingUpdateVersion ?? "the downloaded version";
         bool monitoring = _cts is not null;
 
+        IWin32Window owner =
+            _wallboardForm is not null && !_wallboardForm.IsDisposed
+                ? _wallboardForm
+                : this;
+
         var result = MessageBox.Show(
+            owner,
             monitoring
                 ? $"Version {version} is downloaded and ready.\r\n\r\nRestarting now will stop the current monitoring session, save your sites and settings, apply the update, and reopen Ping Watchdog.\r\n\r\nRestart now?"
                 : $"Version {version} is downloaded and ready.\r\n\r\nPing Watchdog will save your current setup, apply the update, and reopen automatically.\r\n\r\nRestart now?",
             "Restart to Update",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Information,
-            MessageBoxDefaultButton.Button1);
+            MessageBoxDefaultButton.Button2);
 
-        if (result != DialogResult.Yes)
+        if (result == DialogResult.Yes)
+            ApplyPendingUpdateAndRestart();
+    }
+
+    private void ApplyPendingUpdateAndRestart()
+    {
+        if (_pendingUpdateManager is null || _pendingUpdateInfo is null)
             return;
+
+        string version = _pendingUpdateVersion ?? "the downloaded version";
 
         try
         {
@@ -3601,10 +3657,7 @@ public sealed class MainForm : Form
             _pendingUpdateInfo = update;
             SetUpdateReadyUi(version);
 
-            ShowNotification(
-                "Ping Watchdog update ready",
-                $"Version {version} was downloaded. Click Restart to Update when you are ready to apply it.",
-                ToolTipIcon.Info);
+            PromptForDownloadedUpdate(version);
         }
         catch (Exception ex)
         {

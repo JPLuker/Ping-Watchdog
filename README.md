@@ -260,3 +260,18 @@ Wallboard is now a second operational control surface rather than a read-only di
 - Outage History, full Settings, and GitHub update checks can be opened directly over Wallboard.
 - All actions operate on the same MainForm state, worker set, autosave configuration, event history, and updater. There is no separate Wallboard configuration to drift out of sync.
 - Keyboard controls remain available: **O** operations, **P** start/stop, **C** CLI, **M** move monitor, **H** history range, **S** suspects, **Ctrl+H** full history, **Ctrl+,** settings, and **Esc/F11** return to the main window.
+
+
+## Version 1.13 quiet background updater
+
+Update management is no longer a primary-navigation feature for normal users.
+
+- Automatic update checks still run on launch and every six hours by default.
+- Checks and downloads happen in the background while Ping Watchdog remains usable.
+- When a release finishes downloading, Ping Watchdog presents a **Restart now?** prompt.
+- Choosing **No** leaves the update staged; it can still be applied later from Settings or the tray menu.
+- The full Updates page remains under Settings with installed version, status, automatic-update preference, and manual Check for Updates / Restart to Update action.
+- The main-window Updates button is hidden by default to reduce UI clutter.
+- Wallboard's dedicated update toolbar button is also hidden by default.
+- Settings → Updates includes **Developer: show update control in the main UI**. Enabling it restores the visible updater controls on both the main app bar and Wallboard toolbar for development/testing.
+- The developer preference is persisted in the normal autosave configuration and defaults to off for new users.

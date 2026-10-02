@@ -40,6 +40,7 @@ internal sealed class SettingsForm : Form
     private readonly Button _openHistoryButton = new() { Text = "Open Outage History", AutoSize = true };
 
     private readonly CheckBox _autoUpdates = new() { Text = "Check automatically on startup and every 6 hours", AutoSize = true };
+    private readonly CheckBox _showHomeUpdateControl = new() { Text = "Developer: show update control in the main UI", AutoSize = true };
     private readonly Label _versionValue = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 10) };
     private readonly Label _updateStatus = new() { AutoSize = false, Height = 48, Width = 560 };
     private readonly Button _updateButton = new() { Text = "Check for Updates", AutoSize = true };
@@ -284,12 +285,16 @@ internal sealed class SettingsForm : Form
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(LabeledValue("Installed version", _versionValue));
         stack.Controls.Add(LabeledValue("Update status", _updateStatus));
-        _autoUpdates.Margin = new Padding(0, 12, 0, 14);
+        _autoUpdates.Margin = new Padding(0, 12, 0, 10);
         stack.Controls.Add(_autoUpdates);
+
+        _showHomeUpdateControl.Margin = new Padding(0, 4, 0, 14);
+        stack.Controls.Add(_showHomeUpdateControl);
+
         stack.Controls.Add(_updateButton);
         stack.Controls.Add(new Label
         {
-            Text = "Manual update checks stay available even when automatic checks are disabled.",
+            Text = "Updates normally run quietly in the background. Manual checks stay available here even when automatic checks are disabled. The developer option exposes the update control in the main app bar and Wallboard toolbar.",
             AutoSize = true,
             ForeColor = Color.FromArgb(139, 153, 169),
             Margin = new Padding(0, 12, 0, 0)
@@ -468,7 +473,7 @@ internal sealed class SettingsForm : Form
         _historyRange.ForeColor = text;
         _historyRange.FlatStyle = FlatStyle.Flat;
 
-        foreach (var check in new[] { _minimizeToTray, _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates })
+        foreach (var check in new[] { _minimizeToTray, _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
             check.ForeColor = text;
     }
 
@@ -496,6 +501,7 @@ internal sealed class SettingsForm : Form
             _minimizeToTray.Checked = s.MinimizeToTray;
             _notifications.Checked = s.NotificationsEnabled;
             _autoUpdates.Checked = s.AutoCheckUpdates;
+            _showHomeUpdateControl.Checked = s.ShowUpdateControlOnHome;
             _historyRange.SelectedIndex = HistoryHoursToIndex(s.EventHistoryHours);
             _hideSuspects.Checked = s.HideSuspectEvents;
             RefreshRuntimeState();
@@ -519,6 +525,7 @@ internal sealed class SettingsForm : Form
             MinimizeToTray = _minimizeToTray.Checked,
             NotificationsEnabled = _notifications.Checked,
             AutoCheckUpdates = _autoUpdates.Checked,
+            ShowUpdateControlOnHome = _showHomeUpdateControl.Checked,
             EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
             HideSuspectEvents = _hideSuspects.Checked
         };

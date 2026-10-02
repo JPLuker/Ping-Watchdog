@@ -18,5 +18,6 @@
   "AutoCheckUpdates": true,
   "MinimizeToTray": true,
   "NotificationsEnabled": true,
-  "WallboardShowCli": true
+  "WallboardShowCli": true,
+  "ShowUpdateControlOnHome": false
 }

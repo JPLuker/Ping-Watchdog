@@ -79,3 +79,11 @@ From Wallboard you can start/stop monitoring, manage sites and hosts, edit label
 change stopped-session monitoring defaults, import/export config, clear CLI,
 open History/Settings, check for updates, switch monitors, and return to the main window.
 All Wallboard actions use the same live session and autosaved configuration as the main window.
+
+
+BACKGROUND UPDATES
+Ping Watchdog checks for updates on launch and downloads them in the background.
+When an update is ready, choose Restart Now or Later.
+Manual update controls always remain in Settings > Updates and in the tray when an update is staged.
+The main-screen/Wallboard update controls are hidden by default.
+Developers can restore them from Settings > Updates > "Developer: show update control in the main UI".

@@ -842,6 +842,7 @@ internal sealed class WallboardForm : Form
             _cliButton.Width = 74;
 
             _updateButton.Text = state.UpdateActionText;
+            _updateButton.Visible = state.ShowUpdateControl;
             _updateStatusLabel.Text = $"{state.Version}\r\n{state.UpdateStatus}";
 
             RefreshSiteCombo(state);
