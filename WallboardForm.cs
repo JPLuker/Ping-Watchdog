@@ -6,6 +6,7 @@ internal sealed class WallboardForm : Form
     private readonly WallboardCanvas _canvas = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
     private int _screenIndex;
+    private bool _showCli = true;
 
     public WallboardForm(
         Func<WallboardSnapshot> snapshotProvider,
@@ -34,6 +35,7 @@ internal sealed class WallboardForm : Form
         Bounds = screens[_screenIndex].Bounds;
 
         _canvas.Dock = DockStyle.Fill;
+        _canvas.ShowCli = _showCli;
         Controls.Add(_canvas);
 
         KeyDown += (_, e) =>
@@ -47,6 +49,13 @@ internal sealed class WallboardForm : Form
             {
                 e.Handled = true;
                 MoveToNextScreen();
+            }
+            else if (e.KeyCode == Keys.C)
+            {
+                e.Handled = true;
+                _showCli = !_showCli;
+                _canvas.ShowCli = _showCli;
+                _canvas.Invalidate();
             }
         };
 
@@ -110,8 +119,10 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _smallFont = new("Segoe UI", 8.5f);
     private readonly Font _tinyFont = new("Segoe UI", 7.5f);
     private readonly Font _coreFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
+    private readonly Font _cliFont = new("Cascadia Mono", 8.5f);
 
     public WallboardSnapshot? Snapshot { get; set; }
+    public bool ShowCli { get; set; } = true;
 
     public WallboardCanvas()
     {
@@ -141,6 +152,7 @@ internal sealed class WallboardCanvas : Control
             _smallFont.Dispose();
             _tinyFont.Dispose();
             _coreFont.Dispose();
+            _cliFont.Dispose();
         }
 
         base.Dispose(disposing);
@@ -158,7 +170,8 @@ internal sealed class WallboardCanvas : Control
             false,
             DateTime.Now,
             Array.Empty<WallboardSiteSnapshot>(),
-            Array.Empty<WallboardEventSnapshot>());
+            Array.Empty<WallboardEventSnapshot>(),
+            Array.Empty<WallboardCommandSnapshot>());
 
         DrawBackground(g);
         DrawHeader(g, snapshot);
@@ -171,23 +184,47 @@ internal sealed class WallboardCanvas : Control
         int footerHeight = 34;
         int sidebarWidth = Math.Clamp((int)(ClientSize.Width * 0.29), 320, 440);
         int gap = 16;
+        int availableBodyHeight = Math.Max(
+            240,
+            ClientSize.Height - bodyTop - footerHeight - 16);
+
+        int cliHeight = ShowCli
+            ? Math.Clamp((int)(availableBodyHeight * 0.28), 150, 240)
+            : 0;
+
+        int upperHeight = ShowCli
+            ? Math.Max(210, availableBodyHeight - cliHeight - gap)
+            : availableBodyHeight;
 
         var mapRect = new Rectangle(
             22,
             bodyTop,
             Math.Max(300, ClientSize.Width - sidebarWidth - gap - 44),
-            Math.Max(220, ClientSize.Height - bodyTop - footerHeight - 16));
+            upperHeight);
 
         var sidebarRect = new Rectangle(
             mapRect.Right + gap,
             bodyTop,
             sidebarWidth,
-            mapRect.Height);
+            upperHeight);
 
         DrawPanel(g, mapRect);
         DrawPanel(g, sidebarRect);
         DrawTopology(g, snapshot, mapRect);
         DrawSidebar(g, snapshot, sidebarRect);
+
+        if (ShowCli)
+        {
+            var cliRect = new Rectangle(
+                22,
+                mapRect.Bottom + gap,
+                Math.Max(300, ClientSize.Width - 44),
+                cliHeight);
+
+            DrawPanel(g, cliRect);
+            DrawCli(g, snapshot, cliRect);
+        }
+
         DrawFooter(g);
     }
 
@@ -653,10 +690,87 @@ internal sealed class WallboardCanvas : Control
         }
     }
 
+    private void DrawCli(
+        Graphics g,
+        WallboardSnapshot snapshot,
+        Rectangle rect)
+    {
+        int x = rect.X + 14;
+        int y = rect.Y + 11;
+        int width = rect.Width - 28;
+        int contentTop = y + 27;
+        int contentBottom = rect.Bottom - 10;
+
+        using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
+        using var hintBrush = new SolidBrush(Color.FromArgb(84, 111, 128));
+        using var idleBrush = new SolidBrush(Color.FromArgb(98, 116, 133));
+        using var successBrush = new SolidBrush(Color.FromArgb(100, 220, 132));
+        using var failureBrush = new SolidBrush(Color.FromArgb(255, 111, 116));
+
+        g.DrawString("LIVE CLI / CMD TRACE", _sectionFont, titleBrush, x, y);
+
+        string hint = "C  HIDE";
+        var hintSize = g.MeasureString(hint, _tinyFont);
+        g.DrawString(
+            hint,
+            _tinyFont,
+            hintBrush,
+            rect.Right - hintSize.Width - 14,
+            y + 1);
+
+        if (snapshot.Commands.Count == 0)
+        {
+            g.DrawString(
+                snapshot.Monitoring
+                    ? "Waiting for ping output..."
+                    : "Start monitoring to populate the live CLI trace.",
+                _cliFont,
+                idleBrush,
+                x,
+                contentTop);
+            return;
+        }
+
+        float lineHeight = Math.Max(15f, _cliFont.GetHeight(g) + 2f);
+        int lineCapacity = Math.Max(
+            1,
+            (int)((contentBottom - contentTop) / lineHeight));
+
+        var visible = snapshot.Commands
+            .TakeLast(lineCapacity)
+            .ToList();
+
+        float lineY = contentBottom - visible.Count * lineHeight;
+
+        foreach (var command in visible)
+        {
+            Brush brush = command.Success
+                ? successBrush
+                : failureBrush;
+
+            string text = TrimToWidth(
+                g,
+                command.Text,
+                _cliFont,
+                width);
+
+            g.DrawString(
+                text,
+                _cliFont,
+                brush,
+                x,
+                lineY);
+
+            lineY += lineHeight;
+        }
+    }
+
     private void DrawFooter(Graphics g)
     {
         using var mutedBrush = new SolidBrush(Color.FromArgb(90, 107, 125));
-        string left = "F11 / ESC  Exit wallboard     M  Move to next monitor";
+        string left = ShowCli
+            ? "F11 / ESC  Exit     M  Move monitor     C  Hide CLI"
+            : "F11 / ESC  Exit     M  Move monitor     C  Show CLI";
         string right = "© 2026 Joseph Luker • All rights reserved.";
 
         g.DrawString(left, _tinyFont, mutedBrush, 23, ClientSize.Height - 25);

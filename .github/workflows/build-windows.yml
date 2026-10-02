@@ -67,7 +67,7 @@ jobs:
           - Downloads updates in-app.
           - Restarts automatically to apply an update when Watchdog is idle.
           - If monitoring is active, the update is downloaded and applied on the next restart.
-          - Fullscreen multi-monitor Wallboard / NOC mode with live topology, outage feed, and real host status.
+          - Fullscreen multi-monitor Wallboard / NOC mode with live topology, outage feed, real host status, and toggleable live CLI trace.
           - Full premium-style UX redesign with status dashboard and refined site navigation.
           - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
           - Copyright © 2026 Joseph Luker. All rights reserved.

@@ -159,3 +159,15 @@ Ping Watchdog now includes a purpose-built fullscreen operations display for a d
 - Active outages and recent state transitions are shown beside the live topology.
 - DOWN and recovery events are retained for the current monitoring session and capped to prevent unbounded memory growth.
 - Wallboard stays useful even before monitoring begins by showing configured sites and hosts as unknown/idle.
+
+
+### Wallboard live CLI trace
+
+Wallboard now includes the same live ping-command trace used by the main interface.
+
+- The CLI panel is **visible by default** in Wallboard.
+- It appears as a full-width terminal strip below the topology and outage panels.
+- Successful ping results use the existing green trace treatment; failures use red.
+- The newest output stays at the bottom like a terminal.
+- The Wallboard snapshot carries only a bounded recent slice of command history.
+- Press **C** at any time to hide or restore the CLI panel without leaving fullscreen mode.

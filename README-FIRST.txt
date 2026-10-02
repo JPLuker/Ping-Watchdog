@@ -28,3 +28,8 @@ Click "Wallboard" or press F11 for a fullscreen side-monitor display.
 If more than one monitor is attached, Wallboard opens on the other monitor automatically.
 Press M to move it to another monitor.
 Press Esc or F11 to close Wallboard.
+
+
+WALLBOARD CLI
+The live CLI/CMD trace is shown at the bottom of Wallboard by default.
+Press C to hide/show the CLI panel without leaving Wallboard.

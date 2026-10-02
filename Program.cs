@@ -312,11 +312,17 @@ internal sealed record WallboardEventSnapshot(
     string Kind,
     string Message);
 
+internal sealed record WallboardCommandSnapshot(
+    DateTime Timestamp,
+    bool Success,
+    string Text);
+
 internal sealed record WallboardSnapshot(
     bool Monitoring,
     DateTime CapturedAt,
     IReadOnlyList<WallboardSiteSnapshot> Sites,
-    IReadOnlyList<WallboardEventSnapshot> Events);
+    IReadOnlyList<WallboardEventSnapshot> Events,
+    IReadOnlyList<WallboardCommandSnapshot> Commands);
 
 public sealed class MainForm : Form
 {
@@ -773,6 +779,8 @@ public sealed class MainForm : Form
         var wallboardSnapshot = form.BuildWallboardSnapshot();
         Check(wallboardSnapshot.Sites.Count == 1);
         Check(wallboardSnapshot.Sites[0].Hosts.Count == 1);
+        Check(wallboardSnapshot.Commands.Count == 2);
+        Check(wallboardSnapshot.Commands[0].Text.Contains("ping 127.0.0.1", StringComparison.Ordinal));
 
         form.ClientSize = new Size(960, 640);
         form.ApplyResponsiveLayout();
@@ -2488,11 +2496,20 @@ public sealed class MainForm : Form
                 .ToList();
         }
 
+        var commands = _commandEntries
+            .TakeLast(120)
+            .Select(entry => new WallboardCommandSnapshot(
+                entry.Timestamp,
+                entry.Success,
+                FormatCommandEntry(entry)))
+            .ToList();
+
         return new WallboardSnapshot(
             monitoring,
             DateTime.Now,
             sites,
-            events);
+            events,
+            commands);
     }
 
     private void OpenWallboard()
@@ -2714,17 +2731,22 @@ public sealed class MainForm : Form
         _commandBox.ScrollToCaret();
     }
 
-    private void AppendCommandEntryToView(
-        CommandLogEntry entry,
-        bool scroll = true)
+    private string FormatCommandEntry(CommandLogEntry entry)
     {
         string nickname = GetNickname(entry.Site, entry.Host);
         string labelPart = string.IsNullOrWhiteSpace(nickname)
             ? string.Empty
             : $" [{nickname}]";
 
-        string command =
+        return
             $"{entry.Host}: [{entry.Site}]{labelPart} [{entry.Timestamp:HH:mm:ss}] ping {entry.Host} -n 1 -w {entry.TimeoutMs}  ->  {entry.ResultText}";
+    }
+
+    private void AppendCommandEntryToView(
+        CommandLogEntry entry,
+        bool scroll = true)
+    {
+        string command = FormatCommandEntry(entry);
 
         _commandBox.SelectionStart = _commandBox.TextLength;
         _commandBox.SelectionLength = 0;
