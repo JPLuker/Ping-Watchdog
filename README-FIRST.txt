@@ -54,3 +54,11 @@ MODERN APP BAR
 The top bar always shows Wallboard and Updates.
 Import/Export configuration are under the ••• menu so they cannot crowd the updater off-screen.
 The Updates button changes state automatically as Watchdog checks, downloads, and prepares releases.
+
+
+OUTAGE HISTORY
+Open ••• > Outage history... or press Ctrl+H.
+History is saved across restarts and updates in your Ping Watchdog AppData folder.
+Choose Last 24 hours / 7 days / 30 days / All time and optionally hide SUSPECT events.
+Those display preferences are saved automatically.
+In Wallboard: H cycles the history range and S toggles SUSPECT events.

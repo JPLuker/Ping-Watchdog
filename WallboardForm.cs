@@ -5,14 +5,20 @@ internal sealed class WallboardForm : Form
     private readonly Func<WallboardSnapshot> _snapshotProvider;
     private readonly WallboardCanvas _canvas = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
+    private readonly Action _cycleHistoryWindow;
+    private readonly Action _toggleSuspectHistory;
     private int _screenIndex;
     private bool _showCli = true;
 
     public WallboardForm(
         Func<WallboardSnapshot> snapshotProvider,
-        Screen targetScreen)
+        Screen targetScreen,
+        Action cycleHistoryWindow,
+        Action toggleSuspectHistory)
     {
         _snapshotProvider = snapshotProvider;
+        _cycleHistoryWindow = cycleHistoryWindow;
+        _toggleSuspectHistory = toggleSuspectHistory;
 
         Text = "Ping Watchdog Wallboard";
         FormBorderStyle = FormBorderStyle.None;
@@ -56,6 +62,18 @@ internal sealed class WallboardForm : Form
                 _showCli = !_showCli;
                 _canvas.ShowCli = _showCli;
                 _canvas.Invalidate();
+            }
+            else if (e.KeyCode == Keys.H)
+            {
+                e.Handled = true;
+                _cycleHistoryWindow();
+                RefreshSnapshot();
+            }
+            else if (e.KeyCode == Keys.S)
+            {
+                e.Handled = true;
+                _toggleSuspectHistory();
+                RefreshSnapshot();
             }
         };
 
@@ -175,7 +193,9 @@ internal sealed class WallboardCanvas : Control
             DateTime.Now,
             Array.Empty<WallboardSiteSnapshot>(),
             Array.Empty<WallboardEventSnapshot>(),
-            Array.Empty<WallboardCommandSnapshot>());
+            Array.Empty<WallboardCommandSnapshot>(),
+            "Last 24 hours",
+            true);
 
         DrawBackground(g);
         DrawHeader(g, snapshot);
@@ -710,8 +730,31 @@ internal sealed class WallboardCanvas : Control
 
         g.DrawLine(dividerPen, x, y + 3, x + width, y + 3);
         y += 20;
-        g.DrawString("RECENT EVENTS", _sectionFont, titleBrush, x, y);
+        g.DrawString("OUTAGE HISTORY", _sectionFont, titleBrush, x, y);
+
+        string historyFilter = snapshot.HideSuspectEvents
+            ? $"{snapshot.EventWindowLabel} • suspects hidden"
+            : $"{snapshot.EventWindowLabel} • suspects shown";
+
+        var filterSize = g.MeasureString(historyFilter, _tinyFont);
+        g.DrawString(
+            historyFilter,
+            _tinyFont,
+            mutedBrush,
+            Math.Max(x, x + width - filterSize.Width),
+            y + 1);
+
         y += 27;
+
+        if (snapshot.Events.Count == 0)
+        {
+            g.DrawString(
+                "No events match the saved filters.",
+                _smallFont,
+                mutedBrush,
+                x,
+                y);
+        }
 
         foreach (var item in snapshot.Events
             .OrderByDescending(e => e.Timestamp)
@@ -728,7 +771,7 @@ internal sealed class WallboardCanvas : Control
             using var kindBrush = new SolidBrush(kindColor);
 
             g.DrawString(
-                item.Timestamp.ToString("HH:mm:ss"),
+                item.Timestamp.ToString("MM/dd HH:mm"),
                 _tinyFont,
                 mutedBrush,
                 x,
@@ -738,7 +781,7 @@ internal sealed class WallboardCanvas : Control
                 item.Kind,
                 _tinyFont,
                 kindBrush,
-                x + 58,
+                x + 76,
                 y);
 
             y += 16;
@@ -846,8 +889,8 @@ internal sealed class WallboardCanvas : Control
     {
         using var mutedBrush = new SolidBrush(Color.FromArgb(90, 107, 125));
         string left = ShowCli
-            ? "F11 / ESC  Exit     M  Move monitor     C  Hide CLI"
-            : "F11 / ESC  Exit     M  Move monitor     C  Show CLI";
+            ? "ESC Exit   M Monitor   C Hide CLI   H History range   S Suspects"
+            : "ESC Exit   M Monitor   C Show CLI   H History range   S Suspects";
         string right = "© 2026 Joseph Luker • All rights reserved.";
 
         g.DrawString(left, _tinyFont, mutedBrush, 23, ClientSize.Height - 25);

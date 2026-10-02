@@ -12,5 +12,7 @@
   "FailureThreshold": 3,
   "RecoveryThreshold": 2,
   "ShowCommandView": false,
-  "SelectedSite": "Default Site"
+  "SelectedSite": "Default Site",
+  "EventHistoryHours": 24,
+  "HideSuspectEvents": true
 }

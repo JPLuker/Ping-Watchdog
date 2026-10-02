@@ -157,7 +157,7 @@ Ping Watchdog now includes a purpose-built fullscreen operations display for a d
 - The topology is based on real Ping Watchdog sites and host state. It intentionally does not fake geographic locations for private IP addresses.
 - Site clusters aggregate actual Online, Suspect, Offline, and Unknown states.
 - Active outages and recent state transitions are shown beside the live topology.
-- DOWN and recovery events are retained for the current monitoring session and capped to prevent unbounded memory growth.
+- DOWN, recovery, and suspect transitions are persisted under the current Windows user's Ping Watchdog AppData folder and survive restarts and updates.
 - Wallboard stays useful even before monitoring begins by showing configured sites and hosts as unknown/idle.
 
 
@@ -211,3 +211,20 @@ The primary Ping Watchdog window was reworked again after real-device testing.
 - CLI trace remains optional and uses a larger share of the split only when enabled.
 - Site navigation remains explicit and DPI-safe.
 - The wording and hierarchy were normalized toward current Windows desktop conventions rather than all-caps utility-style controls.
+
+
+## Version 1.10 persistent outage history
+
+Ping Watchdog now keeps a durable operational history instead of treating Wallboard events as session-only data.
+
+- DOWN, RECOVERED, and SUSPECT transitions are written to `%APPDATA%\PingWatchdog\event-history.json`.
+- Starting a new monitoring session no longer clears prior outage history.
+- Open **••• → Outage history...** or press **Ctrl+H** for the full history window.
+- The history window shows timestamp, event type, site, host, and event details in a sortable desktop table.
+- Time filters include **Last 24 hours**, **Last 7 days**, **Last 30 days**, and **All time**.
+- **Hide suspect events** removes noisy SUSPECT transitions from the view without deleting them.
+- Time-range and suspect visibility preferences are saved with Ping Watchdog's automatic working configuration.
+- The history window also supports a site filter and CSV export.
+- Wallboard's old **Recent Events** area is now **Outage History** and uses the same saved time-range / suspect filters.
+- On Wallboard, press **H** to cycle the saved history range and **S** to show/hide suspect events.
+- Existing events from versions before 1.10 cannot be reconstructed after they were discarded; persistent history begins once 1.10 is running.

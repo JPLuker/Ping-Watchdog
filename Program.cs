@@ -92,6 +92,8 @@ internal sealed class WatchdogConfig
     public int RecoveryThreshold { get; set; } = 2;
     public bool ShowCommandView { get; set; }
     public string? SelectedSite { get; set; }
+    public int EventHistoryHours { get; set; } = 24;
+    public bool HideSuspectEvents { get; set; } = true;
 }
 
 internal sealed class NicknameDialog : Form
@@ -293,6 +295,10 @@ internal sealed record StateEventRecord(
     string Kind,
     string Message);
 
+internal sealed record EventHistoryPreferences(
+    int WindowHours,
+    bool HideSuspects);
+
 internal sealed record WallboardHostSnapshot(
     string Site,
     string Address,
@@ -322,7 +328,9 @@ internal sealed record WallboardSnapshot(
     DateTime CapturedAt,
     IReadOnlyList<WallboardSiteSnapshot> Sites,
     IReadOnlyList<WallboardEventSnapshot> Events,
-    IReadOnlyList<WallboardCommandSnapshot> Commands);
+    IReadOnlyList<WallboardCommandSnapshot> Commands,
+    string EventWindowLabel,
+    bool HideSuspectEvents);
 
 public sealed class MainForm : Form
 {
@@ -339,6 +347,10 @@ public sealed class MainForm : Form
     private readonly string _bundledDefaultConfigPath = Path.Combine(
         AppContext.BaseDirectory,
         "default.pingwatch.json");
+    private readonly string _eventHistoryPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "PingWatchdog",
+        "event-history.json");
 
     private readonly List<SiteDefinition> _sites = new();
     private readonly List<CommandLogEntry> _commandEntries = new();
@@ -517,6 +529,7 @@ public sealed class MainForm : Form
 
     private CancellationTokenSource? _cts;
     private WallboardForm? _wallboardForm;
+    private EventHistoryForm? _eventHistoryForm;
     private bool _appNotificationsAvailable;
     private readonly bool _suppressNotifications;
     private readonly bool _persistSites;
@@ -532,6 +545,8 @@ public sealed class MainForm : Form
     private int _pingTimeoutMs = 1000;
     private int _failureThresholdValue = 3;
     private int _recoveryThresholdValue = 2;
+    private int _eventHistoryHours = 24;
+    private bool _hideSuspectEvents = true;
 
     private static Label CreateStatValueLabel()
     {
@@ -669,6 +684,11 @@ public sealed class MainForm : Form
                 e.Handled = true;
                 OpenWallboard();
             }
+            else if (e.Control && e.KeyCode == Keys.H)
+            {
+                e.Handled = true;
+                OpenEventHistory();
+            }
         };
 
         Shown += async (_, _) =>
@@ -707,6 +727,7 @@ public sealed class MainForm : Form
         {
             _closingApplication = true;
             _wallboardForm?.Close();
+            _eventHistoryForm?.Close();
             PersistCurrentEditor();
             SaveSites();
             StopMonitoring();
@@ -724,6 +745,7 @@ public sealed class MainForm : Form
         };
 
         LoadSites();
+        LoadEventHistory();
 
         if (_sites.Count == 0)
             _sites.Add(new SiteDefinition { Name = "Default Site" });
@@ -804,10 +826,27 @@ public sealed class MainForm : Form
         Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
         Check(configRoundTrip?.PingIntervalSeconds == 2);
         Check(configRoundTrip?.FailureThreshold == 3);
+        Check(configRoundTrip?.EventHistoryHours == 24);
+        Check(configRoundTrip?.HideSuspectEvents == true);
         Check(form.GetConfiguredTargets().Count == 1);
         Check(UpdateRepoUrl.EndsWith("/JPLuker/Ping-Watchdog", StringComparison.Ordinal));
         Check(form._stateEvents.Any(e => e.Kind == "DOWN"));
         Check(form._stateEvents.Any(e => e.Kind == "RECOVERED"));
+
+        var historyNow = DateTime.Now;
+        var historySample = new[]
+        {
+            new StateEventRecord(historyNow.AddHours(-1), "A", "1", "one", "DOWN", "down"),
+            new StateEventRecord(historyNow.AddMinutes(-30), "A", "1", "one", "RECOVERED", "up"),
+            new StateEventRecord(historyNow.AddMinutes(-10), "A", "2", "two", "SUSPECT", "suspect"),
+            new StateEventRecord(historyNow.AddHours(-30), "B", "3", "three", "DOWN", "old")
+        };
+        var filtered24h = FilterStateEvents(historySample, 24, hideSuspects: true, historyNow);
+        Check(filtered24h.Count == 2);
+        Check(filtered24h.All(e => e.Kind != "SUSPECT"));
+        Check(filtered24h.All(e => e.Timestamp >= historyNow.AddHours(-24)));
+        Check(FilterStateEvents(historySample, 0, hideSuspects: false, historyNow).Count == 4);
+        Check(GetEventHistoryWindowLabel(168) == "Last 7 days");
 
         var wallboardSnapshot = form.BuildWallboardSnapshot();
         Check(wallboardSnapshot.Sites.Count == 1);
@@ -920,14 +959,19 @@ public sealed class MainForm : Form
     {
         _appMenu.Items.Clear();
 
+        var historyItem = new ToolStripMenuItem("Outage history...");
         var exportItem = new ToolStripMenuItem("Export configuration");
         var importItem = new ToolStripMenuItem("Import configuration");
         var aboutItem = new ToolStripMenuItem("About Ping Watchdog");
 
+        historyItem.ShortcutKeys = Keys.Control | Keys.H;
+        historyItem.Click += (_, _) => OpenEventHistory();
         exportItem.Click += (_, _) => SaveConfigFile();
         importItem.Click += (_, _) => LoadConfigFile();
         aboutItem.Click += (_, _) => ShowAboutDialog();
 
+        _appMenu.Items.Add(historyItem);
+        _appMenu.Items.Add(new ToolStripSeparator());
         _appMenu.Items.Add(exportItem);
         _appMenu.Items.Add(importItem);
         _appMenu.Items.Add(new ToolStripSeparator());
@@ -1934,7 +1978,9 @@ public sealed class MainForm : Form
             FailureThreshold = (int)_failureThreshold.Value,
             RecoveryThreshold = (int)_recoveryThreshold.Value,
             ShowCommandView = _showCommandView.Checked,
-            SelectedSite = _selectedSiteName
+            SelectedSite = _selectedSiteName,
+            EventHistoryHours = _eventHistoryHours,
+            HideSuspectEvents = _hideSuspectEvents
         };
     }
 
@@ -2058,6 +2104,8 @@ public sealed class MainForm : Form
         _failureThreshold.Value = Math.Clamp(config.FailureThreshold, (int)_failureThreshold.Minimum, (int)_failureThreshold.Maximum);
         _recoveryThreshold.Value = Math.Clamp(config.RecoveryThreshold, (int)_recoveryThreshold.Minimum, (int)_recoveryThreshold.Maximum);
         _showCommandView.Checked = config.ShowCommandView;
+        _eventHistoryHours = NormalizeEventHistoryHours(config.EventHistoryHours);
+        _hideSuspectEvents = config.HideSuspectEvents;
 
         _selectedSiteName = config.SelectedSite is not null &&
             _sites.Any(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase))
@@ -2261,8 +2309,6 @@ public sealed class MainForm : Form
         _recoveryThresholdValue = (int)_recoveryThreshold.Value;
 
         _hosts.Clear();
-        lock (_stateEvents)
-            _stateEvents.Clear();
 
         foreach (var token in _hostTokens.Values)
             token.Dispose();
@@ -2590,9 +2636,160 @@ public sealed class MainForm : Form
                 kind,
                 message));
 
-            if (_stateEvents.Count > 250)
-                _stateEvents.RemoveRange(0, 50);
+            PersistEventHistoryUnsafe();
         }
+    }
+
+    private void LoadEventHistory()
+    {
+        if (!_persistSites)
+            return;
+
+        try
+        {
+            if (!File.Exists(_eventHistoryPath))
+                return;
+
+            var loaded = JsonSerializer.Deserialize<List<StateEventRecord>>(
+                File.ReadAllText(_eventHistoryPath));
+
+            if (loaded is null)
+                return;
+
+            lock (_stateEvents)
+            {
+                _stateEvents.Clear();
+                _stateEvents.AddRange(
+                    loaded
+                        .Where(e =>
+                            e.Timestamp != default &&
+                            !string.IsNullOrWhiteSpace(e.Site) &&
+                            !string.IsNullOrWhiteSpace(e.Host) &&
+                            !string.IsNullOrWhiteSpace(e.Kind))
+                        .OrderBy(e => e.Timestamp));
+            }
+        }
+        catch
+        {
+            // A damaged history file must never prevent monitoring.
+        }
+    }
+
+    private void PersistEventHistoryUnsafe()
+    {
+        if (!_persistSites)
+            return;
+
+        try
+        {
+            var directory = Path.GetDirectoryName(_eventHistoryPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            string tempPath = _eventHistoryPath + ".tmp";
+
+            File.WriteAllText(
+                tempPath,
+                JsonSerializer.Serialize(_stateEvents));
+
+            File.Move(tempPath, _eventHistoryPath, overwrite: true);
+        }
+        catch
+        {
+            // History persistence is best-effort; monitoring stays authoritative.
+        }
+    }
+
+    private IReadOnlyList<StateEventRecord> GetStateEventSnapshot()
+    {
+        lock (_stateEvents)
+            return _stateEvents.ToList();
+    }
+
+    internal static IReadOnlyList<StateEventRecord> FilterStateEvents(
+        IEnumerable<StateEventRecord> source,
+        int windowHours,
+        bool hideSuspects,
+        DateTime now)
+    {
+        windowHours = NormalizeEventHistoryHours(windowHours);
+        DateTime? cutoff = windowHours == 0
+            ? null
+            : now.AddHours(-windowHours);
+
+        return source
+            .Where(e => !cutoff.HasValue || e.Timestamp >= cutoff.Value)
+            .Where(e =>
+                !hideSuspects ||
+                !e.Kind.Equals("SUSPECT", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(e => e.Timestamp)
+            .ToList();
+    }
+
+    internal static int NormalizeEventHistoryHours(int hours)
+    {
+        return hours switch
+        {
+            0 or 24 or 168 or 720 => hours,
+            _ => 24
+        };
+    }
+
+    internal static string GetEventHistoryWindowLabel(int hours)
+    {
+        return NormalizeEventHistoryHours(hours) switch
+        {
+            24 => "Last 24 hours",
+            168 => "Last 7 days",
+            720 => "Last 30 days",
+            _ => "All time"
+        };
+    }
+
+    private EventHistoryPreferences GetEventHistoryPreferences()
+    {
+        return new EventHistoryPreferences(
+            _eventHistoryHours,
+            _hideSuspectEvents);
+    }
+
+    private void SetEventHistoryPreferences(int hours, bool hideSuspects)
+    {
+        _eventHistoryHours = NormalizeEventHistoryHours(hours);
+        _hideSuspectEvents = hideSuspects;
+        SaveSites();
+    }
+
+    private void CycleEventHistoryWindow()
+    {
+        int[] windows = { 24, 168, 720, 0 };
+        int current = Array.IndexOf(windows, _eventHistoryHours);
+        _eventHistoryHours = windows[(Math.Max(0, current) + 1) % windows.Length];
+        SaveSites();
+    }
+
+    private void ToggleSuspectHistory()
+    {
+        _hideSuspectEvents = !_hideSuspectEvents;
+        SaveSites();
+    }
+
+    private void OpenEventHistory()
+    {
+        if (_eventHistoryForm is not null && !_eventHistoryForm.IsDisposed)
+        {
+            _eventHistoryForm.Show();
+            _eventHistoryForm.Activate();
+            return;
+        }
+
+        _eventHistoryForm = new EventHistoryForm(
+            GetStateEventSnapshot,
+            GetEventHistoryPreferences,
+            SetEventHistoryPreferences);
+
+        _eventHistoryForm.FormClosed += (_, _) => _eventHistoryForm = null;
+        _eventHistoryForm.Show(this);
     }
 
     private WallboardSnapshot BuildWallboardSnapshot()
@@ -2649,8 +2846,12 @@ public sealed class MainForm : Form
 
         lock (_stateEvents)
         {
-            events = _stateEvents
-                .TakeLast(40)
+            events = FilterStateEvents(
+                    _stateEvents,
+                    _eventHistoryHours,
+                    _hideSuspectEvents,
+                    DateTime.Now)
+                .TakeLast(80)
                 .Select(e => new WallboardEventSnapshot(
                     e.Timestamp,
                     e.Site,
@@ -2673,7 +2874,9 @@ public sealed class MainForm : Form
             DateTime.Now,
             sites,
             events,
-            commands);
+            commands,
+            GetEventHistoryWindowLabel(_eventHistoryHours),
+            _hideSuspectEvents);
     }
 
     private void OpenWallboard()
@@ -2692,7 +2895,9 @@ public sealed class MainForm : Form
 
         _wallboardForm = new WallboardForm(
             BuildWallboardSnapshot,
-            target);
+            target,
+            CycleEventHistoryWindow,
+            ToggleSuspectHistory);
 
         _wallboardForm.FormClosed += (_, _) =>
         {
