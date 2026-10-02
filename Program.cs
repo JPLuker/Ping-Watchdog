@@ -493,6 +493,12 @@ public sealed class MainForm : Form
     private readonly Font _siteItemFont = new("Segoe UI Semibold", 9.5f);
     private readonly Font _statusCellFont = new("Segoe UI Semibold", 8.5f, FontStyle.Bold);
 
+    private TableLayoutPanel? _rootLayout;
+    private TableLayoutPanel? _rightLayout;
+    private FlowLayoutPanel? _headerActionsPanel;
+    private FlowLayoutPanel? _settingsFlowPanel;
+    private Label? _brandSubtitleLabel;
+
     private CancellationTokenSource? _cts;
     private WallboardForm? _wallboardForm;
     private bool _appNotificationsAvailable;
@@ -528,12 +534,21 @@ public sealed class MainForm : Form
         _persistSites = persistSites;
 
         Text = "Ping Watchdog";
-        Width = 1320;
-        Height = 840;
-        MinimumSize = new Size(1080, 680);
+        AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9.5f);
         KeyPreview = true;
+
+        var workingArea = Screen.PrimaryScreen?.WorkingArea
+            ?? new Rectangle(0, 0, 1366, 768);
+
+        int initialWidth = Math.Min(1320, Math.Max(860, workingArea.Width - 32));
+        int initialHeight = Math.Min(840, Math.Max(560, workingArea.Height - 32));
+
+        Size = new Size(initialWidth, initialHeight);
+        MinimumSize = new Size(
+            Math.Min(900, initialWidth),
+            Math.Min(560, initialHeight));
 
         _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)
             ?? (Icon)SystemIcons.Application.Clone();
@@ -577,7 +592,7 @@ public sealed class MainForm : Form
         _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
 
         _siteList.DrawMode = DrawMode.OwnerDrawFixed;
-        _siteList.ItemHeight = 38;
+        _siteList.ItemHeight = 36;
         _siteList.DrawItem += DrawSiteItem;
         _siteList.SelectedIndexChanged += (_, _) => OnSiteSelectionChanged();
         _siteList.DoubleClick += (_, _) => RenameSite();
@@ -620,12 +635,21 @@ public sealed class MainForm : Form
 
         Shown += async (_, _) =>
         {
+            ApplyResponsiveLayout();
+
+            var screen = Screen.FromControl(this).WorkingArea;
+            if (screen.Width < 1220 || screen.Height < 700)
+                WindowState = FormWindowState.Maximized;
+
+            ApplyResponsiveLayout();
             _updateTimer.Start();
             await CheckForUpdatesAsync(userInitiated: false);
         };
 
         Resize += (_, _) =>
         {
+            ApplyResponsiveLayout();
+
             if (WindowState == FormWindowState.Minimized)
             {
                 Hide();
@@ -638,6 +662,8 @@ public sealed class MainForm : Form
                     ToolTipIcon.Info);
             }
         };
+
+        DpiChanged += (_, _) => BeginInvoke(ApplyResponsiveLayout);
 
         FormClosing += (_, _) =>
         {
@@ -747,6 +773,16 @@ public sealed class MainForm : Form
         var wallboardSnapshot = form.BuildWallboardSnapshot();
         Check(wallboardSnapshot.Sites.Count == 1);
         Check(wallboardSnapshot.Sites[0].Hosts.Count == 1);
+
+        form.ClientSize = new Size(960, 640);
+        form.ApplyResponsiveLayout();
+        Check(form._workspaceSplit.SplitterDistance <= 205);
+        Check(form._rootLayout?.RowStyles[0].Height >= 100);
+        Check(form._settingsFlowPanel?.WrapContents == true);
+
+        form.ClientSize = new Size(1320, 840);
+        form.ApplyResponsiveLayout();
+        Check(form._workspaceSplit.SplitterDistance >= 220);
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -862,14 +898,15 @@ public sealed class MainForm : Form
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        _rootLayout = root;
 
         var header = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Padding = new Padding(22, 13, 18, 10),
+            Padding = new Padding(20, 12, 16, 9),
             Margin = new Padding(0),
             Tag = "header"
         };
@@ -894,23 +931,25 @@ public sealed class MainForm : Form
             ForeColor = Color.White,
             Tag = "title"
         }, 0, 0);
-        brand.Controls.Add(new Label
+        _brandSubtitleLabel = new Label
         {
             Text = "Multi-site availability monitoring",
             AutoSize = true,
             Font = new Font("Segoe UI", 9.5f),
             Tag = "muted"
-        }, 0, 1);
+        };
+        brand.Controls.Add(_brandSubtitleLabel, 0, 1);
 
         var headerActions = new FlowLayoutPanel
         {
             AutoSize = true,
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Margin = new Padding(0, 8, 0, 0),
+            WrapContents = true,
+            Margin = new Padding(0, 7, 0, 0),
             Tag = "header"
         };
+        _headerActionsPanel = headerActions;
         _saveConfigButton.Text = "Export Config";
         _loadConfigButton.Text = "Import Config";
         headerActions.Controls.Add(_monitorStateLabel);
@@ -922,9 +961,9 @@ public sealed class MainForm : Form
         header.Controls.Add(brand, 0, 0);
         header.Controls.Add(headerActions, 1, 0);
 
-        _workspaceSplit.SplitterDistance = 252;
+        _workspaceSplit.SplitterDistance = 232;
         _workspaceSplit.SplitterWidth = 1;
-        _workspaceSplit.Panel1MinSize = 225;
+        _workspaceSplit.Panel1MinSize = 175;
         _workspaceSplit.Panel1.Padding = new Padding(14, 16, 12, 16);
         _workspaceSplit.Panel2.Padding = new Padding(18, 16, 18, 16);
         _workspaceSplit.Panel1.Tag = "nav";
@@ -934,16 +973,15 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 4,
             Padding = new Padding(0),
             Margin = new Padding(0),
             Tag = "nav"
         };
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
 
         sitePanel.Controls.Add(new Label
         {
@@ -955,12 +993,25 @@ public sealed class MainForm : Form
         }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
 
+        var siteActions = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Tag = "nav"
+        };
+        siteActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        siteActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
         _addSiteButton.Dock = DockStyle.Fill;
-        _addSiteButton.Margin = new Padding(0, 7, 0, 2);
+        _addSiteButton.Margin = new Padding(0, 6, 3, 2);
         _renameSiteButton.Dock = DockStyle.Fill;
-        _renameSiteButton.Margin = new Padding(0, 4, 0, 2);
-        sitePanel.Controls.Add(_addSiteButton, 0, 2);
-        sitePanel.Controls.Add(_renameSiteButton, 0, 3);
+        _renameSiteButton.Margin = new Padding(3, 6, 0, 2);
+        _renameSiteButton.Text = "Rename";
+        siteActions.Controls.Add(_addSiteButton, 0, 0);
+        siteActions.Controls.Add(_renameSiteButton, 1, 0);
+        sitePanel.Controls.Add(siteActions, 0, 2);
 
         var siteFooter = new TableLayoutPanel
         {
@@ -982,7 +1033,7 @@ public sealed class MainForm : Form
         _deleteSiteButton.Text = "Delete";
         _deleteSiteButton.Margin = new Padding(5, 7, 0, 0);
         siteFooter.Controls.Add(_deleteSiteButton, 1, 0);
-        sitePanel.Controls.Add(siteFooter, 0, 4);
+        sitePanel.Controls.Add(siteFooter, 0, 3);
 
         var right = new TableLayoutPanel
         {
@@ -993,10 +1044,11 @@ public sealed class MainForm : Form
             Margin = new Padding(0),
             Tag = "window"
         };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 158));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 148));
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _rightLayout = right;
 
         var stats = new TableLayoutPanel
         {
@@ -1089,11 +1141,12 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            AutoScroll = true,
+            WrapContents = true,
+            AutoScroll = false,
             Margin = new Padding(0),
             Tag = "card"
         };
+        _settingsFlowPanel = settings;
 
         Control Setting(string title, Control input, string suffix)
         {
@@ -1209,6 +1262,89 @@ public sealed class MainForm : Form
 
         Controls.Add(root);
         ResumeLayout(true);
+        ApplyResponsiveLayout();
+    }
+
+    private void ApplyResponsiveLayout()
+    {
+        if (_rootLayout is null ||
+            _rightLayout is null ||
+            _headerActionsPanel is null ||
+            _settingsFlowPanel is null ||
+            IsDisposed)
+        {
+            return;
+        }
+
+        int width = Math.Max(1, ClientSize.Width);
+        int height = Math.Max(1, ClientSize.Height);
+        bool narrow = width < 1180;
+        bool veryNarrow = width < 1020;
+        bool shortWindow = height < 720;
+
+        SuspendLayout();
+
+        try
+        {
+            _rootLayout.RowStyles[0].Height = narrow ? 108 : 86;
+
+            _workspaceSplit.Panel1MinSize = veryNarrow ? 165 : 175;
+            int requestedSidebar = veryNarrow ? 185 : narrow ? 205 : 232;
+            int maxSidebar = Math.Max(_workspaceSplit.Panel1MinSize, width / 3);
+
+            try
+            {
+                _workspaceSplit.SplitterDistance = Math.Clamp(
+                    requestedSidebar,
+                    _workspaceSplit.Panel1MinSize,
+                    maxSidebar);
+            }
+            catch (InvalidOperationException)
+            {
+                // During an in-progress WinForms resize the splitter can briefly
+                // reject otherwise valid distances. The next Resize event retries.
+            }
+
+            _rightLayout.RowStyles[0].Height = shortWindow ? 72 : 84;
+            _rightLayout.RowStyles[1].Height = shortWindow ? 116 : 148;
+            _rightLayout.RowStyles[2].Height = narrow ? 116 : 92;
+
+            _headerActionsPanel.WrapContents = true;
+            _headerActionsPanel.MaximumSize = new Size(
+                narrow ? Math.Max(360, width - 330) : 720,
+                0);
+
+            _settingsFlowPanel.WrapContents = true;
+            _settingsFlowPanel.AutoScroll = false;
+
+            _checkUpdateButton.Text = narrow ? "Updates" : "Check Updates";
+            _saveConfigButton.Text = narrow ? "Export" : "Export Config";
+            _loadConfigButton.Text = narrow ? "Import" : "Import Config";
+
+            if (_brandSubtitleLabel is not null)
+                _brandSubtitleLabel.Visible = !veryNarrow;
+
+            _siteList.ItemHeight = Math.Max(
+                34,
+                (int)Math.Round(36 * DeviceDpi / 96d));
+
+            if (!_mainSplit.Panel2Collapsed)
+            {
+                int splitHeight = _mainSplit.ClientSize.Height;
+                if (splitHeight > 150)
+                {
+                    int desired = (int)(splitHeight * (shortWindow ? 0.52 : 0.60));
+                    _mainSplit.SplitterDistance = Math.Clamp(
+                        desired,
+                        Math.Min(80, splitHeight - 1),
+                        Math.Max(81, splitHeight - 70));
+                }
+            }
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
     }
 
     private void DrawSiteItem(object? sender, DrawItemEventArgs e)
@@ -2495,9 +2631,14 @@ public sealed class MainForm : Form
 
                 int height = _mainSplit.ClientSize.Height;
 
-                if (height > 330)
-                    _mainSplit.SplitterDistance =
-                        Math.Max(160, (int)(height * 0.58));
+                if (height > 150)
+                {
+                    int desired = (int)(height * (ClientSize.Height < 720 ? 0.52 : 0.60));
+                    _mainSplit.SplitterDistance = Math.Clamp(
+                        desired,
+                        Math.Min(80, height - 1),
+                        Math.Max(81, height - 70));
+                }
 
                 RebuildCommandView();
             });
