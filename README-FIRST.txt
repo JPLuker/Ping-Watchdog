@@ -48,3 +48,9 @@ This does not exit Ping Watchdog.
 WALLBOARD SITE HEALTH
 A site with some failed hosts stays yellow while more than half of its configured hosts are still replying.
 The site turns red when half or fewer are replying. Individual failed host dots remain red.
+
+
+MODERN APP BAR
+The top bar always shows Wallboard and Updates.
+Import/Export configuration are under the ••• menu so they cannot crowd the updater off-screen.
+The Updates button changes state automatically as Watchdog checks, downloads, and prepares releases.

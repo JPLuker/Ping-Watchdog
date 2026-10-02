@@ -196,3 +196,18 @@ Wallboard site nodes now distinguish a partial outage from a site-wide problem:
 - **Red:** half or fewer of the site's configured hosts are replying.
 - Individual host dots keep their own real state colors, so a down host remains red even when its site is yellow.
 - Active outage entries remain visible regardless of the aggregate site color.
+
+
+## Version 1.9 modern desktop UI
+
+The primary Ping Watchdog window was reworked again after real-device testing.
+
+- The top app bar now keeps only four always-available actions: monitoring state, **Wallboard**, **Updates**, and a **•••** overflow menu.
+- Import/export configuration moved into the overflow menu so updater controls can never be pushed off-screen.
+- The update button always communicates its current state: Updates, Checking, Up to date, Downloading, Unmanaged, or Restart to Update.
+- The app version is shown next to the product name and in the footer.
+- Dashboard cards, host editor, and monitoring profile use tighter spacing so the host table receives more of the available window.
+- The host table hides the redundant Site column when viewing one specific site.
+- CLI trace remains optional and uses a larger share of the split only when enabled.
+- Site navigation remains explicit and DPI-safe.
+- The wording and hierarchy were normalized toward current Windows desktop conventions rather than all-caps utility-style controls.
