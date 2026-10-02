@@ -125,3 +125,22 @@ Ping Watchdog now uses Velopack for distribution and self-updates.
 - Users of pre-1.6 standalone ZIP builds need to move to a 1.6 Velopack installer or portable package once. After that, manual release downloads are no longer required.
 
 The update source is the official `JPLuker/Ping-Watchdog` GitHub Releases feed.
+
+
+## Version 1.7 product UX pass
+
+Version 1.7 rebuilds the primary interface around the intended day-to-day monitoring workflow.
+
+- New product-style header and navigation rail.
+- Dashboard cards for total, online, suspect, and offline hosts.
+- Cleaner monitoring controls with stronger visual hierarchy.
+- Refined host editor and live-apply messaging.
+- Owner-drawn site navigation for a more consistent Windows dark UI.
+- More restrained status presentation in the host grid.
+- Explicit copyright/ownership presentation in the application footer and executable metadata.
+
+## Copyright and license
+
+Copyright © 2026 Joseph Luker. All rights reserved.
+
+The repository is publicly viewable, but Ping Watchdog is **not licensed as open-source software**. See [LICENSE](LICENSE) for the permissions and restrictions that apply.

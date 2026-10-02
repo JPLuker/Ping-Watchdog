@@ -16,3 +16,8 @@ If monitoring is active, the update downloads without interrupting the scan and 
 Use "Check Updates" in the header to force a check.
 
 Use Save Config / Load Config when you want portable named scan files you can move between PCs.
+
+
+COPYRIGHT
+Copyright © 2026 Joseph Luker. All rights reserved.
+See LICENSE included with this release for permitted use.

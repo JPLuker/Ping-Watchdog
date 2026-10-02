@@ -31,7 +31,7 @@ jobs:
       - name: Set release version
         shell: pwsh
         run: |
-          "WATCHDOG_VERSION=1.6.${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WATCHDOG_VERSION=1.7.${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install matching Velopack CLI
         shell: pwsh
@@ -53,6 +53,7 @@ jobs:
           dotnet publish PingWatchdog.csproj -c Release -r win-x64 --self-contained true -p:Version=$env:WATCHDOG_VERSION -p:PublishSingleFile=true -p:PublishTrimmed=false -o publish
           Copy-Item default.pingwatch.json publish\default.pingwatch.json
           Copy-Item README-FIRST.txt publish\README-FIRST.txt
+          Copy-Item LICENSE publish\LICENSE
 
       - name: Write release notes
         shell: pwsh
@@ -66,7 +67,9 @@ jobs:
           - Downloads updates in-app.
           - Restarts automatically to apply an update when Watchdog is idle.
           - If monitoring is active, the update is downloaded and applied on the next restart.
+          - Full premium-style UX redesign with status dashboard and refined site navigation.
           - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
+          - Copyright © 2026 Joseph Luker. All rights reserved.
 
           Made by Joseph Luker.
           "@ | Set-Content release-notes.md

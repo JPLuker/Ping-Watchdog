@@ -384,6 +384,18 @@ public sealed class MainForm : Form
         Padding = new Padding(8, 5, 0, 0)
     };
     private readonly Button _clearLogButton = new() { Text = "Clear", AutoSize = true };
+    private readonly Label _totalValueLabel = CreateStatValueLabel();
+    private readonly Label _onlineValueLabel = CreateStatValueLabel();
+    private readonly Label _suspectValueLabel = CreateStatValueLabel();
+    private readonly Label _offlineValueLabel = CreateStatValueLabel();
+    private readonly Label _monitorStateLabel = new()
+    {
+        Text = "IDLE",
+        AutoSize = true,
+        Font = new Font("Segoe UI Semibold", 9, FontStyle.Bold),
+        Padding = new Padding(10, 6, 10, 6),
+        Tag = "stateBadge"
+    };
 
     private readonly DataGridView _grid = new()
     {
@@ -426,7 +438,12 @@ public sealed class MainForm : Form
     };
 
     private readonly StatusStrip _statusStrip = new() { SizingGrip = false };
-    private readonly ToolStripStatusLabel _statusLabel = new("Idle");
+    private readonly ToolStripStatusLabel _statusLabel = new("Ready");
+    private readonly ToolStripStatusLabel _ownershipLabel = new("© 2026 Joseph Luker • All rights reserved.")
+    {
+        Spring = true,
+        TextAlign = ContentAlignment.MiddleRight
+    };
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 500 };
     private readonly System.Windows.Forms.Timer _updateTimer = new()
     {
@@ -450,6 +467,17 @@ public sealed class MainForm : Form
     private int _failureThresholdValue = 3;
     private int _recoveryThresholdValue = 2;
 
+    private static Label CreateStatValueLabel()
+    {
+        return new Label
+        {
+            Text = "0",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 22, FontStyle.Bold),
+            Tag = "statValue"
+        };
+    }
+
     public MainForm(
         bool appNotificationsAvailable,
         bool suppressNotifications = false,
@@ -460,10 +488,11 @@ public sealed class MainForm : Form
         _persistSites = persistSites;
 
         Text = "Ping Watchdog";
-        Width = 1180;
-        Height = 780;
-        MinimumSize = new Size(940, 600);
+        Width = 1320;
+        Height = 840;
+        MinimumSize = new Size(1080, 680);
         StartPosition = FormStartPosition.CenterScreen;
+        Font = new Font("Segoe UI", 9.5f);
 
         _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)
             ?? (Icon)SystemIcons.Application.Clone();
@@ -473,6 +502,7 @@ public sealed class MainForm : Form
         BuildLayout();
         BuildGridContextMenu();
         _statusStrip.Items.Add(_statusLabel);
+        _statusStrip.Items.Add(_ownershipLabel);
 
         var trayMenu = new ContextMenuStrip
         {
@@ -502,6 +532,9 @@ public sealed class MainForm : Form
 
         _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
 
+        _siteList.DrawMode = DrawMode.OwnerDrawFixed;
+        _siteList.ItemHeight = 38;
+        _siteList.DrawItem += DrawSiteItem;
         _siteList.SelectedIndexChanged += (_, _) => OnSiteSelectionChanged();
         _siteList.DoubleClick += (_, _) => RenameSite();
         _addSiteButton.Click += (_, _) => AddSite();
@@ -675,6 +708,13 @@ public sealed class MainForm : Form
 
     private void BuildGrid()
     {
+        _grid.RowTemplate.Height = 36;
+        _grid.ColumnHeadersHeight = 40;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+        _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "SiteColumn",
@@ -744,163 +784,313 @@ public sealed class MainForm : Form
 
     private void BuildLayout()
     {
+        SuspendLayout();
+
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 3,
-            Padding = new Padding(12)
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            Tag = "window"
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
 
         var header = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = new Padding(0)
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(22, 13, 18, 10),
+            Margin = new Padding(0),
+            Tag = "header"
         };
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-        var titleBar = new FlowLayoutPanel
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var brand = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Margin = new Padding(0)
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0),
+            Tag = "header"
         };
-        titleBar.Controls.Add(new Label
+        brand.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        brand.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        brand.Controls.Add(new Label
         {
             Text = "PING WATCHDOG",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold),
-            Padding = new Padding(0, 0, 16, 0)
-        });
-        titleBar.Controls.Add(_saveConfigButton);
-        titleBar.Controls.Add(_loadConfigButton);
-        titleBar.Controls.Add(_checkUpdateButton);
-        header.Controls.Add(titleBar, 0, 0);
-        header.Controls.Add(new Label
+            Font = new Font("Segoe UI Semibold", 20, FontStyle.Bold),
+            ForeColor = Color.White,
+            Tag = "title"
+        }, 0, 0);
+        brand.Controls.Add(new Label
         {
-            Text = "Multi-site ICMP monitoring • outage alerts • live command trace • Made by Joseph Luker",
+            Text = "Multi-site availability monitoring",
             AutoSize = true,
-            Font = new Font("Segoe UI", 9),
-            Padding = new Padding(1, 0, 0, 0)
+            Font = new Font("Segoe UI", 9.5f),
+            Tag = "muted"
         }, 0, 1);
+
+        var headerActions = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 8, 0, 0),
+            Tag = "header"
+        };
+        _saveConfigButton.Text = "Export Config";
+        _loadConfigButton.Text = "Import Config";
+        headerActions.Controls.Add(_monitorStateLabel);
+        headerActions.Controls.Add(_checkUpdateButton);
+        headerActions.Controls.Add(_saveConfigButton);
+        headerActions.Controls.Add(_loadConfigButton);
+
+        header.Controls.Add(brand, 0, 0);
+        header.Controls.Add(headerActions, 1, 0);
+
+        _workspaceSplit.SplitterDistance = 252;
+        _workspaceSplit.SplitterWidth = 1;
+        _workspaceSplit.Panel1MinSize = 225;
+        _workspaceSplit.Panel1.Padding = new Padding(14, 16, 12, 16);
+        _workspaceSplit.Panel2.Padding = new Padding(18, 16, 18, 16);
+        _workspaceSplit.Panel1.Tag = "nav";
+        _workspaceSplit.Panel2.Tag = "window";
 
         var sitePanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
-            Padding = new Padding(0, 0, 8, 0)
+            RowCount = 5,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            Tag = "nav"
         };
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
 
         sitePanel.Controls.Add(new Label
         {
-            Text = "SITES / GROUPS",
+            Text = "SITES",
             AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            Padding = new Padding(2, 8, 0, 0)
+            Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold),
+            Padding = new Padding(4, 10, 0, 0),
+            Tag = "sectionLabel"
         }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
 
-        var siteButtons = new FlowLayoutPanel
+        _addSiteButton.Dock = DockStyle.Fill;
+        _addSiteButton.Margin = new Padding(0, 7, 0, 2);
+        _renameSiteButton.Dock = DockStyle.Fill;
+        _renameSiteButton.Margin = new Padding(0, 4, 0, 2);
+        sitePanel.Controls.Add(_addSiteButton, 0, 2);
+        sitePanel.Controls.Add(_renameSiteButton, 0, 3);
+
+        var siteFooter = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            Padding = new Padding(0, 5, 0, 0)
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Tag = "nav"
         };
-        siteButtons.Controls.Add(_addSiteButton);
-        siteButtons.Controls.Add(_renameSiteButton);
-        siteButtons.Controls.Add(_deleteSiteButton);
-        sitePanel.Controls.Add(siteButtons, 0, 2);
-        sitePanel.Controls.Add(new Label
+        siteFooter.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        siteFooter.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        siteFooter.Controls.Add(new Label
         {
-            Text = "Sites and hosts can be changed while monitoring. Changes apply automatically.",
+            Text = "Changes apply live",
             AutoSize = true,
-            MaximumSize = new Size(205, 0),
-            Padding = new Padding(2, 5, 2, 0)
-        }, 0, 3);
+            Padding = new Padding(3, 13, 0, 0),
+            Tag = "muted"
+        }, 0, 0);
+        _deleteSiteButton.Text = "Delete";
+        _deleteSiteButton.Margin = new Padding(5, 7, 0, 0);
+        siteFooter.Controls.Add(_deleteSiteButton, 1, 0);
+        sitePanel.Controls.Add(siteFooter, 0, 4);
 
         var right = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
-            Padding = new Padding(8, 0, 0, 0)
+            RowCount = 4,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            Tag = "window"
         };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 102));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 158));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var inputGroup = new GroupBox
+        var stats = new TableLayoutPanel
         {
-            Text = " HOSTS ",
             Dock = DockStyle.Fill,
-            Padding = new Padding(10)
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, 12),
+            Tag = "window"
         };
+        for (int i = 0; i < 4; i++)
+            stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
 
-        var hostEditor = new TableLayoutPanel
+        Panel StatCard(string title, Label value, string tag)
+        {
+            var card = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 10, 0),
+                Padding = new Padding(14, 10, 14, 8),
+                Tag = "card"
+            };
+            value.Tag = tag;
+            value.Location = new Point(14, 28);
+            card.Controls.Add(new Label
+            {
+                Text = title,
+                AutoSize = true,
+                Location = new Point(14, 9),
+                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+                Tag = "muted"
+            });
+            card.Controls.Add(value);
+            return card;
+        }
+
+        stats.Controls.Add(StatCard("TOTAL HOSTS", _totalValueLabel, "statTotal"), 0, 0);
+        stats.Controls.Add(StatCard("ONLINE", _onlineValueLabel, "statOnline"), 1, 0);
+        stats.Controls.Add(StatCard("SUSPECT", _suspectValueLabel, "statSuspect"), 2, 0);
+        var offlineCard = StatCard("OFFLINE", _offlineValueLabel, "statOffline");
+        offlineCard.Margin = new Padding(0);
+        stats.Controls.Add(offlineCard, 3, 0);
+
+        var inputCard = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 2,
-            Margin = new Padding(0)
+            Padding = new Padding(16, 12, 16, 14),
+            Margin = new Padding(0, 0, 0, 12),
+            Tag = "card"
         };
-        hostEditor.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        hostEditor.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        inputCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        inputCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var hostHeader = new FlowLayoutPanel
+        var hostHeader = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Tag = "card"
+        };
+        hostHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        hostHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _siteHeaderLabel.Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold);
+        _siteHeaderLabel.Padding = new Padding(0, 5, 0, 0);
+        _siteHeaderLabel.Tag = "primaryText";
+        _autoSaveLabel.Text = "AUTO-SAVE  •  LIVE APPLY";
+        _autoSaveLabel.Font = new Font("Segoe UI Semibold", 8, FontStyle.Bold);
+        _autoSaveLabel.Padding = new Padding(0, 6, 0, 0);
+        _autoSaveLabel.Tag = "accentText";
+        hostHeader.Controls.Add(_siteHeaderLabel, 0, 0);
+        hostHeader.Controls.Add(_autoSaveLabel, 1, 0);
+        inputCard.Controls.Add(hostHeader, 0, 0);
+        inputCard.Controls.Add(_ipBox, 0, 1);
+
+        var settingsCard = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(16, 13, 14, 12),
+            Margin = new Padding(0, 0, 0, 12),
+            Tag = "card"
+        };
+        settingsCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        settingsCard.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var settings = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
-        };
-        hostHeader.Controls.Add(_siteHeaderLabel);
-        hostHeader.Controls.Add(_autoSaveLabel);
-
-        hostEditor.Controls.Add(hostHeader, 0, 0);
-        hostEditor.Controls.Add(_ipBox, 0, 1);
-        inputGroup.Controls.Add(hostEditor);
-
-        var controls = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
+            WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(2, 11, 2, 4)
+            Margin = new Padding(0),
+            Tag = "card"
         };
 
-        controls.Controls.Add(new Label { Text = "Ping every:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
-        controls.Controls.Add(_intervalSeconds);
-        controls.Controls.Add(new Label { Text = "sec", AutoSize = true, Padding = new Padding(0, 6, 10, 0) });
+        Control Setting(string title, Control input, string suffix)
+        {
+            var wrap = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 18, 0),
+                Tag = "card"
+            };
+            wrap.Controls.Add(new Label
+            {
+                Text = title.ToUpperInvariant(),
+                AutoSize = true,
+                Font = new Font("Segoe UI Semibold", 8, FontStyle.Bold),
+                Tag = "muted"
+            });
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0),
+                Tag = "card"
+            };
+            input.Margin = new Padding(0, 2, 4, 0);
+            row.Controls.Add(input);
+            row.Controls.Add(new Label
+            {
+                Text = suffix,
+                AutoSize = true,
+                Padding = new Padding(0, 7, 0, 0),
+                Tag = "muted"
+            });
+            wrap.Controls.Add(row);
+            return wrap;
+        }
 
-        controls.Controls.Add(new Label { Text = "Timeout:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
-        controls.Controls.Add(_timeoutMs);
-        controls.Controls.Add(new Label { Text = "ms", AutoSize = true, Padding = new Padding(0, 6, 10, 0) });
+        settings.Controls.Add(Setting("Interval", _intervalSeconds, "sec"));
+        settings.Controls.Add(Setting("Timeout", _timeoutMs, "ms"));
+        settings.Controls.Add(Setting("Down after", _failureThreshold, "fails"));
+        settings.Controls.Add(Setting("Recover after", _recoveryThreshold, "successes"));
+        settings.Controls.Add(_showCommandView);
+        settingsCard.Controls.Add(settings, 0, 0);
 
-        controls.Controls.Add(new Label { Text = "Declare down after:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
-        controls.Controls.Add(_failureThreshold);
-        controls.Controls.Add(new Label { Text = "fails", AutoSize = true, Padding = new Padding(0, 6, 10, 0) });
+        var monitorActions = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Anchor = AnchorStyles.Right | AnchorStyles.Top,
+            Margin = new Padding(8, 12, 0, 0),
+            Tag = "card"
+        };
+        _startButton.Text = "Start Monitoring";
+        _startButton.MinimumSize = new Size(132, 34);
+        _stopButton.MinimumSize = new Size(78, 34);
+        monitorActions.Controls.Add(_startButton);
+        monitorActions.Controls.Add(_stopButton);
+        settingsCard.Controls.Add(monitorActions, 1, 0);
 
-        controls.Controls.Add(new Label { Text = "Recover after:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
-        controls.Controls.Add(_recoveryThreshold);
-        controls.Controls.Add(new Label { Text = "successes", AutoSize = true, Padding = new Padding(0, 6, 10, 0) });
-
-        controls.Controls.Add(_startButton);
-        controls.Controls.Add(_stopButton);
-        controls.Controls.Add(_showCommandView);
-
-        _mainSplit.Panel1.Padding = new Padding(0, 4, 0, 4);
+        _mainSplit.Panel1.Padding = new Padding(0);
         _mainSplit.Panel1.Controls.Add(_grid);
 
         var commandPanel = new TableLayoutPanel
@@ -908,33 +1098,41 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 2,
-            Padding = new Padding(0, 5, 0, 0)
+            Padding = new Padding(0, 8, 0, 0),
+            Tag = "window"
         };
         commandPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         commandPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var commandHeader = new FlowLayoutPanel
+        var commandHeader = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Tag = "window"
         };
+        commandHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        commandHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         commandHeader.Controls.Add(new Label
         {
-            Text = "LIVE CMD VIEW  •  filtered with selected site",
+            Text = "LIVE COMMAND TRACE",
             AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            Padding = new Padding(0, 7, 12, 0)
-        });
-        commandHeader.Controls.Add(_clearLogButton);
+            Font = new Font("Segoe UI Semibold", 9, FontStyle.Bold),
+            Padding = new Padding(2, 7, 0, 0),
+            Tag = "sectionLabel"
+        }, 0, 0);
+        _clearLogButton.Margin = new Padding(0, 0, 0, 4);
+        commandHeader.Controls.Add(_clearLogButton, 1, 0);
 
         commandPanel.Controls.Add(commandHeader, 0, 0);
         commandPanel.Controls.Add(_commandBox, 0, 1);
         _mainSplit.Panel2.Controls.Add(commandPanel);
 
-        right.Controls.Add(inputGroup, 0, 0);
-        right.Controls.Add(controls, 0, 1);
-        right.Controls.Add(_mainSplit, 0, 2);
+        right.Controls.Add(stats, 0, 0);
+        right.Controls.Add(inputCard, 0, 1);
+        right.Controls.Add(settingsCard, 0, 2);
+        right.Controls.Add(_mainSplit, 0, 3);
 
         _workspaceSplit.Panel1.Controls.Add(sitePanel);
         _workspaceSplit.Panel2.Controls.Add(right);
@@ -944,6 +1142,38 @@ public sealed class MainForm : Form
         root.Controls.Add(_statusStrip, 0, 2);
 
         Controls.Add(root);
+        ResumeLayout(true);
+    }
+
+    private void DrawSiteItem(object? sender, DrawItemEventArgs e)
+    {
+        e.DrawBackground();
+
+        if (e.Index < 0 || e.Index >= _siteList.Items.Count)
+            return;
+
+        bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+        var bounds = new Rectangle(e.Bounds.X + 2, e.Bounds.Y + 2, e.Bounds.Width - 4, e.Bounds.Height - 4);
+
+        using var background = new SolidBrush(selected
+            ? Color.FromArgb(36, 86, 132)
+            : Color.FromArgb(18, 24, 32));
+        using var textBrush = new SolidBrush(selected
+            ? Color.White
+            : Color.FromArgb(210, 218, 228));
+
+        e.Graphics.FillRectangle(background, bounds);
+
+        string text = _siteList.Items[e.Index]?.ToString() ?? string.Empty;
+        TextRenderer.DrawText(
+            e.Graphics,
+            text,
+            new Font("Segoe UI Semibold", 9.5f),
+            new Rectangle(bounds.X + 12, bounds.Y, bounds.Width - 18, bounds.Height),
+            textBrush.Color,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+
+        e.DrawFocusRectangle();
     }
 
     private void LoadSites()
@@ -1680,7 +1910,8 @@ public sealed class MainForm : Form
         LoadHostEditor();
 
         _uiTimer.Start();
-        _statusLabel.Text = $"Monitoring {targets.Count} host(s) across {_sites.Count} site(s)...";
+        _monitorStateLabel.Text = "MONITORING";
+        _statusLabel.Text = $"Monitoring {targets.Count} host(s) across {_sites.Count} site(s)";
     }
 
     private void StopMonitoring()
@@ -1711,7 +1942,8 @@ public sealed class MainForm : Form
 
             UpdateActionState();
             LoadHostEditor();
-            _statusLabel.Text = "Stopped";
+            _monitorStateLabel.Text = "IDLE";
+            _statusLabel.Text = "Monitoring stopped";
         }
     }
 
@@ -2146,12 +2378,15 @@ public sealed class MainForm : Form
 
     private void ApplyDarkTheme()
     {
-        var window = Color.FromArgb(13, 17, 23);
-        var panel = Color.FromArgb(22, 27, 34);
-        var input = Color.FromArgb(13, 17, 23);
-        var border = Color.FromArgb(48, 54, 61);
-        var text = Color.FromArgb(230, 237, 243);
-        var muted = Color.FromArgb(139, 148, 158);
+        var window = Color.FromArgb(10, 14, 20);
+        var header = Color.FromArgb(12, 18, 26);
+        var nav = Color.FromArgb(14, 20, 28);
+        var card = Color.FromArgb(18, 25, 34);
+        var input = Color.FromArgb(11, 17, 24);
+        var border = Color.FromArgb(39, 49, 61);
+        var text = Color.FromArgb(234, 240, 246);
+        var muted = Color.FromArgb(139, 153, 169);
+        var accent = Color.FromArgb(74, 158, 255);
 
         BackColor = window;
         ForeColor = text;
@@ -2160,7 +2395,18 @@ public sealed class MainForm : Form
         {
             foreach (Control control in parent.Controls)
             {
+                string tag = control.Tag?.ToString() ?? string.Empty;
+
                 control.ForeColor = text;
+
+                if (tag == "header")
+                    control.BackColor = header;
+                else if (tag == "nav")
+                    control.BackColor = nav;
+                else if (tag == "card")
+                    control.BackColor = card;
+                else if (tag == "window")
+                    control.BackColor = window;
 
                 switch (control)
                 {
@@ -2168,63 +2414,75 @@ public sealed class MainForm : Form
                         box.BackColor = input;
                         box.ForeColor = text;
                         box.BorderStyle = BorderStyle.FixedSingle;
+                        box.Margin = new Padding(0);
                         break;
 
                     case RichTextBox rich:
-                        rich.BackColor = Color.FromArgb(8, 12, 18);
-                        rich.ForeColor = Color.FromArgb(201, 209, 217);
+                        rich.BackColor = Color.FromArgb(6, 10, 15);
+                        rich.ForeColor = Color.FromArgb(199, 211, 223);
                         break;
 
                     case NumericUpDown number:
                         number.BackColor = input;
                         number.ForeColor = text;
+                        number.BorderStyle = BorderStyle.FixedSingle;
                         break;
 
                     case Button button:
                         button.FlatStyle = FlatStyle.Flat;
                         button.FlatAppearance.BorderColor = border;
                         button.FlatAppearance.BorderSize = 1;
-                        button.BackColor = panel;
+                        button.BackColor = Color.FromArgb(25, 34, 45);
                         button.ForeColor = text;
-                        button.Padding = new Padding(5, 1, 5, 1);
-                        break;
-
-                    case GroupBox group:
-                        group.BackColor = window;
-                        group.ForeColor = muted;
+                        button.Padding = new Padding(8, 2, 8, 2);
+                        button.Height = Math.Max(button.Height, 32);
                         break;
 
                     case Label label:
                         label.BackColor = Color.Transparent;
-                        label.ForeColor = muted;
+                        label.ForeColor = tag switch
+                        {
+                            "title" => Color.White,
+                            "primaryText" => text,
+                            "accentText" => accent,
+                            "statOnline" => Color.FromArgb(72, 207, 137),
+                            "statSuspect" => Color.FromArgb(244, 190, 72),
+                            "statOffline" => Color.FromArgb(255, 104, 112),
+                            "statTotal" => Color.FromArgb(190, 210, 232),
+                            "stateBadge" => Color.FromArgb(155, 220, 255),
+                            _ => muted
+                        };
                         break;
 
                     case CheckBox check:
                         check.BackColor = Color.Transparent;
                         check.ForeColor = text;
+                        check.Padding = new Padding(6, 8, 0, 0);
                         break;
 
                     case ListBox list:
-                        list.BackColor = panel;
+                        list.BackColor = nav;
                         list.ForeColor = text;
+                        list.BorderStyle = BorderStyle.None;
                         break;
 
                     case ContextMenuStrip menu:
-                        menu.BackColor = panel;
+                        menu.BackColor = card;
                         menu.ForeColor = text;
                         break;
 
-                    case FlowLayoutPanel flow:
+                    case FlowLayoutPanel flow when string.IsNullOrEmpty(tag):
                         flow.BackColor = window;
                         break;
 
-                    case TableLayoutPanel table:
+                    case TableLayoutPanel table when string.IsNullOrEmpty(tag):
                         table.BackColor = window;
                         break;
 
                     case SplitContainer split:
                         split.BackColor = border;
-                        split.Panel1.BackColor = window;
+                        if (split.Panel1.Tag?.ToString() != "nav")
+                            split.Panel1.BackColor = window;
                         split.Panel2.BackColor = window;
                         break;
                 }
@@ -2236,38 +2494,47 @@ public sealed class MainForm : Form
 
         Theme(this);
 
-        _startButton.BackColor = Color.FromArgb(35, 134, 96);
-        _startButton.FlatAppearance.BorderColor =
-            Color.FromArgb(46, 160, 107);
+        _monitorStateLabel.BackColor = Color.FromArgb(20, 50, 68);
+        _monitorStateLabel.ForeColor = Color.FromArgb(139, 211, 255);
 
-        _stopButton.BackColor = Color.FromArgb(92, 35, 39);
-        _stopButton.FlatAppearance.BorderColor =
-            Color.FromArgb(139, 55, 62);
+        _startButton.BackColor = Color.FromArgb(31, 120, 82);
+        _startButton.FlatAppearance.BorderColor = Color.FromArgb(53, 170, 116);
+        _startButton.ForeColor = Color.White;
 
-        _deleteSiteButton.BackColor = Color.FromArgb(64, 28, 34);
+        _stopButton.BackColor = Color.FromArgb(93, 38, 45);
+        _stopButton.FlatAppearance.BorderColor = Color.FromArgb(155, 64, 75);
+        _stopButton.ForeColor = Color.White;
+
+        _addSiteButton.BackColor = Color.FromArgb(29, 73, 115);
+        _addSiteButton.FlatAppearance.BorderColor = Color.FromArgb(59, 128, 196);
+        _deleteSiteButton.BackColor = Color.FromArgb(57, 28, 34);
+        _deleteSiteButton.FlatAppearance.BorderColor = Color.FromArgb(100, 45, 55);
+
+        _checkUpdateButton.BackColor = Color.FromArgb(24, 55, 82);
+        _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(48, 103, 153);
 
         _grid.EnableHeadersVisualStyles = false;
-        _grid.BackgroundColor = panel;
-        _grid.GridColor = border;
-        _grid.DefaultCellStyle.BackColor = panel;
+        _grid.BackgroundColor = card;
+        _grid.GridColor = Color.FromArgb(31, 40, 50);
+        _grid.DefaultCellStyle.BackColor = card;
         _grid.DefaultCellStyle.ForeColor = text;
-        _grid.DefaultCellStyle.SelectionBackColor =
-            Color.FromArgb(38, 79, 120);
+        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 73, 108);
         _grid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor =
-            Color.FromArgb(30, 36, 44);
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = text;
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor =
-            Color.FromArgb(30, 36, 44);
-        _grid.ColumnHeadersBorderStyle =
-            DataGridViewHeaderBorderStyle.Single;
+        _grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(16, 23, 31);
+        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(22, 31, 42);
+        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(170, 185, 201);
+        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(22, 31, 42);
+        _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
 
-        _statusStrip.BackColor = Color.FromArgb(17, 22, 29);
+        _statusStrip.BackColor = Color.FromArgb(11, 16, 23);
         _statusStrip.ForeColor = muted;
         _statusLabel.ForeColor = muted;
+        _ownershipLabel.ForeColor = Color.FromArgb(105, 119, 135);
 
-        _commandBox.BackColor = Color.FromArgb(6, 10, 15);
-        _commandBox.ForeColor = Color.FromArgb(201, 209, 217);
+        _commandBox.BackColor = Color.FromArgb(5, 9, 14);
+        _commandBox.ForeColor = Color.FromArgb(199, 211, 223);
     }
 
     private void ShowNotification(
@@ -2354,26 +2621,35 @@ public sealed class MainForm : Form
         foreach (DataGridViewRow row in _grid.Rows)
         {
             var status = row.Cells["StatusColumn"].Value?.ToString();
+            var cell = row.Cells["StatusColumn"];
 
-            row.DefaultCellStyle.BackColor = status switch
+            cell.Style.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+            cell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            cell.Style.ForeColor = status switch
             {
-                "OFFLINE" => Color.FromArgb(72, 29, 34),
-                "SUSPECT" => Color.FromArgb(82, 64, 22),
-                "ONLINE" => Color.FromArgb(24, 61, 45),
-                _ => Color.FromArgb(22, 27, 34)
+                "OFFLINE" => Color.FromArgb(255, 120, 128),
+                "SUSPECT" => Color.FromArgb(244, 194, 84),
+                "ONLINE" => Color.FromArgb(88, 214, 148),
+                _ => Color.FromArgb(139, 153, 169)
             };
 
-            row.DefaultCellStyle.ForeColor =
-                Color.FromArgb(230, 237, 243);
+            if (status == "OFFLINE")
+                row.DefaultCellStyle.BackColor = Color.FromArgb(40, 24, 29);
         }
 
         int online = rows.Count(h => h.Status == "ONLINE");
         int suspect = rows.Count(h => h.Status == "SUSPECT");
         int offline = rows.Count(h => h.Status == "OFFLINE");
 
+        _totalValueLabel.Text = rows.Count.ToString();
+        _onlineValueLabel.Text = online.ToString();
+        _suspectValueLabel.Text = suspect.ToString();
+        _offlineValueLabel.Text = offline.ToString();
+
         string view = _selectedSiteName ?? AllSitesLabel;
 
-        _statusLabel.Text =
-            $"View: {view}   |   Online: {online}   Suspect: {suspect}   Offline: {offline}";
+        _statusLabel.Text = _cts is null
+            ? $"Ready • View: {view} • {rows.Count} configured host(s)"
+            : $"Monitoring • View: {view} • {online} online • {suspect} suspect • {offline} offline";
     }
 }

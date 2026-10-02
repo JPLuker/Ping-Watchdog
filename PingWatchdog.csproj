@@ -7,7 +7,12 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PingWatchdog</AssemblyName>
     <RootNamespace>PingWatchdog</RootNamespace>
-    <Version>1.6.0</Version>
+    <Version>1.7.0</Version>
+    <Product>Ping Watchdog</Product>
+    <Authors>Joseph Luker</Authors>
+    <Company>Joseph Luker</Company>
+    <Copyright>Copyright © 2026 Joseph Luker. All rights reserved.</Copyright>
+    <Description>Multi-site ICMP availability monitoring for Windows.</Description>
     <ApplicationIcon>Assets\PingWatchdog.ico</ApplicationIcon>
 
     <WindowsPackageType>None</WindowsPackageType>
