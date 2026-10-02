@@ -946,8 +946,8 @@ public sealed class MainForm : Form
         Check(form._wallboardButton.Parent is not null);
         Check(form._settingsButton.Parent is not null);
         Check(form._moreButton.Parent is not null);
-        Check(form._checkUpdateButton.Visible);
-        Check(form._settingsButton.Visible);
+        Check(form._headerActionsPanel?.Controls.Contains(form._checkUpdateButton) == true);
+        Check(form._headerActionsPanel?.Controls.Contains(form._settingsButton) == true);
         Check(form._saveConfigButton.Parent is null);
         Check(form._loadConfigButton.Parent is null);
         Check(form._headerActionsPanel?.WrapContents == false);
