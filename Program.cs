@@ -94,6 +94,10 @@ internal sealed class WatchdogConfig
     public string? SelectedSite { get; set; }
     public int EventHistoryHours { get; set; } = 24;
     public bool HideSuspectEvents { get; set; } = true;
+    public bool AutoCheckUpdates { get; set; } = true;
+    public bool MinimizeToTray { get; set; } = true;
+    public bool NotificationsEnabled { get; set; } = true;
+    public bool WallboardShowCli { get; set; } = true;
 }
 
 internal sealed class NicknameDialog : Form
@@ -299,6 +303,23 @@ internal sealed record EventHistoryPreferences(
     int WindowHours,
     bool HideSuspects);
 
+internal sealed record AppSettingsSnapshot(
+    int PingIntervalSeconds,
+    int PingTimeoutMs,
+    int FailureThreshold,
+    int RecoveryThreshold,
+    bool ShowCommandView,
+    bool WallboardShowCli,
+    bool MinimizeToTray,
+    bool NotificationsEnabled,
+    bool AutoCheckUpdates,
+    int EventHistoryHours,
+    bool HideSuspectEvents,
+    bool MonitoringActive,
+    string Version,
+    string UpdateStatus,
+    string UpdateActionText);
+
 internal sealed record WallboardHostSnapshot(
     string Site,
     string Address,
@@ -377,9 +398,10 @@ public sealed class MainForm : Form
     };
     private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
     private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
-    private readonly Button _checkUpdateButton = new() { Text = "Updates", AutoSize = false, Width = 132 };
-    private readonly Button _wallboardButton = new() { Text = "Wallboard", AutoSize = false, Width = 96 };
-    private readonly Button _moreButton = new() { Text = "•••", AutoSize = false, Width = 42 };
+    private readonly Button _checkUpdateButton = new() { Text = "Updates", AutoSize = false, Width = 120 };
+    private readonly Button _wallboardButton = new() { Text = "Wallboard", AutoSize = false, Width = 88 };
+    private readonly Button _settingsButton = new() { Text = "Settings", AutoSize = false, Width = 88 };
+    private readonly Button _moreButton = new() { Text = "•••", AutoSize = false, Width = 38 };
     private readonly ContextMenuStrip _appMenu = new();
     private readonly ContextMenuStrip _gridMenu = new();
     private readonly Label _versionLabel = new()
@@ -530,6 +552,7 @@ public sealed class MainForm : Form
     private CancellationTokenSource? _cts;
     private WallboardForm? _wallboardForm;
     private EventHistoryForm? _eventHistoryForm;
+    private SettingsForm? _settingsForm;
     private bool _appNotificationsAvailable;
     private readonly bool _suppressNotifications;
     private readonly bool _persistSites;
@@ -547,6 +570,10 @@ public sealed class MainForm : Form
     private int _recoveryThresholdValue = 2;
     private int _eventHistoryHours = 24;
     private bool _hideSuspectEvents = true;
+    private bool _autoCheckUpdates = true;
+    private bool _minimizeToTray = true;
+    private bool _notificationsEnabled = true;
+    private bool _wallboardShowCli = true;
 
     private static Label CreateStatValueLabel()
     {
@@ -647,14 +674,9 @@ public sealed class MainForm : Form
         _deleteSiteButton.Click += (_, _) => DeleteSite();
         _saveConfigButton.Click += (_, _) => SaveConfigFile();
         _loadConfigButton.Click += (_, _) => LoadConfigFile();
-        _checkUpdateButton.Click += async (_, _) =>
-        {
-            if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
-                RestartToApplyPendingUpdate();
-            else
-                await CheckForUpdatesAsync(userInitiated: true);
-        };
+        _checkUpdateButton.Click += async (_, _) => await RunUpdateActionAsync();
         _wallboardButton.Click += (_, _) => OpenWallboard();
+        _settingsButton.Click += (_, _) => OpenSettings();
         _moreButton.Click += (_, _) => ShowAppMenu();
         _grid.CellMouseDown += GridCellMouseDown;
 
@@ -675,7 +697,11 @@ public sealed class MainForm : Form
         _showCommandView.CheckedChanged += (_, _) => ToggleCommandView();
         _clearLogButton.Click += (_, _) => ClearCommandLog();
         _uiTimer.Tick += (_, _) => RefreshGrid();
-        _updateTimer.Tick += async (_, _) => await CheckForUpdatesAsync(userInitiated: false);
+        _updateTimer.Tick += async (_, _) =>
+        {
+            if (_autoCheckUpdates)
+                await CheckForUpdatesAsync(userInitiated: false);
+        };
 
         KeyDown += (_, e) =>
         {
@@ -689,6 +715,11 @@ public sealed class MainForm : Form
                 e.Handled = true;
                 OpenEventHistory();
             }
+            else if (e.Control && e.KeyCode == Keys.Oemcomma)
+            {
+                e.Handled = true;
+                OpenSettings();
+            }
         };
 
         Shown += async (_, _) =>
@@ -700,23 +731,27 @@ public sealed class MainForm : Form
                 WindowState = FormWindowState.Maximized;
 
             ApplyResponsiveLayout();
-            _updateTimer.Start();
-            await CheckForUpdatesAsync(userInitiated: false);
+
+            if (_autoCheckUpdates)
+            {
+                _updateTimer.Start();
+                await CheckForUpdatesAsync(userInitiated: false);
+            }
         };
 
         Resize += (_, _) =>
         {
             ApplyResponsiveLayout();
 
-            if (WindowState == FormWindowState.Minimized)
+            if (WindowState == FormWindowState.Minimized && _minimizeToTray)
             {
                 Hide();
                 _trayIcon.ShowBalloonTip(
                     2500,
                     "Ping Watchdog",
                     _cts is null
-                        ? "Ping Watchdog is minimized."
-                        : "Monitoring continues in the background.",
+                        ? "Ping Watchdog is minimized to the notification area."
+                        : "Monitoring continues in the notification area.",
                     ToolTipIcon.Info);
             }
         };
@@ -728,6 +763,7 @@ public sealed class MainForm : Form
             _closingApplication = true;
             _wallboardForm?.Close();
             _eventHistoryForm?.Close();
+            _settingsForm?.Close();
             PersistCurrentEditor();
             SaveSites();
             StopMonitoring();
@@ -828,6 +864,10 @@ public sealed class MainForm : Form
         Check(configRoundTrip?.FailureThreshold == 3);
         Check(configRoundTrip?.EventHistoryHours == 24);
         Check(configRoundTrip?.HideSuspectEvents == true);
+        Check(configRoundTrip?.AutoCheckUpdates == true);
+        Check(configRoundTrip?.MinimizeToTray == true);
+        Check(configRoundTrip?.NotificationsEnabled == true);
+        Check(configRoundTrip?.WallboardShowCli == true);
         Check(form.GetConfiguredTargets().Count == 1);
         Check(UpdateRepoUrl.EndsWith("/JPLuker/Ping-Watchdog", StringComparison.Ordinal));
         Check(form._stateEvents.Any(e => e.Kind == "DOWN"));
@@ -904,7 +944,10 @@ public sealed class MainForm : Form
         Check(form._deleteSiteButton.MinimumSize.Height >= 32);
         Check(form._checkUpdateButton.Parent is not null);
         Check(form._wallboardButton.Parent is not null);
+        Check(form._settingsButton.Parent is not null);
         Check(form._moreButton.Parent is not null);
+        Check(form._checkUpdateButton.Visible);
+        Check(form._settingsButton.Visible);
         Check(form._saveConfigButton.Parent is null);
         Check(form._loadConfigButton.Parent is null);
         Check(form._headerActionsPanel?.WrapContents == false);
@@ -915,6 +958,13 @@ public sealed class MainForm : Form
         form.RestoreAfterWallboard();
         Check(form.Visible);
         Check(form.WindowState != FormWindowState.Minimized);
+
+        var settingsSnapshot = form.GetAppSettingsSnapshot();
+        Check(settingsSnapshot.AutoCheckUpdates);
+        Check(settingsSnapshot.MinimizeToTray);
+        Check(settingsSnapshot.NotificationsEnabled);
+        Check(settingsSnapshot.WallboardShowCli);
+        Check(settingsSnapshot.UpdateActionText == "Check for Updates");
 
         form.SetUpdateReadyUi("9.9.9");
         Check(form._checkUpdateButton.Text == "Restart to Update");
@@ -959,17 +1009,21 @@ public sealed class MainForm : Form
     {
         _appMenu.Items.Clear();
 
+        var settingsItem = new ToolStripMenuItem("Settings...");
         var historyItem = new ToolStripMenuItem("Outage history...");
         var exportItem = new ToolStripMenuItem("Export configuration");
         var importItem = new ToolStripMenuItem("Import configuration");
         var aboutItem = new ToolStripMenuItem("About Ping Watchdog");
 
+        settingsItem.ShortcutKeys = Keys.Control | Keys.Oemcomma;
+        settingsItem.Click += (_, _) => OpenSettings();
         historyItem.ShortcutKeys = Keys.Control | Keys.H;
         historyItem.Click += (_, _) => OpenEventHistory();
         exportItem.Click += (_, _) => SaveConfigFile();
         importItem.Click += (_, _) => LoadConfigFile();
         aboutItem.Click += (_, _) => ShowAboutDialog();
 
+        _appMenu.Items.Add(settingsItem);
         _appMenu.Items.Add(historyItem);
         _appMenu.Items.Add(new ToolStripSeparator());
         _appMenu.Items.Add(exportItem);
@@ -1154,13 +1208,15 @@ public sealed class MainForm : Form
         _headerActionsPanel = headerActions;
 
         _monitorStateLabel.Margin = new Padding(0, 0, 7, 0);
-        _wallboardButton.Margin = new Padding(0, 0, 7, 0);
         _checkUpdateButton.Margin = new Padding(0, 0, 7, 0);
+        _wallboardButton.Margin = new Padding(0, 0, 7, 0);
+        _settingsButton.Margin = new Padding(0, 0, 7, 0);
         _moreButton.Margin = new Padding(0);
 
         headerActions.Controls.Add(_monitorStateLabel);
-        headerActions.Controls.Add(_wallboardButton);
         headerActions.Controls.Add(_checkUpdateButton);
+        headerActions.Controls.Add(_wallboardButton);
+        headerActions.Controls.Add(_settingsButton);
         headerActions.Controls.Add(_moreButton);
 
         header.Controls.Add(brand, 0, 0);
@@ -1513,6 +1569,11 @@ public sealed class MainForm : Form
 
             _headerActionsPanel.WrapContents = false;
             _headerActionsPanel.MaximumSize = Size.Empty;
+            _monitorStateLabel.Visible = !veryNarrow;
+            _checkUpdateButton.Visible = true;
+            _wallboardButton.Visible = true;
+            _settingsButton.Visible = true;
+            _moreButton.Visible = true;
 
             _settingsFlowPanel.WrapContents = true;
             _settingsFlowPanel.AutoScroll = false;
@@ -1980,7 +2041,11 @@ public sealed class MainForm : Form
             ShowCommandView = _showCommandView.Checked,
             SelectedSite = _selectedSiteName,
             EventHistoryHours = _eventHistoryHours,
-            HideSuspectEvents = _hideSuspectEvents
+            HideSuspectEvents = _hideSuspectEvents,
+            AutoCheckUpdates = _autoCheckUpdates,
+            MinimizeToTray = _minimizeToTray,
+            NotificationsEnabled = _notificationsEnabled,
+            WallboardShowCli = _wallboardShowCli
         };
     }
 
@@ -2106,6 +2171,10 @@ public sealed class MainForm : Form
         _showCommandView.Checked = config.ShowCommandView;
         _eventHistoryHours = NormalizeEventHistoryHours(config.EventHistoryHours);
         _hideSuspectEvents = config.HideSuspectEvents;
+        _autoCheckUpdates = config.AutoCheckUpdates;
+        _minimizeToTray = config.MinimizeToTray;
+        _notificationsEnabled = config.NotificationsEnabled;
+        _wallboardShowCli = config.WallboardShowCli;
 
         _selectedSiteName = config.SelectedSite is not null &&
             _sites.Any(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase))
@@ -2608,6 +2677,7 @@ public sealed class MainForm : Form
                 eventMessage);
 
         if (!_suppressNotifications &&
+            _notificationsEnabled &&
             notificationTitle is not null &&
             notificationBody is not null)
         {
@@ -2897,7 +2967,8 @@ public sealed class MainForm : Form
             BuildWallboardSnapshot,
             target,
             CycleEventHistoryWindow,
-            ToggleSuspectHistory);
+            ToggleSuspectHistory,
+            _wallboardShowCli);
 
         _wallboardForm.FormClosed += (_, _) =>
         {
@@ -2909,6 +2980,137 @@ public sealed class MainForm : Form
 
         _wallboardForm.Show();
         _wallboardForm.Activate();
+    }
+
+    private AppSettingsSnapshot GetAppSettingsSnapshot()
+    {
+        return new AppSettingsSnapshot(
+            (int)_intervalSeconds.Value,
+            (int)_timeoutMs.Value,
+            (int)_failureThreshold.Value,
+            (int)_recoveryThreshold.Value,
+            _showCommandView.Checked,
+            _wallboardShowCli,
+            _minimizeToTray,
+            _notificationsEnabled,
+            _autoCheckUpdates,
+            _eventHistoryHours,
+            _hideSuspectEvents,
+            _cts is not null,
+            GetDisplayVersion(),
+            GetUpdateStatusText(),
+            GetUpdateActionText());
+    }
+
+    private string GetUpdateActionText()
+    {
+        return _pendingUpdateManager is not null && _pendingUpdateInfo is not null
+            ? "Restart to Update"
+            : "Check for Updates";
+    }
+
+    private string GetUpdateStatusText()
+    {
+        if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
+            return $"Version {_pendingUpdateVersion ?? string.Empty} is downloaded and ready.";
+
+        if (_updateCheckInProgress)
+            return "Checking GitHub Releases...";
+
+        return _checkUpdateButton.Text switch
+        {
+            "Up to date" => "Ping Watchdog is up to date.",
+            "Unmanaged" => "This copy is not managed by the self-updater.",
+            string value when value.StartsWith("Downloading", StringComparison.Ordinal) =>
+                $"{value} from GitHub Releases.",
+            _ when !_autoCheckUpdates =>
+                "Automatic update checks are disabled. Manual checks remain available.",
+            _ => "Ready to check GitHub Releases."
+        };
+    }
+
+    private async Task RunUpdateActionAsync()
+    {
+        if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
+        {
+            RestartToApplyPendingUpdate();
+            return;
+        }
+
+        await CheckForUpdatesAsync(userInitiated: true);
+        _settingsForm?.RefreshRuntimeState();
+    }
+
+    private void ApplyAppSettings(AppSettingsSnapshot settings)
+    {
+        bool wasAutoCheck = _autoCheckUpdates;
+
+        _autoCheckUpdates = settings.AutoCheckUpdates;
+        _minimizeToTray = settings.MinimizeToTray;
+        _notificationsEnabled = settings.NotificationsEnabled;
+        _wallboardShowCli = settings.WallboardShowCli;
+        _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
+        _hideSuspectEvents = settings.HideSuspectEvents;
+
+        if (_cts is null)
+        {
+            _intervalSeconds.Value = Math.Clamp(
+                settings.PingIntervalSeconds,
+                (int)_intervalSeconds.Minimum,
+                (int)_intervalSeconds.Maximum);
+            _timeoutMs.Value = Math.Clamp(
+                settings.PingTimeoutMs,
+                (int)_timeoutMs.Minimum,
+                (int)_timeoutMs.Maximum);
+            _failureThreshold.Value = Math.Clamp(
+                settings.FailureThreshold,
+                (int)_failureThreshold.Minimum,
+                (int)_failureThreshold.Maximum);
+            _recoveryThreshold.Value = Math.Clamp(
+                settings.RecoveryThreshold,
+                (int)_recoveryThreshold.Minimum,
+                (int)_recoveryThreshold.Maximum);
+        }
+
+        if (_showCommandView.Checked != settings.ShowCommandView)
+            _showCommandView.Checked = settings.ShowCommandView;
+
+        if (_autoCheckUpdates)
+        {
+            _updateTimer.Start();
+
+            if (!wasAutoCheck)
+                _ = CheckForUpdatesAsync(userInitiated: false);
+        }
+        else
+        {
+            _updateTimer.Stop();
+        }
+
+        SaveSites();
+        _eventHistoryForm?.RefreshNow();
+        _settingsForm?.RefreshRuntimeState();
+        _statusLabel.Text = "Settings saved.";
+    }
+
+    private void OpenSettings()
+    {
+        if (_settingsForm is not null && !_settingsForm.IsDisposed)
+        {
+            _settingsForm.Show();
+            _settingsForm.Activate();
+            _settingsForm.RefreshRuntimeState();
+            return;
+        }
+
+        _settingsForm = new SettingsForm(
+            GetAppSettingsSnapshot,
+            ApplyAppSettings,
+            RunUpdateActionAsync,
+            OpenEventHistory);
+
+        _settingsForm.FormClosed += (_, _) => _settingsForm = null;
+        _settingsForm.Show(this);
     }
 
     private void RestoreAfterWallboard()
@@ -2943,6 +3145,7 @@ public sealed class MainForm : Form
         _trayUpdateItem.Enabled = true;
 
         _statusLabel.Text = $"Update {version} downloaded • restart when ready";
+        _settingsForm?.RefreshRuntimeState();
     }
 
     private void ClearPendingUpdateUi()
@@ -2955,6 +3158,7 @@ public sealed class MainForm : Form
         _checkUpdateButton.BackColor = Color.FromArgb(24, 55, 82);
         _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(48, 103, 153);
         _checkUpdateButton.ForeColor = Color.White;
+        _settingsForm?.RefreshRuntimeState();
     }
 
     private void RestartToApplyPendingUpdate()
@@ -3010,6 +3214,9 @@ public sealed class MainForm : Form
 
     private async Task CheckForUpdatesAsync(bool userInitiated)
     {
+        if (!userInitiated && !_autoCheckUpdates)
+            return;
+
         if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
         {
             if (userInitiated)
@@ -3109,6 +3316,8 @@ public sealed class MainForm : Form
 
             if (!IsDisposed && !Disposing)
                 _checkUpdateButton.Enabled = true;
+
+            _settingsForm?.RefreshRuntimeState();
         }
     }
 
@@ -3377,6 +3586,9 @@ public sealed class MainForm : Form
 
         _wallboardButton.BackColor = Color.FromArgb(26, 77, 91);
         _wallboardButton.FlatAppearance.BorderColor = Color.FromArgb(54, 139, 159);
+
+        _settingsButton.BackColor = Color.FromArgb(25, 34, 45);
+        _settingsButton.FlatAppearance.BorderColor = Color.FromArgb(39, 49, 61);
 
         _moreButton.BackColor = Color.FromArgb(25, 34, 45);
         _moreButton.FlatAppearance.BorderColor = Color.FromArgb(39, 49, 61);

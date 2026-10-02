@@ -228,3 +228,19 @@ Ping Watchdog now keeps a durable operational history instead of treating Wallbo
 - Wallboard's old **Recent Events** area is now **Outage History** and uses the same saved time-range / suspect filters.
 - On Wallboard, press **H** to cycle the saved history range and **S** to show/hide suspect events.
 - Existing events from versions before 1.10 cannot be reconstructed after they were discarded; persistent history begins once 1.10 is running.
+
+
+## Version 1.11 Settings and permanent updater access
+
+Ping Watchdog now has a dedicated Settings window rather than forcing every preference into the monitoring workspace.
+
+- A permanent **Updates** control remains in the top app bar and is never hidden by responsive layout.
+- **Settings** is also permanently available in the app bar. Open it with **Ctrl+,** or from the **•••** menu.
+- Settings includes **General**, **Monitoring**, **History**, and **Updates** sections.
+- General settings include minimize-to-tray behavior, Windows outage/recovery notifications, main-window CLI visibility, and whether Wallboard opens with its CLI panel visible.
+- Monitoring settings mirror interval, timeout, failure threshold, and recovery threshold. They are locked in Settings while a monitoring session is active.
+- History settings include the saved event-history range and suspect-event visibility.
+- Updates includes current version, live updater status, a permanent **Check for Updates** / **Restart to Update** button, and an option to enable or disable automatic startup/6-hour checks.
+- Disabling automatic checks never disables the manual Check for Updates button.
+- All Settings preferences persist in Ping Watchdog's normal autosave config.
+- On very narrow windows the redundant MONITORING/IDLE badge may hide first; Updates, Wallboard, Settings, and the overflow menu remain visible.

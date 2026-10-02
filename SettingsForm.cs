@@ -1,0 +1,547 @@
+namespace PingWatchdog;
+
+internal sealed class SettingsForm : Form
+{
+    private readonly Func<AppSettingsSnapshot> _provider;
+    private readonly Action<AppSettingsSnapshot> _apply;
+    private readonly Func<Task> _updateAction;
+    private readonly Action _openHistory;
+    private readonly System.Windows.Forms.Timer _runtimeTimer = new() { Interval = 750 };
+
+    private readonly ListBox _nav = new()
+    {
+        Dock = DockStyle.Fill,
+        BorderStyle = BorderStyle.None,
+        IntegralHeight = false,
+        Font = new Font("Segoe UI Semibold", 10)
+    };
+
+    private readonly Panel _content = new() { Dock = DockStyle.Fill };
+    private readonly Button _saveButton = new() { Text = "Save Settings", AutoSize = true };
+    private readonly Button _closeButton = new() { Text = "Close", AutoSize = true };
+
+    private readonly CheckBox _minimizeToTray = new() { Text = "Minimize to notification area", AutoSize = true };
+    private readonly CheckBox _notifications = new() { Text = "Windows outage and recovery notifications", AutoSize = true };
+    private readonly CheckBox _showMainCli = new() { Text = "Show CLI trace in the main window", AutoSize = true };
+    private readonly CheckBox _wallboardCli = new() { Text = "Show CLI trace when Wallboard opens", AutoSize = true };
+
+    private readonly NumericUpDown _interval = Number(1, 300, 2, 1, 90);
+    private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250, 110);
+    private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 90);
+    private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 90);
+    private readonly Label _monitorLockLabel = new() { AutoSize = true };
+
+    private readonly ComboBox _historyRange = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 180
+    };
+    private readonly CheckBox _hideSuspects = new() { Text = "Hide SUSPECT events by default", AutoSize = true };
+    private readonly Button _openHistoryButton = new() { Text = "Open Outage History", AutoSize = true };
+
+    private readonly CheckBox _autoUpdates = new() { Text = "Check automatically on startup and every 6 hours", AutoSize = true };
+    private readonly Label _versionValue = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 10) };
+    private readonly Label _updateStatus = new() { AutoSize = false, Height = 48, Width = 560 };
+    private readonly Button _updateButton = new() { Text = "Check for Updates", AutoSize = true };
+
+    private readonly Dictionary<string, Control> _pages = new(StringComparer.OrdinalIgnoreCase);
+    private bool _loading;
+
+    public SettingsForm(
+        Func<AppSettingsSnapshot> provider,
+        Action<AppSettingsSnapshot> apply,
+        Func<Task> updateAction,
+        Action openHistory)
+    {
+        _provider = provider;
+        _apply = apply;
+        _updateAction = updateAction;
+        _openHistory = openHistory;
+
+        Text = "Settings • Ping Watchdog";
+        Width = 900;
+        Height = 650;
+        MinimumSize = new Size(760, 540);
+        StartPosition = FormStartPosition.CenterParent;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        Font = new Font("Segoe UI", 9.5f);
+        BackColor = Color.FromArgb(10, 14, 20);
+        ForeColor = Color.FromArgb(234, 240, 246);
+
+        _historyRange.Items.AddRange(new object[]
+        {
+            "Last 24 hours",
+            "Last 7 days",
+            "Last 30 days",
+            "All time"
+        });
+
+        BuildLayout();
+        ApplyTheme();
+
+        _nav.Items.AddRange(new object[] { "General", "Monitoring", "History", "Updates" });
+        _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
+        _nav.SelectedIndex = 0;
+
+        _saveButton.Click += (_, _) => SaveSettings();
+        _closeButton.Click += (_, _) => Close();
+        _openHistoryButton.Click += (_, _) => _openHistory();
+        _updateButton.Click += async (_, _) =>
+        {
+            _updateButton.Enabled = false;
+            try { await _updateAction(); }
+            finally
+            {
+                if (!IsDisposed && !Disposing)
+                    _updateButton.Enabled = true;
+                RefreshRuntimeState();
+            }
+        };
+
+        Shown += (_, _) =>
+        {
+            LoadSettings();
+            _runtimeTimer.Start();
+        };
+        _runtimeTimer.Tick += (_, _) => RefreshRuntimeState();
+        FormClosed += (_, _) =>
+        {
+            _runtimeTimer.Stop();
+            _runtimeTimer.Dispose();
+        };
+    }
+
+    internal void RefreshRuntimeState()
+    {
+        if (IsDisposed || Disposing)
+            return;
+
+        var snapshot = _provider();
+        _versionValue.Text = snapshot.Version;
+        _updateStatus.Text = snapshot.UpdateStatus;
+        _updateButton.Text = snapshot.UpdateActionText;
+
+        bool editable = !snapshot.MonitoringActive;
+        foreach (var control in new Control[] { _interval, _timeout, _downAfter, _recoverAfter })
+            control.Enabled = editable;
+
+        _monitorLockLabel.Text = editable
+            ? "Changes apply to the next monitoring session."
+            : "Monitoring is active. Stop monitoring to change timing and outage thresholds.";
+        _monitorLockLabel.ForeColor = editable
+            ? Color.FromArgb(139, 153, 169)
+            : Color.FromArgb(245, 191, 71);
+    }
+
+    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal increment, int width)
+    {
+        return new NumericUpDown
+        {
+            Minimum = min,
+            Maximum = max,
+            Value = value,
+            Increment = increment,
+            Width = width,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+    }
+
+    private void BuildLayout()
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 3,
+            Padding = new Padding(0),
+            Margin = new Padding(0)
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+
+        var header = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(12, 18, 26)
+        };
+        header.Controls.Add(new Label
+        {
+            Text = "Settings",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 20, FontStyle.Bold),
+            ForeColor = Color.White,
+            Location = new Point(24, 14)
+        });
+        header.Controls.Add(new Label
+        {
+            Text = "Configure Ping Watchdog without crowding the monitoring workspace.",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(139, 153, 169),
+            Location = new Point(27, 49)
+        });
+        root.Controls.Add(header, 0, 0);
+        root.SetColumnSpan(header, 2);
+
+        var navPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12, 16, 10, 16),
+            BackColor = Color.FromArgb(14, 20, 28)
+        };
+        navPanel.Controls.Add(_nav);
+        root.Controls.Add(navPanel, 0, 1);
+
+        _content.Padding = new Padding(24, 18, 24, 18);
+        root.Controls.Add(_content, 1, 1);
+
+        _pages["General"] = BuildGeneralPage();
+        _pages["Monitoring"] = BuildMonitoringPage();
+        _pages["History"] = BuildHistoryPage();
+        _pages["Updates"] = BuildUpdatesPage();
+
+        foreach (var page in _pages.Values)
+        {
+            page.Dock = DockStyle.Fill;
+            page.Visible = false;
+            _content.Controls.Add(page);
+        }
+
+        var footer = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(18, 14, 22, 10),
+            BackColor = Color.FromArgb(12, 18, 26)
+        };
+        footer.Controls.Add(_closeButton);
+        footer.Controls.Add(_saveButton);
+        root.Controls.Add(footer, 0, 2);
+        root.SetColumnSpan(footer, 2);
+
+        Controls.Add(root);
+    }
+
+    private Control BuildGeneralPage()
+    {
+        var page = Page("General", "Application behavior and display defaults.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+
+        stack.Controls.Add(Section(
+            "Window behavior",
+            _minimizeToTray,
+            "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues."));
+        stack.Controls.Add(Section(
+            "Notifications",
+            _notifications,
+            "Controls outage and recovery notifications. Monitoring and history recording continue either way."));
+        stack.Controls.Add(Section(
+            "CLI displays",
+            new Control[] { _showMainCli, _wallboardCli },
+            "Choose which command-trace views are visible by default."));
+
+        return page;
+    }
+
+    private Control BuildMonitoringPage()
+    {
+        var page = Page("Monitoring", "Default ICMP timing and outage rules.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(SettingRow("Ping interval", _interval, "seconds"));
+        stack.Controls.Add(SettingRow("Ping timeout", _timeout, "milliseconds"));
+        stack.Controls.Add(SettingRow("Declare DOWN after", _downAfter, "consecutive failures"));
+        stack.Controls.Add(SettingRow("Declare RECOVERED after", _recoverAfter, "consecutive successes"));
+        _monitorLockLabel.Margin = new Padding(0, 14, 0, 0);
+        stack.Controls.Add(_monitorLockLabel);
+        return page;
+    }
+
+    private Control BuildHistoryPage()
+    {
+        var page = Page("History", "Persistent outage-history display defaults.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(SettingRow("Default history range", _historyRange, ""));
+        _hideSuspects.Margin = new Padding(0, 10, 0, 8);
+        stack.Controls.Add(_hideSuspects);
+        stack.Controls.Add(new Label
+        {
+            Text = "These filters change what Wallboard and Outage History show. They never delete the underlying events.",
+            AutoSize = true,
+            MaximumSize = new Size(560, 0),
+            ForeColor = Color.FromArgb(139, 153, 169),
+            Margin = new Padding(0, 4, 0, 16)
+        });
+        stack.Controls.Add(_openHistoryButton);
+        return page;
+    }
+
+    private Control BuildUpdatesPage()
+    {
+        var page = Page("Updates", "GitHub release checks and installed-version status.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(LabeledValue("Installed version", _versionValue));
+        stack.Controls.Add(LabeledValue("Update status", _updateStatus));
+        _autoUpdates.Margin = new Padding(0, 12, 0, 14);
+        stack.Controls.Add(_autoUpdates);
+        stack.Controls.Add(_updateButton);
+        stack.Controls.Add(new Label
+        {
+            Text = "Manual update checks stay available even when automatic checks are disabled.",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(139, 153, 169),
+            Margin = new Padding(0, 12, 0, 0)
+        });
+        return page;
+    }
+
+    private Control Page(string title, string subtitle)
+    {
+        var page = new TableLayoutPanel
+        {
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.FromArgb(10, 14, 20)
+        };
+        page.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var head = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0)
+        };
+        head.Controls.Add(new Label
+        {
+            Text = title,
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold),
+            ForeColor = Color.White
+        });
+        head.Controls.Add(new Label
+        {
+            Text = subtitle,
+            AutoSize = true,
+            ForeColor = Color.FromArgb(139, 153, 169)
+        });
+
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            Margin = new Padding(0)
+        };
+        page.Controls.Add(head, 0, 0);
+        page.Controls.Add(stack, 0, 1);
+        return page;
+    }
+
+    private static Control Section(string title, Control content, string description) =>
+        Section(title, new[] { content }, description);
+
+    private static Control Section(string title, IEnumerable<Control> controls, string description)
+    {
+        var panel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            MinimumSize = new Size(560, 0),
+            MaximumSize = new Size(620, 0),
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(14),
+            Margin = new Padding(0, 0, 0, 12),
+            BackColor = Color.FromArgb(18, 25, 34)
+        };
+        panel.Controls.Add(new Label
+        {
+            Text = title,
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(234, 240, 246)
+        });
+        foreach (var control in controls)
+        {
+            control.Margin = new Padding(0, 8, 0, 0);
+            panel.Controls.Add(control);
+        }
+        panel.Controls.Add(new Label
+        {
+            Text = description,
+            AutoSize = true,
+            MaximumSize = new Size(540, 0),
+            ForeColor = Color.FromArgb(139, 153, 169),
+            Margin = new Padding(0, 8, 0, 0)
+        });
+        return panel;
+    }
+
+    private static Control SettingRow(string label, Control input, string suffix)
+    {
+        var row = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            MinimumSize = new Size(560, 48),
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0, 7, 0, 7),
+            Margin = new Padding(0, 0, 0, 8)
+        };
+        row.Controls.Add(new Label
+        {
+            Text = label,
+            Width = 205,
+            Height = 32,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(220, 228, 237)
+        });
+        input.Margin = new Padding(0, 2, 8, 0);
+        row.Controls.Add(input);
+        if (!string.IsNullOrWhiteSpace(suffix))
+        {
+            row.Controls.Add(new Label
+            {
+                Text = suffix,
+                AutoSize = true,
+                Padding = new Padding(0, 8, 0, 0),
+                ForeColor = Color.FromArgb(139, 153, 169)
+            });
+        }
+        return row;
+    }
+
+    private static Control LabeledValue(string label, Control value)
+    {
+        var panel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            MinimumSize = new Size(560, 58),
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        panel.Controls.Add(new Label
+        {
+            Text = label,
+            AutoSize = true,
+            ForeColor = Color.FromArgb(139, 153, 169)
+        });
+        panel.Controls.Add(value);
+        return panel;
+    }
+
+    private void ApplyTheme()
+    {
+        var nav = Color.FromArgb(14, 20, 28);
+        var input = Color.FromArgb(11, 17, 24);
+        var border = Color.FromArgb(39, 49, 61);
+        var text = Color.FromArgb(234, 240, 246);
+
+        _nav.BackColor = nav;
+        _nav.ForeColor = text;
+
+        foreach (var button in new[] { _saveButton, _closeButton, _openHistoryButton, _updateButton })
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderColor = border;
+            button.BackColor = Color.FromArgb(25, 34, 45);
+            button.ForeColor = text;
+            button.Padding = new Padding(10, 3, 10, 3);
+            button.Height = Math.Max(button.Height, 34);
+        }
+
+        _saveButton.BackColor = Color.FromArgb(24, 76, 105);
+        _saveButton.FlatAppearance.BorderColor = Color.FromArgb(58, 132, 171);
+
+        foreach (var number in new[] { _interval, _timeout, _downAfter, _recoverAfter })
+        {
+            number.BackColor = input;
+            number.ForeColor = text;
+        }
+
+        _historyRange.BackColor = input;
+        _historyRange.ForeColor = text;
+        _historyRange.FlatStyle = FlatStyle.Flat;
+
+        foreach (var check in new[] { _minimizeToTray, _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates })
+            check.ForeColor = text;
+    }
+
+    private void ShowSelectedPage()
+    {
+        string selected = _nav.SelectedItem?.ToString() ?? "General";
+        foreach (var pair in _pages)
+            pair.Value.Visible = pair.Key.Equals(selected, StringComparison.OrdinalIgnoreCase);
+        if (_pages.TryGetValue(selected, out var page))
+            page.BringToFront();
+    }
+
+    private void LoadSettings()
+    {
+        _loading = true;
+        try
+        {
+            var s = _provider();
+            _interval.Value = Clamp(_interval, s.PingIntervalSeconds);
+            _timeout.Value = Clamp(_timeout, s.PingTimeoutMs);
+            _downAfter.Value = Clamp(_downAfter, s.FailureThreshold);
+            _recoverAfter.Value = Clamp(_recoverAfter, s.RecoveryThreshold);
+            _showMainCli.Checked = s.ShowCommandView;
+            _wallboardCli.Checked = s.WallboardShowCli;
+            _minimizeToTray.Checked = s.MinimizeToTray;
+            _notifications.Checked = s.NotificationsEnabled;
+            _autoUpdates.Checked = s.AutoCheckUpdates;
+            _historyRange.SelectedIndex = HistoryHoursToIndex(s.EventHistoryHours);
+            _hideSuspects.Checked = s.HideSuspectEvents;
+            RefreshRuntimeState();
+        }
+        finally { _loading = false; }
+    }
+
+    private void SaveSettings()
+    {
+        if (_loading) return;
+
+        var current = _provider();
+        var settings = current with
+        {
+            PingIntervalSeconds = (int)_interval.Value,
+            PingTimeoutMs = (int)_timeout.Value,
+            FailureThreshold = (int)_downAfter.Value,
+            RecoveryThreshold = (int)_recoverAfter.Value,
+            ShowCommandView = _showMainCli.Checked,
+            WallboardShowCli = _wallboardCli.Checked,
+            MinimizeToTray = _minimizeToTray.Checked,
+            NotificationsEnabled = _notifications.Checked,
+            AutoCheckUpdates = _autoUpdates.Checked,
+            EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
+            HideSuspectEvents = _hideSuspects.Checked
+        };
+        _apply(settings);
+        LoadSettings();
+    }
+
+    private static decimal Clamp(NumericUpDown control, int value) =>
+        Math.Clamp(value, (int)control.Minimum, (int)control.Maximum);
+
+    private static int HistoryHoursToIndex(int hours) => hours switch
+    {
+        24 => 0,
+        168 => 1,
+        720 => 2,
+        _ => 3
+    };
+
+    private static int IndexToHistoryHours(int index) => index switch
+    {
+        0 => 24,
+        1 => 168,
+        2 => 720,
+        _ => 0
+    };
+}

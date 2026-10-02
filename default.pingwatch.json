@@ -14,5 +14,9 @@
   "ShowCommandView": false,
   "SelectedSite": "Default Site",
   "EventHistoryHours": 24,
-  "HideSuspectEvents": true
+  "HideSuspectEvents": true,
+  "AutoCheckUpdates": true,
+  "MinimizeToTray": true,
+  "NotificationsEnabled": true,
+  "WallboardShowCli": true
 }

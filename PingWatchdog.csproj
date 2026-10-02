@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PingWatchdog</AssemblyName>
     <RootNamespace>PingWatchdog</RootNamespace>
-    <Version>1.10.0</Version>
+    <Version>1.11.0</Version>
     <Product>Ping Watchdog</Product>
     <Authors>Joseph Luker</Authors>
     <Company>Joseph Luker</Company>

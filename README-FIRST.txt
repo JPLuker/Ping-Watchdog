@@ -62,3 +62,11 @@ History is saved across restarts and updates in your Ping Watchdog AppData folde
 Choose Last 24 hours / 7 days / 30 days / All time and optionally hide SUSPECT events.
 Those display preferences are saved automatically.
 In Wallboard: H cycles the history range and S toggles SUSPECT events.
+
+
+SETTINGS
+Use the permanent Settings button, Ctrl+, or ••• > Settings.
+The Settings window controls tray behavior, notifications, CLI/Wallboard preferences,
+monitoring defaults, outage-history defaults, and automatic update checks.
+A manual Check for Updates button is always available in Settings even if automatic checks are disabled.
+The main app bar also keeps its Updates button permanently visible.

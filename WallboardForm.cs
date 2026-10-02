@@ -14,11 +14,13 @@ internal sealed class WallboardForm : Form
         Func<WallboardSnapshot> snapshotProvider,
         Screen targetScreen,
         Action cycleHistoryWindow,
-        Action toggleSuspectHistory)
+        Action toggleSuspectHistory,
+        bool showCliByDefault)
     {
         _snapshotProvider = snapshotProvider;
         _cycleHistoryWindow = cycleHistoryWindow;
         _toggleSuspectHistory = toggleSuspectHistory;
+        _showCli = showCliByDefault;
 
         Text = "Ping Watchdog Wallboard";
         FormBorderStyle = FormBorderStyle.None;
