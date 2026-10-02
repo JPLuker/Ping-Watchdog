@@ -260,6 +260,7 @@ internal sealed class HostMonitor
 {
     public string Site { get; }
     public string Address { get; }
+    public string Label { get; set; }
     public HostState State { get; set; } = HostState.Unknown;
     public int ConsecutiveFailures { get; set; }
     public int ConsecutiveSuccesses { get; set; }
@@ -268,10 +269,11 @@ internal sealed class HostMonitor
     public DateTime? OutageStarted { get; set; }
     public bool AlertedForCurrentOutage { get; set; }
 
-    public HostMonitor(string site, string address)
+    public HostMonitor(string site, string address, string label = "")
     {
         Site = site;
         Address = address;
+        Label = label;
     }
 }
 
@@ -1519,6 +1521,10 @@ public sealed class MainForm : Form
         nickname = nickname.Trim();
         if (!string.IsNullOrWhiteSpace(nickname))
             site.Labels[address] = nickname;
+
+        string key = BuildHostKey(siteName, address);
+        if (_hosts.TryGetValue(key, out var activeHost))
+            activeHost.Label = nickname;
     }
 
     private string DescribeHost(string siteName, string address)
@@ -1968,7 +1974,10 @@ public sealed class MainForm : Form
         foreach (var target in targets)
         {
             string key = BuildHostKey(target.Site, target.Address);
-            var host = new HostMonitor(target.Site, target.Address);
+            var host = new HostMonitor(
+                target.Site,
+                target.Address,
+                GetNickname(target.Site, target.Address));
             _hosts[key] = host;
             StartHostWorker(key, host);
         }
@@ -2047,7 +2056,10 @@ public sealed class MainForm : Form
             if (_hosts.ContainsKey(pair.Key))
                 continue;
 
-            var host = new HostMonitor(pair.Value.Site, pair.Value.Address);
+            var host = new HostMonitor(
+                pair.Value.Site,
+                pair.Value.Address,
+                GetNickname(pair.Value.Site, pair.Value.Address));
             _hosts[pair.Key] = host;
             StartHostWorker(pair.Key, host);
         }
@@ -2140,6 +2152,14 @@ public sealed class MainForm : Form
         }
     }
 
+    private static string DescribeMonitoredHost(HostMonitor host)
+    {
+        string label = host.Label;
+        return string.IsNullOrWhiteSpace(label)
+            ? host.Address
+            : $"{label} ({host.Address})";
+    }
+
     private void ProcessResult(HostMonitor host, bool success, long? latency)
     {
         string? notificationTitle = null;
@@ -2172,7 +2192,7 @@ public sealed class MainForm : Form
                         host.AlertedForCurrentOutage = false;
 
                         notificationTitle = $"Host Recovered • {host.Site}";
-                        string displayHost = DescribeHost(host.Site, host.Address);
+                        string displayHost = DescribeMonitoredHost(host);
                         notificationBody = duration.HasValue
                             ? $"{displayHost} is responding again. Outage duration: {FormatDuration(duration.Value)}."
                             : $"{displayHost} is responding again.";
@@ -2203,7 +2223,7 @@ public sealed class MainForm : Form
                         {
                             host.AlertedForCurrentOutage = true;
                             notificationTitle = $"Host Down • {host.Site}";
-                            string displayHost = DescribeHost(host.Site, host.Address);
+                            string displayHost = DescribeMonitoredHost(host);
                             notificationBody =
                                 $"{displayHost} failed {host.ConsecutiveFailures} consecutive ping attempts and is now OFFLINE.";
                             eventKind = "DOWN";
@@ -2219,14 +2239,19 @@ public sealed class MainForm : Form
                     if (previousState != HostState.Suspect)
                     {
                         eventKind = "SUSPECT";
-                        eventMessage = $"{DescribeHost(host.Site, host.Address)} has {host.ConsecutiveFailures} failed ping attempt(s).";
+                        eventMessage = $"{DescribeMonitoredHost(host)} has {host.ConsecutiveFailures} failed ping attempt(s).";
                     }
                 }
             }
         }
 
         if (eventKind is not null && eventMessage is not null)
-            RecordStateEvent(host.Site, host.Address, eventKind, eventMessage);
+            RecordStateEvent(
+                host.Site,
+                host.Address,
+                DescribeMonitoredHost(host),
+                eventKind,
+                eventMessage);
 
         if (!_suppressNotifications &&
             notificationTitle is not null &&
@@ -2243,11 +2268,10 @@ public sealed class MainForm : Form
     private void RecordStateEvent(
         string site,
         string host,
+        string displayHost,
         string kind,
         string message)
     {
-        string displayHost = DescribeHost(site, host);
-
         lock (_stateEvents)
         {
             _stateEvents.Add(new StateEventRecord(
@@ -2280,7 +2304,7 @@ public sealed class MainForm : Form
                     hostLookup[pair.Key] = new WallboardHostSnapshot(
                         host.Site,
                         host.Address,
-                        GetNickname(host.Site, host.Address),
+                        host.Label,
                         host.State,
                         host.LastRoundTripMs,
                         host.OutageStarted);
