@@ -185,3 +185,14 @@ Wallboard now includes the same live ping-command trace used by the main interfa
 ## Wallboard exit behavior
 
 Pressing **Esc** or **F11** inside Wallboard now closes only the Wallboard and restores/focuses the main Ping Watchdog window. If the base window had been minimized to the tray, it is shown again automatically. A true application exit still closes both windows normally.
+
+
+## Wallboard majority-health coloring
+
+Wallboard site nodes now distinguish a partial outage from a site-wide problem:
+
+- **Green:** no declared offline hosts and the site is healthy.
+- **Yellow:** one or more hosts are down, but a strict majority of configured hosts are still replying.
+- **Red:** half or fewer of the site's configured hosts are replying.
+- Individual host dots keep their own real state colors, so a down host remains red even when its site is yellow.
+- Active outage entries remain visible regardless of the aggregate site color.

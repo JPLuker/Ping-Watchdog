@@ -861,15 +861,30 @@ internal sealed class WallboardCanvas : Control
             ClientSize.Height - 25);
     }
 
-    private static HostState AggregateSiteState(WallboardSiteSnapshot site)
+    internal static HostState AggregateSiteState(WallboardSiteSnapshot site)
     {
-        if (site.Hosts.Any(h => h.State == HostState.Offline))
-            return HostState.Offline;
+        int total = site.Hosts.Count;
 
-        if (site.Hosts.Any(h => h.State == HostState.Suspect))
+        if (total == 0)
+            return HostState.Unknown;
+
+        int online = site.Hosts.Count(h => h.State == HostState.Online);
+        int offline = site.Hosts.Count(h => h.State == HostState.Offline);
+        int suspect = site.Hosts.Count(h => h.State == HostState.Suspect);
+
+        if (offline > 0)
+        {
+            // A site with some failed hosts is degraded while a strict
+            // majority of its configured hosts are still replying.
+            return online > total / 2d
+                ? HostState.Suspect
+                : HostState.Offline;
+        }
+
+        if (suspect > 0)
             return HostState.Suspect;
 
-        if (site.Hosts.Any(h => h.State == HostState.Online))
+        if (online > 0)
             return HostState.Online;
 
         return HostState.Unknown;

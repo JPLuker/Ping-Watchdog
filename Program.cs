@@ -801,6 +801,39 @@ public sealed class MainForm : Form
         Check(wallboardSnapshot.Commands.Count == 2);
         Check(wallboardSnapshot.Commands[0].Text.Contains("ping 127.0.0.1", StringComparison.Ordinal));
 
+        var majorityOnlineSite = new WallboardSiteSnapshot(
+            "Majority Online",
+            new[]
+            {
+                new WallboardHostSnapshot("Majority Online", "1", "", HostState.Online, 1, null),
+                new WallboardHostSnapshot("Majority Online", "2", "", HostState.Online, 1, null),
+                new WallboardHostSnapshot("Majority Online", "3", "", HostState.Online, 1, null),
+                new WallboardHostSnapshot("Majority Online", "4", "", HostState.Offline, null, DateTime.Now),
+                new WallboardHostSnapshot("Majority Online", "5", "", HostState.Offline, null, DateTime.Now)
+            });
+        Check(WallboardCanvas.AggregateSiteState(majorityOnlineSite) == HostState.Suspect);
+
+        var majorityOfflineSite = new WallboardSiteSnapshot(
+            "Majority Offline",
+            new[]
+            {
+                new WallboardHostSnapshot("Majority Offline", "1", "", HostState.Online, 1, null),
+                new WallboardHostSnapshot("Majority Offline", "2", "", HostState.Online, 1, null),
+                new WallboardHostSnapshot("Majority Offline", "3", "", HostState.Offline, null, DateTime.Now),
+                new WallboardHostSnapshot("Majority Offline", "4", "", HostState.Offline, null, DateTime.Now),
+                new WallboardHostSnapshot("Majority Offline", "5", "", HostState.Offline, null, DateTime.Now)
+            });
+        Check(WallboardCanvas.AggregateSiteState(majorityOfflineSite) == HostState.Offline);
+
+        var tiedSite = new WallboardSiteSnapshot(
+            "Tie",
+            new[]
+            {
+                new WallboardHostSnapshot("Tie", "1", "", HostState.Online, 1, null),
+                new WallboardHostSnapshot("Tie", "2", "", HostState.Offline, null, DateTime.Now)
+            });
+        Check(WallboardCanvas.AggregateSiteState(tiedSite) == HostState.Offline);
+
         form.ClientSize = new Size(960, 640);
         form.ApplyResponsiveLayout();
         Check(form._workspaceSplit.SplitterDistance <= 205);

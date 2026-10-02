@@ -43,3 +43,8 @@ Watchdog saves your current setup, stops monitoring if necessary, applies the do
 WALLBOARD EXIT
 Press Esc or F11 to leave Wallboard and return to the main Ping Watchdog window.
 This does not exit Ping Watchdog.
+
+
+WALLBOARD SITE HEALTH
+A site with some failed hosts stays yellow while more than half of its configured hosts are still replying.
+The site turns red when half or fewer are replying. Individual failed host dots remain red.
