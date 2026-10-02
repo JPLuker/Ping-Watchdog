@@ -453,6 +453,8 @@ public sealed class MainForm : Form
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _trayStopItem;
     private readonly Icon _appIcon;
+    private readonly Font _siteItemFont = new("Segoe UI Semibold", 9.5f);
+    private readonly Font _statusCellFont = new("Segoe UI Semibold", 8.5f, FontStyle.Bold);
 
     private CancellationTokenSource? _cts;
     private bool _appNotificationsAvailable;
@@ -598,6 +600,8 @@ public sealed class MainForm : Form
             _updateTimer.Dispose();
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
+            _siteItemFont.Dispose();
+            _statusCellFont.Dispose();
             _appIcon.Dispose();
         };
 
@@ -690,6 +694,8 @@ public sealed class MainForm : Form
 
         form._trayIcon.Visible = false;
         form._trayIcon.Dispose();
+        form._siteItemFont.Dispose();
+        form._statusCellFont.Dispose();
         form._appIcon.Dispose();
     }
 
@@ -1168,7 +1174,7 @@ public sealed class MainForm : Form
         TextRenderer.DrawText(
             e.Graphics,
             text,
-            new Font("Segoe UI Semibold", 9.5f),
+            _siteItemFont,
             new Rectangle(bounds.X + 12, bounds.Y, bounds.Width - 18, bounds.Height),
             textBrush.Color,
             TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
@@ -2623,7 +2629,7 @@ public sealed class MainForm : Form
             var status = row.Cells["StatusColumn"].Value?.ToString();
             var cell = row.Cells["StatusColumn"];
 
-            cell.Style.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+            cell.Style.Font = _statusCellFont;
             cell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             cell.Style.ForeColor = status switch
             {
@@ -2641,7 +2647,11 @@ public sealed class MainForm : Form
         int suspect = rows.Count(h => h.Status == "SUSPECT");
         int offline = rows.Count(h => h.Status == "OFFLINE");
 
-        _totalValueLabel.Text = rows.Count.ToString();
+        int configured = _selectedSiteName is null
+            ? _sites.Sum(s => s.Hosts.Count)
+            : FindSite(_selectedSiteName)?.Hosts.Count ?? 0;
+
+        _totalValueLabel.Text = (_cts is null ? configured : rows.Count).ToString();
         _onlineValueLabel.Text = online.ToString();
         _suspectValueLabel.Text = suspect.ToString();
         _offlineValueLabel.Text = offline.ToString();
@@ -2649,7 +2659,7 @@ public sealed class MainForm : Form
         string view = _selectedSiteName ?? AllSitesLabel;
 
         _statusLabel.Text = _cts is null
-            ? $"Ready • View: {view} • {rows.Count} configured host(s)"
+            ? $"Ready • View: {view} • {configured} configured host(s)"
             : $"Monitoring • View: {view} • {online} online • {suspect} suspect • {offline} offline";
     }
 }
