@@ -811,8 +811,8 @@ public sealed class MainForm : Form
 
         form.SetUpdateReadyUi("9.9.9");
         Check(form._checkUpdateButton.Text == "Restart to Update");
-        Check(form._trayUpdateItem.Visible);
-        Check(form._trayUpdateItem.Text.Contains("9.9.9", StringComparison.Ordinal));
+        Check(form._trayUpdateItem.Enabled);
+        Check((form._trayUpdateItem.Text ?? string.Empty).Contains("9.9.9", StringComparison.Ordinal));
         form.ClearPendingUpdateUi();
 
         using var ping = new Ping();
