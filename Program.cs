@@ -476,7 +476,17 @@ public sealed class MainForm : Form
     private readonly Button _checkUpdateButton = new() { Text = "Updates", AutoSize = false, Width = 120 };
     private readonly Button _wallboardButton = new() { Text = "Wallboard", AutoSize = false, Width = 88 };
     private readonly Button _settingsButton = new() { Text = "Settings", AutoSize = false, Width = 88 };
-    private readonly Button _moreButton = new() { Text = "•••", AutoSize = false, Width = 38 };
+    private readonly Button _moreButton = new()
+    {
+        Text = "⋯",
+        AutoSize = false,
+        Width = 48,
+        Height = 34,
+        Padding = Padding.Empty,
+        TextAlign = ContentAlignment.MiddleCenter,
+        Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold),
+        AccessibleName = "More options"
+    };
     private readonly ContextMenuStrip _appMenu = new();
     private readonly ContextMenuStrip _gridMenu = new();
     private readonly Label _versionLabel = new()
@@ -1076,6 +1086,9 @@ public sealed class MainForm : Form
         Check(form._moreButton.Parent is not null);
         Check(form._headerActionsPanel?.Controls.Contains(form._checkUpdateButton) == true);
         Check(form._headerActionsPanel?.Controls.Contains(form._settingsButton) == true);
+        Check(form._moreButton.Text == "⋯");
+        Check(form._moreButton.Width >= 48);
+        Check(form._moreButton.Padding == Padding.Empty);
         Check(form._saveConfigButton.Parent is null);
         Check(form._loadConfigButton.Parent is null);
         Check(form._headerActionsPanel?.WrapContents == false);
@@ -4360,8 +4373,20 @@ public sealed class MainForm : Form
                         button.FlatAppearance.BorderSize = 1;
                         button.BackColor = Color.FromArgb(25, 34, 45);
                         button.ForeColor = text;
-                        button.Padding = new Padding(8, 2, 8, 2);
-                        button.Height = Math.Max(button.Height, 32);
+
+                        if (ReferenceEquals(button, _moreButton))
+                        {
+                            button.Padding = Padding.Empty;
+                            button.Width = Math.Max(button.Width, 48);
+                            button.Height = Math.Max(button.Height, 34);
+                            button.Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold);
+                            button.TextAlign = ContentAlignment.MiddleCenter;
+                        }
+                        else
+                        {
+                            button.Padding = new Padding(8, 2, 8, 2);
+                            button.Height = Math.Max(button.Height, 32);
+                        }
                         break;
 
                     case Label label:

@@ -1061,7 +1061,8 @@ internal sealed class WallboardCanvas : Control
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
-        int statsTop = 94;
+        const int headerBandHeight = 116;
+        int statsTop = headerBandHeight;
         int statsHeight = 82;
         DrawStats(g, snapshot, statsTop, statsHeight);
 
@@ -1146,25 +1147,27 @@ internal sealed class WallboardCanvas : Control
         var clockSize = g.MeasureString(clock, _clockFont);
         var dateSize = g.MeasureString(date, _dateFont);
 
+        int rightEdge = ClientSize.Width - 24;
+
         g.DrawString(
             clock,
             _clockFont,
             brandBrush,
-            ClientSize.Width - clockSize.Width - 24,
-            12);
+            rightEdge - clockSize.Width,
+            10);
 
         g.DrawString(
             date,
             _dateFont,
             mutedBrush,
-            ClientSize.Width - dateSize.Width - 26,
-            43);
+            rightEdge - dateSize.Width,
+            48);
 
         var stateRect = new Rectangle(
-            ClientSize.Width - 240,
-            66,
-            214,
-            22);
+            rightEdge - 220,
+            74,
+            220,
+            24);
 
         using var stateBrush = new SolidBrush(snapshot.Monitoring
             ? Color.FromArgb(24, 92, 64)
@@ -1177,9 +1180,17 @@ internal sealed class WallboardCanvas : Control
         DrawCenteredText(
             g,
             snapshot.Monitoring ? "LIVE MONITORING" : "IDLE / CONFIG VIEW",
-            _tinyFont,
+            _smallFont,
             stateText,
             stateRect);
+
+        using var divider = new Pen(Color.FromArgb(28, 40, 52), 1);
+        g.DrawLine(
+            divider,
+            22,
+            108,
+            Math.Max(22, ClientSize.Width - 22),
+            108);
     }
 
     private void DrawStats(
