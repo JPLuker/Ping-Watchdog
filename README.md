@@ -110,3 +110,18 @@ Sites and host lists can be changed while monitoring is active.
 - Existing hosts keep their current monitoring state when unrelated sites or hosts change.
 
 Timing and outage-threshold controls remain locked during an active scan so one scan uses consistent monitoring rules.
+
+
+## Version 1.6 automatic GitHub updates
+
+Ping Watchdog now uses Velopack for distribution and self-updates.
+
+- The app checks the public GitHub Releases feed automatically on startup and every six hours.
+- If Watchdog is idle, an available update is downloaded and applied automatically with an app restart.
+- If monitoring is active, the update downloads in the background and is applied the next time Watchdog restarts so an active monitoring session is not interrupted.
+- **Check Updates** in the header can force an immediate check.
+- GitHub Actions publishes both a normal Windows installer and a self-updating portable ZIP.
+- Velopack delta packages are generated when a prior compatible release is available, reducing future update download size.
+- Users of pre-1.6 standalone ZIP builds need to move to a 1.6 Velopack installer or portable package once. After that, manual release downloads are no longer required.
+
+The update source is the official `JPLuker/Ping-Watchdog` GitHub Releases feed.

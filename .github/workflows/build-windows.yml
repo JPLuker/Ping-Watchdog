@@ -1,4 +1,4 @@
-name: Build Windows Package
+name: Build Windows Auto-Updating Release
 
 on:
   workflow_dispatch:
@@ -28,38 +28,72 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Set release version
+        shell: pwsh
+        run: |
+          "WATCHDOG_VERSION=1.6.${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install matching Velopack CLI
+        shell: pwsh
+        run: dotnet tool install --tool-path .\.tools vpk --version 1.2.161
+
       - name: Validate starter config
         shell: pwsh
         run: |
           $config = Get-Content default.pingwatch.json -Raw | ConvertFrom-Json
           if (-not $config.Sites -or $config.Sites.Count -lt 1) { throw "Starter config must contain a site." }
 
-      - name: Test alert, config, and localhost behavior
-        run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
+      - name: Test alert, config, localhost, and updater wiring
+        shell: pwsh
+        run: dotnet run --project PingWatchdog.csproj -c Release -p:Version=$env:WATCHDOG_VERSION -- --self-test
 
-      - name: Publish self-contained EXE
-        run: dotnet publish PingWatchdog.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o publish
-
-      - name: Build portable ZIP
+      - name: Publish self-contained app
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force package | Out-Null
-          Copy-Item publish/PingWatchdog.exe package/PingWatchdog.exe
-          Copy-Item default.pingwatch.json package/default.pingwatch.json
-          Copy-Item README-FIRST.txt package/README-FIRST.txt
-          Compress-Archive -Path package/* -DestinationPath PingWatchdog-win-x64.zip -Force
+          dotnet publish PingWatchdog.csproj -c Release -r win-x64 --self-contained true -p:Version=$env:WATCHDOG_VERSION -p:PublishSingleFile=true -p:PublishTrimmed=false -o publish
+          Copy-Item default.pingwatch.json publish\default.pingwatch.json
+          Copy-Item README-FIRST.txt publish\README-FIRST.txt
 
-      - name: Upload ZIP
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          @"
+          # Ping Watchdog $env:WATCHDOG_VERSION
+
+          Self-updating Windows release.
+
+          - Checks GitHub Releases automatically on startup and every six hours.
+          - Downloads updates in-app.
+          - Restarts automatically to apply an update when Watchdog is idle.
+          - If monitoring is active, the update is downloaded and applied on the next restart.
+          - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
+
+          Made by Joseph Luker.
+          "@ | Set-Content release-notes.md
+
+      - name: Download previous Velopack release for delta generation
+        continue-on-error: true
+        shell: pwsh
+        env:
+          VPK_TOKEN: ${{ github.token }}
+        run: |
+          .\.tools\vpk.exe download github --repoUrl https://github.com/JPLuker/Ping-Watchdog --token $env:VPK_TOKEN --channel win --outputDir Releases
+
+      - name: Build installer, portable package, and update feed
+        shell: pwsh
+        run: |
+          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\PingWatchdog.ico --releaseNotes release-notes.md --channel win --outputDir Releases
+
+      - name: Upload release bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PingWatchdog-win-x64
-          path: PingWatchdog-win-x64.zip
+          name: PingWatchdog-${{ env.WATCHDOG_VERSION }}
+          path: Releases/*
           if-no-files-found: error
 
-      - name: Publish release download
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish Velopack release to GitHub
         shell: pwsh
+        env:
+          VPK_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v1.5.0-build.${{ github.run_number }}"
-          gh release create $tag PingWatchdog-win-x64.zip --title "Ping Watchdog $tag" --notes "Portable Windows x64 ZIP with live-editable Sites/Groups, automatic per-host ping-worker reconciliation, first-launch default config, local autosave, popup site management, host nicknames, dark mode, and optional live CMD trace."
+          .\.tools\vpk.exe upload github --repoUrl https://github.com/JPLuker/Ping-Watchdog --token $env:VPK_TOKEN --channel win --outputDir Releases --publish --tag "v$env:WATCHDOG_VERSION" --releaseName "Ping Watchdog v$env:WATCHDOG_VERSION" --targetCommitish "${{ github.sha }}"

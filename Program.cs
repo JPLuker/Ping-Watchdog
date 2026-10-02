@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
+using Velopack;
+using Velopack.Sources;
 
 namespace PingWatchdog;
 
@@ -12,6 +14,8 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        VelopackApp.Build().Run();
+
         if (args.Contains("--self-test"))
         {
             ApplicationConfiguration.Initialize();
@@ -282,6 +286,7 @@ internal sealed record CommandLogEntry(
 public sealed class MainForm : Form
 {
     private const string AllSitesLabel = "All Sites";
+    private const string UpdateRepoUrl = "https://github.com/JPLuker/Ping-Watchdog";
     private readonly string _settingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "PingWatchdog",
@@ -318,6 +323,7 @@ public sealed class MainForm : Form
     };
     private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
     private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
+    private readonly Button _checkUpdateButton = new() { Text = "Check Updates", AutoSize = true };
     private readonly ContextMenuStrip _gridMenu = new();
     private readonly Label _siteHeaderLabel = new()
     {
@@ -422,6 +428,10 @@ public sealed class MainForm : Form
     private readonly StatusStrip _statusStrip = new() { SizingGrip = false };
     private readonly ToolStripStatusLabel _statusLabel = new("Idle");
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 500 };
+    private readonly System.Windows.Forms.Timer _updateTimer = new()
+    {
+        Interval = 6 * 60 * 60 * 1000
+    };
 
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _trayStopItem;
@@ -432,6 +442,7 @@ public sealed class MainForm : Form
     private readonly bool _suppressNotifications;
     private readonly bool _persistSites;
     private bool _ignoreSiteSelection;
+    private bool _updateCheckInProgress;
     private string? _selectedSiteName;
 
     private int _monitorIntervalSeconds = 2;
@@ -498,6 +509,7 @@ public sealed class MainForm : Form
         _deleteSiteButton.Click += (_, _) => DeleteSite();
         _saveConfigButton.Click += (_, _) => SaveConfigFile();
         _loadConfigButton.Click += (_, _) => LoadConfigFile();
+        _checkUpdateButton.Click += async (_, _) => await CheckForUpdatesAsync(userInitiated: true);
         _grid.CellMouseDown += GridCellMouseDown;
 
         _ipBox.Leave += (_, _) =>
@@ -517,6 +529,13 @@ public sealed class MainForm : Form
         _showCommandView.CheckedChanged += (_, _) => ToggleCommandView();
         _clearLogButton.Click += (_, _) => ClearCommandLog();
         _uiTimer.Tick += (_, _) => RefreshGrid();
+        _updateTimer.Tick += async (_, _) => await CheckForUpdatesAsync(userInitiated: false);
+
+        Shown += async (_, _) =>
+        {
+            _updateTimer.Start();
+            await CheckForUpdatesAsync(userInitiated: false);
+        };
 
         Resize += (_, _) =>
         {
@@ -542,6 +561,8 @@ public sealed class MainForm : Form
 
         FormClosed += (_, _) =>
         {
+            _updateTimer.Stop();
+            _updateTimer.Dispose();
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _appIcon.Dispose();
@@ -629,6 +650,7 @@ public sealed class MainForm : Form
         Check(configRoundTrip?.PingIntervalSeconds == 2);
         Check(configRoundTrip?.FailureThreshold == 3);
         Check(form.GetConfiguredTargets().Count == 1);
+        Check(UpdateRepoUrl.EndsWith("/JPLuker/Ping-Watchdog", StringComparison.Ordinal));
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -758,6 +780,7 @@ public sealed class MainForm : Form
         });
         titleBar.Controls.Add(_saveConfigButton);
         titleBar.Controls.Add(_loadConfigButton);
+        titleBar.Controls.Add(_checkUpdateButton);
         header.Controls.Add(titleBar, 0, 0);
         header.Controls.Add(new Label
         {
@@ -1899,6 +1922,106 @@ public sealed class MainForm : Form
                     notificationTitle,
                     notificationBody,
                     fallbackIcon);
+        }
+    }
+
+    private async Task CheckForUpdatesAsync(bool userInitiated)
+    {
+        if (_updateCheckInProgress || IsDisposed || Disposing)
+            return;
+
+        _updateCheckInProgress = true;
+        _checkUpdateButton.Enabled = false;
+        _checkUpdateButton.Text = "Checking...";
+
+        try
+        {
+            var source = new GithubSource(
+                UpdateRepoUrl,
+                accessToken: null,
+                prerelease: false);
+
+            var manager = new UpdateManager(source);
+
+            if (!manager.IsInstalled)
+            {
+                _checkUpdateButton.Text = "Updates: unmanaged";
+
+                if (userInitiated)
+                {
+                    MessageBox.Show(
+                        "This copy of Ping Watchdog is not running from the new self-updating package.\r\n\r\nInstall or use the current Velopack Portable release once; future releases will update automatically from GitHub.",
+                        "Ping Watchdog Updates",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+
+                return;
+            }
+
+            var update = await manager.CheckForUpdatesAsync();
+
+            if (update is null)
+            {
+                _checkUpdateButton.Text = "Up to date";
+
+                if (userInitiated)
+                    _statusLabel.Text = "Ping Watchdog is up to date.";
+
+                return;
+            }
+
+            string version = update.TargetFullRelease.Version.ToString();
+            _checkUpdateButton.Text = $"Downloading {version}...";
+
+            await manager.DownloadUpdatesAsync(
+                update,
+                progress =>
+                {
+                    if (IsDisposed || Disposing)
+                        return;
+
+                    BeginInvoke(() =>
+                    {
+                        if (!IsDisposed && !Disposing)
+                            _checkUpdateButton.Text = $"Update {progress}%";
+                    });
+                });
+
+            if (_cts is null)
+            {
+                PersistCurrentEditor();
+                SaveSites();
+                _checkUpdateButton.Text = $"Restarting to {version}...";
+                manager.ApplyUpdatesAndRestart(update);
+                return;
+            }
+
+            _checkUpdateButton.Text = $"{version} ready";
+            ShowNotification(
+                "Ping Watchdog update ready",
+                $"Version {version} was downloaded. It will be applied the next time Ping Watchdog restarts.",
+                ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            _checkUpdateButton.Text = "Check Updates";
+
+            if (userInitiated)
+            {
+                MessageBox.Show(
+                    $"Could not check for updates.\r\n\r\n{ex.Message}",
+                    "Ping Watchdog Updates",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+        finally
+        {
+            _updateCheckInProgress = false;
+
+            if (!IsDisposed && !Disposing)
+                _checkUpdateButton.Enabled = true;
         }
     }
 
