@@ -21,3 +21,10 @@ Use Save Config / Load Config when you want portable named scan files you can mo
 COPYRIGHT
 Copyright © 2026 Joseph Luker. All rights reserved.
 See LICENSE included with this release for permitted use.
+
+
+WALLBOARD / NOC MODE
+Click "Wallboard" or press F11 for a fullscreen side-monitor display.
+If more than one monitor is attached, Wallboard opens on the other monitor automatically.
+Press M to move it to another monitor.
+Press Esc or F11 to close Wallboard.

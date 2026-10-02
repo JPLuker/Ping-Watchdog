@@ -144,3 +144,18 @@ Version 1.7 rebuilds the primary interface around the intended day-to-day monito
 Copyright © 2026 Joseph Luker. All rights reserved.
 
 The repository is publicly viewable, but Ping Watchdog is **not licensed as open-source software**. See [LICENSE](LICENSE) for the permissions and restrictions that apply.
+
+
+## Version 1.8 Wallboard / NOC mode
+
+Ping Watchdog now includes a purpose-built fullscreen operations display for a dedicated or secondary monitor.
+
+- Open **Wallboard** from the main header, the tray menu, or press **F11**.
+- If a second monitor is available, Wallboard opens there automatically.
+- Press **M** to move the Wallboard to the next monitor.
+- Press **Esc** or **F11** from Wallboard to return to the normal interface.
+- The topology is based on real Ping Watchdog sites and host state. It intentionally does not fake geographic locations for private IP addresses.
+- Site clusters aggregate actual Online, Suspect, Offline, and Unknown states.
+- Active outages and recent state transitions are shown beside the live topology.
+- DOWN and recovery events are retained for the current monitoring session and capped to prevent unbounded memory growth.
+- Wallboard stays useful even before monitoring begins by showing configured sites and hosts as unknown/idle.

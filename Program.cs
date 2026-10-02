@@ -283,6 +283,39 @@ internal sealed record CommandLogEntry(
     string ResultText,
     int TimeoutMs);
 
+internal sealed record StateEventRecord(
+    DateTime Timestamp,
+    string Site,
+    string Host,
+    string DisplayHost,
+    string Kind,
+    string Message);
+
+internal sealed record WallboardHostSnapshot(
+    string Site,
+    string Address,
+    string Label,
+    HostState State,
+    long? LatencyMs,
+    DateTime? OutageStarted);
+
+internal sealed record WallboardSiteSnapshot(
+    string Name,
+    IReadOnlyList<WallboardHostSnapshot> Hosts);
+
+internal sealed record WallboardEventSnapshot(
+    DateTime Timestamp,
+    string Site,
+    string Host,
+    string Kind,
+    string Message);
+
+internal sealed record WallboardSnapshot(
+    bool Monitoring,
+    DateTime CapturedAt,
+    IReadOnlyList<WallboardSiteSnapshot> Sites,
+    IReadOnlyList<WallboardEventSnapshot> Events);
+
 public sealed class MainForm : Form
 {
     private const string AllSitesLabel = "All Sites";
@@ -301,6 +334,7 @@ public sealed class MainForm : Form
 
     private readonly List<SiteDefinition> _sites = new();
     private readonly List<CommandLogEntry> _commandEntries = new();
+    private readonly List<StateEventRecord> _stateEvents = new();
     private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _hostTokens = new(StringComparer.OrdinalIgnoreCase);
 
@@ -324,6 +358,7 @@ public sealed class MainForm : Form
     private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
     private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
     private readonly Button _checkUpdateButton = new() { Text = "Check Updates", AutoSize = true };
+    private readonly Button _wallboardButton = new() { Text = "Wallboard", AutoSize = true };
     private readonly ContextMenuStrip _gridMenu = new();
     private readonly Label _siteHeaderLabel = new()
     {
@@ -457,6 +492,7 @@ public sealed class MainForm : Form
     private readonly Font _statusCellFont = new("Segoe UI Semibold", 8.5f, FontStyle.Bold);
 
     private CancellationTokenSource? _cts;
+    private WallboardForm? _wallboardForm;
     private bool _appNotificationsAvailable;
     private readonly bool _suppressNotifications;
     private readonly bool _persistSites;
@@ -495,6 +531,7 @@ public sealed class MainForm : Form
         MinimumSize = new Size(1080, 680);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9.5f);
+        KeyPreview = true;
 
         _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)
             ?? (Icon)SystemIcons.Application.Clone();
@@ -512,14 +549,17 @@ public sealed class MainForm : Form
             ForeColor = Color.FromArgb(230, 237, 243)
         };
         var openItem = new ToolStripMenuItem("Open Ping Watchdog");
+        var wallboardItem = new ToolStripMenuItem("Open Wallboard");
         _trayStopItem = new ToolStripMenuItem("Stop Monitoring") { Enabled = false };
         var exitItem = new ToolStripMenuItem("Exit");
 
         openItem.Click += (_, _) => RestoreFromTray();
+        wallboardItem.Click += (_, _) => OpenWallboard();
         _trayStopItem.Click += (_, _) => StopMonitoring();
         exitItem.Click += (_, _) => Close();
 
         trayMenu.Items.Add(openItem);
+        trayMenu.Items.Add(wallboardItem);
         trayMenu.Items.Add(_trayStopItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(exitItem);
@@ -545,6 +585,7 @@ public sealed class MainForm : Form
         _saveConfigButton.Click += (_, _) => SaveConfigFile();
         _loadConfigButton.Click += (_, _) => LoadConfigFile();
         _checkUpdateButton.Click += async (_, _) => await CheckForUpdatesAsync(userInitiated: true);
+        _wallboardButton.Click += (_, _) => OpenWallboard();
         _grid.CellMouseDown += GridCellMouseDown;
 
         _ipBox.Leave += (_, _) =>
@@ -565,6 +606,15 @@ public sealed class MainForm : Form
         _clearLogButton.Click += (_, _) => ClearCommandLog();
         _uiTimer.Tick += (_, _) => RefreshGrid();
         _updateTimer.Tick += async (_, _) => await CheckForUpdatesAsync(userInitiated: false);
+
+        KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.F11)
+            {
+                e.Handled = true;
+                OpenWallboard();
+            }
+        };
 
         Shown += async (_, _) =>
         {
@@ -589,6 +639,7 @@ public sealed class MainForm : Form
 
         FormClosing += (_, _) =>
         {
+            _wallboardForm?.Close();
             PersistCurrentEditor();
             SaveSites();
             StopMonitoring();
@@ -688,6 +739,12 @@ public sealed class MainForm : Form
         Check(configRoundTrip?.FailureThreshold == 3);
         Check(form.GetConfiguredTargets().Count == 1);
         Check(UpdateRepoUrl.EndsWith("/JPLuker/Ping-Watchdog", StringComparison.Ordinal));
+        Check(form._stateEvents.Any(e => e.Kind == "DOWN"));
+        Check(form._stateEvents.Any(e => e.Kind == "RECOVERED"));
+
+        var wallboardSnapshot = form.BuildWallboardSnapshot();
+        Check(wallboardSnapshot.Sites.Count == 1);
+        Check(wallboardSnapshot.Sites[0].Hosts.Count == 1);
 
         using var ping = new Ping();
         Check(ping.Send("127.0.0.1", 1000).Status == IPStatus.Success);
@@ -855,6 +912,7 @@ public sealed class MainForm : Form
         _saveConfigButton.Text = "Export Config";
         _loadConfigButton.Text = "Import Config";
         headerActions.Controls.Add(_monitorStateLabel);
+        headerActions.Controls.Add(_wallboardButton);
         headerActions.Controls.Add(_checkUpdateButton);
         headerActions.Controls.Add(_saveConfigButton);
         headerActions.Controls.Add(_loadConfigButton);
@@ -1889,6 +1947,9 @@ public sealed class MainForm : Form
         _recoveryThresholdValue = (int)_recoveryThreshold.Value;
 
         _hosts.Clear();
+        lock (_stateEvents)
+            _stateEvents.Clear();
+
         foreach (var token in _hostTokens.Values)
             token.Dispose();
         _hostTokens.Clear();
@@ -2083,10 +2144,13 @@ public sealed class MainForm : Form
     {
         string? notificationTitle = null;
         string? notificationBody = null;
+        string? eventKind = null;
+        string? eventMessage = null;
         ToolTipIcon fallbackIcon = ToolTipIcon.None;
 
         lock (host)
         {
+            var previousState = host.State;
             if (success)
             {
                 host.LastRoundTripMs = latency;
@@ -2112,6 +2176,8 @@ public sealed class MainForm : Form
                         notificationBody = duration.HasValue
                             ? $"{displayHost} is responding again. Outage duration: {FormatDuration(duration.Value)}."
                             : $"{displayHost} is responding again.";
+                        eventKind = "RECOVERED";
+                        eventMessage = notificationBody;
                         fallbackIcon = ToolTipIcon.Info;
                     }
                 }
@@ -2140,6 +2206,8 @@ public sealed class MainForm : Form
                             string displayHost = DescribeHost(host.Site, host.Address);
                             notificationBody =
                                 $"{displayHost} failed {host.ConsecutiveFailures} consecutive ping attempts and is now OFFLINE.";
+                            eventKind = "DOWN";
+                            eventMessage = notificationBody;
                             fallbackIcon = ToolTipIcon.Warning;
                         }
                     }
@@ -2147,9 +2215,18 @@ public sealed class MainForm : Form
                 else if (host.State != HostState.Offline)
                 {
                     host.State = HostState.Suspect;
+
+                    if (previousState != HostState.Suspect)
+                    {
+                        eventKind = "SUSPECT";
+                        eventMessage = $"{DescribeHost(host.Site, host.Address)} has {host.ConsecutiveFailures} failed ping attempt(s).";
+                    }
                 }
             }
         }
+
+        if (eventKind is not null && eventMessage is not null)
+            RecordStateEvent(host.Site, host.Address, eventKind, eventMessage);
 
         if (!_suppressNotifications &&
             notificationTitle is not null &&
@@ -2161,6 +2238,124 @@ public sealed class MainForm : Form
                     notificationBody,
                     fallbackIcon);
         }
+    }
+
+    private void RecordStateEvent(
+        string site,
+        string host,
+        string kind,
+        string message)
+    {
+        string displayHost = DescribeHost(site, host);
+
+        lock (_stateEvents)
+        {
+            _stateEvents.Add(new StateEventRecord(
+                DateTime.Now,
+                site,
+                host,
+                displayHost,
+                kind,
+                message));
+
+            if (_stateEvents.Count > 250)
+                _stateEvents.RemoveRange(0, 50);
+        }
+    }
+
+    private WallboardSnapshot BuildWallboardSnapshot()
+    {
+        bool monitoring = _cts is not null && !_cts.IsCancellationRequested;
+        var hostLookup = new Dictionary<string, WallboardHostSnapshot>(
+            StringComparer.OrdinalIgnoreCase);
+
+        if (monitoring)
+        {
+            foreach (var pair in _hosts)
+            {
+                var host = pair.Value;
+
+                lock (host)
+                {
+                    hostLookup[pair.Key] = new WallboardHostSnapshot(
+                        host.Site,
+                        host.Address,
+                        GetNickname(host.Site, host.Address),
+                        host.State,
+                        host.LastRoundTripMs,
+                        host.OutageStarted);
+                }
+            }
+        }
+
+        var sites = _sites
+            .Select(site =>
+            {
+                var hosts = site.Hosts.Select(address =>
+                {
+                    string key = BuildHostKey(site.Name, address);
+
+                    if (monitoring && hostLookup.TryGetValue(key, out var active))
+                        return active;
+
+                    return new WallboardHostSnapshot(
+                        site.Name,
+                        address,
+                        GetNickname(site.Name, address),
+                        HostState.Unknown,
+                        null,
+                        null);
+                }).ToList();
+
+                return new WallboardSiteSnapshot(
+                    site.Name,
+                    hosts);
+            })
+            .ToList();
+
+        List<WallboardEventSnapshot> events;
+
+        lock (_stateEvents)
+        {
+            events = _stateEvents
+                .TakeLast(40)
+                .Select(e => new WallboardEventSnapshot(
+                    e.Timestamp,
+                    e.Site,
+                    e.DisplayHost,
+                    e.Kind,
+                    e.Message))
+                .ToList();
+        }
+
+        return new WallboardSnapshot(
+            monitoring,
+            DateTime.Now,
+            sites,
+            events);
+    }
+
+    private void OpenWallboard()
+    {
+        if (_wallboardForm is not null && !_wallboardForm.IsDisposed)
+        {
+            _wallboardForm.Activate();
+            return;
+        }
+
+        var currentScreen = Screen.FromControl(this);
+        var screens = Screen.AllScreens;
+        var target = screens.FirstOrDefault(s =>
+            !s.DeviceName.Equals(currentScreen.DeviceName, StringComparison.OrdinalIgnoreCase))
+            ?? currentScreen;
+
+        _wallboardForm = new WallboardForm(
+            BuildWallboardSnapshot,
+            target);
+
+        _wallboardForm.FormClosed += (_, _) => _wallboardForm = null;
+        _wallboardForm.Show();
+        _wallboardForm.Activate();
     }
 
     private async Task CheckForUpdatesAsync(bool userInitiated)
@@ -2515,6 +2710,9 @@ public sealed class MainForm : Form
         _addSiteButton.FlatAppearance.BorderColor = Color.FromArgb(59, 128, 196);
         _deleteSiteButton.BackColor = Color.FromArgb(57, 28, 34);
         _deleteSiteButton.FlatAppearance.BorderColor = Color.FromArgb(100, 45, 55);
+
+        _wallboardButton.BackColor = Color.FromArgb(26, 77, 91);
+        _wallboardButton.FlatAppearance.BorderColor = Color.FromArgb(54, 139, 159);
 
         _checkUpdateButton.BackColor = Color.FromArgb(24, 55, 82);
         _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(48, 103, 153);
