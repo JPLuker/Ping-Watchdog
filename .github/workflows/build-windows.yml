@@ -67,7 +67,7 @@ jobs:
           - Downloads updates in-app.
           - Downloads updates without interrupting monitoring, then exposes a one-click Restart to Update action.
           - Restart to Update saves the current setup, stops monitoring cleanly if needed, applies the downloaded update, and relaunches.
-          - Fullscreen multi-monitor Wallboard / NOC mode with live topology, outage feed, real host status, toggleable live CLI trace, and corrected responsive labels/header spacing.
+          - Fullscreen multi-monitor Wallboard / NOC mode with live topology, outage feed, real host status, toggleable live CLI trace, corrected responsive labels/header spacing, and Esc/F11 returning to the base window.
           - Full premium-style UX redesign with status dashboard and a DPI-safe site action rail with full-width Add / Rename / Delete controls.
           - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
           - Copyright © 2026 Joseph Luker. All rights reserved.

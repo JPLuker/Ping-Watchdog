@@ -180,3 +180,8 @@ Wallboard now includes the same live ping-command trace used by the main interfa
 - If monitoring is active, Watchdog clearly warns that the session will stop, saves the working configuration, stops monitoring cleanly, applies the already-downloaded update, and relaunches.
 - Wallboard clock/date/status spacing was corrected so the date no longer overlaps the monitoring badge.
 - Site names are now constrained to their topology nodes, with intelligent two-line splitting and smaller fallback fonts for long names.
+
+
+## Wallboard exit behavior
+
+Pressing **Esc** or **F11** inside Wallboard now closes only the Wallboard and restores/focuses the main Ping Watchdog window. If the base window had been minimized to the tray, it is shown again automatically. A true application exit still closes both windows normally.

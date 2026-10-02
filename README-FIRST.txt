@@ -38,3 +38,8 @@ Press C to hide/show the CLI panel without leaving Wallboard.
 APPLYING DOWNLOADED UPDATES
 When an update is downloaded, click "Restart to Update".
 Watchdog saves your current setup, stops monitoring if necessary, applies the downloaded update, and reopens automatically.
+
+
+WALLBOARD EXIT
+Press Esc or F11 to leave Wallboard and return to the main Ping Watchdog window.
+This does not exit Ping Watchdog.

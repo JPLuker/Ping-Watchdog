@@ -513,6 +513,7 @@ public sealed class MainForm : Form
     private readonly bool _persistSites;
     private bool _ignoreSiteSelection;
     private bool _updateCheckInProgress;
+    private bool _closingApplication;
     private UpdateManager? _pendingUpdateManager;
     private UpdateInfo? _pendingUpdateInfo;
     private string? _pendingUpdateVersion;
@@ -690,6 +691,7 @@ public sealed class MainForm : Form
 
         FormClosing += (_, _) =>
         {
+            _closingApplication = true;
             _wallboardForm?.Close();
             PersistCurrentEditor();
             SaveSites();
@@ -814,6 +816,13 @@ public sealed class MainForm : Form
         Check(form._addSiteButton.MinimumSize.Height >= 32);
         Check(form._renameSiteButton.MinimumSize.Height >= 32);
         Check(form._deleteSiteButton.MinimumSize.Height >= 32);
+
+        form._closingApplication = false;
+        form.WindowState = FormWindowState.Minimized;
+        form.Hide();
+        form.RestoreAfterWallboard();
+        Check(form.Visible);
+        Check(form.WindowState != FormWindowState.Minimized);
 
         form.SetUpdateReadyUi("9.9.9");
         Check(form._checkUpdateButton.Text == "Restart to Update");
@@ -2552,9 +2561,34 @@ public sealed class MainForm : Form
             BuildWallboardSnapshot,
             target);
 
-        _wallboardForm.FormClosed += (_, _) => _wallboardForm = null;
+        _wallboardForm.FormClosed += (_, _) =>
+        {
+            _wallboardForm = null;
+
+            if (!_closingApplication)
+                RestoreAfterWallboard();
+        };
+
         _wallboardForm.Show();
         _wallboardForm.Activate();
+    }
+
+    private void RestoreAfterWallboard()
+    {
+        if (IsDisposed || Disposing)
+            return;
+
+        Show();
+
+        if (WindowState == FormWindowState.Minimized)
+            WindowState = FormWindowState.Normal;
+
+        ApplyResponsiveLayout();
+        Activate();
+        BringToFront();
+        _statusLabel.Text = _cts is null
+            ? "Ready"
+            : $"Monitoring {_hosts.Count} host(s) across {_sites.Count} site(s)";
     }
 
     private void SetUpdateReadyUi(string version)
