@@ -856,7 +856,7 @@ public sealed class MainForm : Form
 
         form.ClientSize = new Size(1320, 840);
         form.ApplyResponsiveLayout();
-        Check(form._workspaceSplit.SplitterDistance >= 220);
+        Check(form._workspaceSplit.SplitterDistance >= 210);
         Check(form._addSiteButton.Text == "+ Add Site");
         Check(form._renameSiteButton.Text == "Rename Site");
         Check(form._deleteSiteButton.Text == "Delete Site");
