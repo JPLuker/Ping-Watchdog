@@ -5,8 +5,8 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - "**/*.cs"
-      - "**/*.csproj"
+      - "*.cs"
+      - "PingWatchdog.csproj"
       - "Assets/**"
       - "default.pingwatch.json"
       - "README-FIRST.txt"
@@ -74,7 +74,7 @@ jobs:
           - Full-control Wallboard operations mode: start/stop monitoring, site selection and management, live host editing, host labels, monitoring defaults, config import/export, CLI clearing, history, settings, updates, and monitor switching from the fullscreen NOC UI.
           - Quiet background updater: startup checks and downloads run without occupying primary UI, then prompt once for restart. Manual controls remain in Settings, with an opt-in developer switch to expose update controls on the main screen and Wallboard.
           - Hierarchical site organization with persistent folders/subfolders, site moves, folder moves/renames, safe folder deletion, and a filesystem-style Organization window.
-          - Wallboard topology now renders individual host nodes with real status color, nickname/label, and IP address under each site hub.
+          - Wallboard topology renders individual host nodes with real status color, nickname/label, and IP address under each site hub.
           - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
           - Copyright © 2026 Joseph Luker. All rights reserved.
 
