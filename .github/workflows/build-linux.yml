@@ -39,6 +39,19 @@ jobs:
         shell: bash
         run: dotnet tool install --tool-path ./.tools vpk --version 1.2.161
 
+      - name: Use Linux beta update channel
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('linux/PingWatchdog.Linux/Core.cs')
+          text = path.read_text(encoding='utf-8')
+          old = 'prerelease: false'
+          if old not in text:
+              raise SystemExit('Linux updater prerelease marker not found.')
+          path.write_text(text.replace(old, 'prerelease: true', 1), encoding='utf-8')
+          PY
+
       - name: Validate starter config
         shell: bash
         run: |
@@ -99,7 +112,7 @@ jobs:
           - Live site/host edits while monitoring.
           - Labels/nicknames, nested site folders, organization view, persistent outage history, filters, CSV history export, and command trace.
           - Fullscreen Wallboard with site hubs plus labeled/IP host nodes.
-          - Settings and background GitHub update checks.
+          - Settings and background GitHub update checks on the Linux beta channel.
           - Linux desktop notifications through notify-send when available.
           - Self-contained .NET runtime; no separate .NET installation required.
           - Copyright © 2026 Joseph Luker. All rights reserved.
