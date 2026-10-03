@@ -123,6 +123,7 @@ internal static class LinuxUiRegressionTests
         engine.SelectedSite = null;
         await Task.Delay(100);
         Check(editor.IsReadOnly, "All Sites editor is read only");
+        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "Programmatic main refresh cannot overwrite a newer Wallboard edit");
         using var reloaded = new WatchdogEngine(Path.GetDirectoryName(engine.ConfigPath)!);
         Check(reloaded.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "UI host edits survive restart");
     }

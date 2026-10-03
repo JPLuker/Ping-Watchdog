@@ -97,31 +97,36 @@ internal sealed class HostEditorBinding
     private readonly TextBox _box;
     private readonly Action<string> _reportError;
     private string? _site;
-    private bool _loading;
+    private string _loadedText = string.Empty;
     private string? _lastError;
-    public bool Dirty { get; private set; }
+    private string? _lastFailedText;
+    // TextChanged can be delivered after a programmatic refresh. Compare values
+    // instead of trusting event timing to decide whether a user has a draft.
+    public bool Dirty => _site is not null && (_box.Text ?? string.Empty) != _loadedText;
 
     public HostEditorBinding(WatchdogEngine engine, TextBox box, Action<string> reportError)
     {
         _engine = engine;
         _box = box;
         _reportError = reportError;
-        _box.TextChanged += (_, _) => { if (!_loading && _site is not null) { Dirty = true; _lastError = null; } };
         _box.LostFocus += (_, _) => Commit();
     }
 
     public bool Commit()
     {
         if (!Dirty || _site is null) return true;
-        string? error = _engine.SaveHosts(_site, _box.Text ?? string.Empty);
+        string text = _box.Text ?? string.Empty;
+        string? error = _engine.SaveHosts(_site, text);
         if (error is not null)
         {
-            if (_lastError != error) _reportError(error);
+            if (_lastError != error || _lastFailedText != text) _reportError(error);
             _lastError = error;
+            _lastFailedText = text;
             return false;
         }
-        Dirty = false;
+        _loadedText = text;
         _lastError = null;
+        _lastFailedText = null;
         return true;
     }
 
@@ -133,17 +138,14 @@ internal sealed class HostEditorBinding
             snapshot = _engine.Snapshot();
         }
         if (Dirty) return;
-        _loading = true;
-        try
-        {
-            _site = snapshot.SelectedSite;
-            string text = _site is null
-                ? string.Join(Environment.NewLine, snapshot.Hosts.Select(h => $"[{h.Site}] {h.Address}"))
-                : string.Join(Environment.NewLine, snapshot.Hosts.Select(h => h.Address));
-            if (_box.Text != text) _box.Text = text;
-            _box.IsReadOnly = _site is null;
-        }
-        finally { _loading = false; }
+        _site = snapshot.SelectedSite;
+        string text = _site is null
+            ? string.Join(Environment.NewLine, snapshot.Hosts.Select(h => $"[{h.Site}] {h.Address}"))
+            : string.Join(Environment.NewLine, snapshot.Hosts.Select(h => h.Address));
+        // Set the baseline first: losing focus during layout must not commit stale text.
+        _loadedText = text;
+        if (_box.Text != text) _box.Text = text;
+        _box.IsReadOnly = _site is null;
     }
 }
 
