@@ -1,310 +1,126 @@
 # Ping Watchdog
 
-A lightweight Windows GUI for monitoring multiple IP addresses or hostnames and alerting only when failures become meaningful.
+<img src="Assets/WatchdogLogo.png" alt="Ping Watchdog dog logo" width="72">
 
-## UI and branding
+A desktop ICMP monitoring tool for tracking multiple IP addresses and hostnames across sites. Configurable failure and recovery thresholds help distinguish a brief missed reply from an outage.
 
-The main shell builds its header, sidebar, and cyan/teal accents during normal form construction. There are no idle-time UI patchers or reflection-based layout changes. Live host refreshes preserve selection by site/address, the selected column, and the scroll positions.
+Available for Windows, with a native Linux beta built using Avalonia.
 
-`Assets/WatchdogLogo.svg` is the supplied dog artwork. The embedded PNG and multi-size ICO are direct renders of that SVG, shared by Windows and Linux branding. To regenerate them, install `cairosvg` and `Pillow`, then run `python tools/render_brand.py`.
+## Features
 
-Windows release CI checks the published executable's normal startup, then runs `--ui-smoke-test` through the actual message loop. It exercises three window widths, repeated host refreshes, host removal, Settings, and opening/closing Wallboard. Screenshots and pass/failure details are saved in the `PingWatchdog-UI-*` Actions artifact. A failed or stalled UI test blocks publishing.
+- **Multi-site monitoring:** Monitor all configured hosts together, filter by site, and assign host nicknames.
+- **Site organization:** Group sites into folders and nested folders, and edit hosts while monitoring continues.
+- **Outage alerts:** Receive outage and recovery notifications when consecutive failure or success thresholds are reached.
+- **Persistent history:** Review outages across sessions, filter by site or time range, hide suspect events, and export history to CSV.
+- **Live command trace:** View individual ping results alongside the host table, with failed attempts highlighted in red.
+- **Fullscreen Wallboard:** Display site and host topology, current outages, history, and command output. Windows Wallboard also provides monitoring and site-management controls.
+- **Saved configuration:** Automatically save your working setup and import or export `.pingwatch.json` files.
+- **Background updates:** Check for releases and download updates in the background, then restart when ready to apply them.
 
-## Default monitoring behavior
+## Download
 
-- Ping interval: **2 seconds**
-- Ping timeout: **1000 ms**
-- Declare a host down after: **3 consecutive failures**
-- Declare a host recovered after: **2 consecutive successes**
-- A single failed ping only changes the host to **SUSPECT**
-- The application alerts only once per outage, then alerts again when the host recovers
+Official builds are available on the [Releases page](https://github.com/JPLuker/Ping-Watchdog/releases).
 
-These values can be changed in the UI before monitoring starts.
+| Platform | Package | Installation |
+| --- | --- | --- |
+| Windows x64 | `PingWatchdog-win-Setup.exe` | Run the installer. |
+| Windows x64, portable | `PingWatchdog-win-Portable.zip` | Extract the ZIP and run `PingWatchdog.exe`. |
+| Linux x64, beta | `PingWatchdog.AppImage` | Download from a release tagged `-linux`, make it executable, and run it. |
 
-## Notifications
+The packages include the .NET runtime; a separate .NET installation is not required to run them. Windows builds are unsigned. Linux requirements and desktop integration details are documented in [README-LINUX.md](README-LINUX.md).
 
-Ping Watchdog uses native Windows app notifications for outage and recovery alerts. They are non-blocking, so monitoring continues without modal message boxes interrupting your work.
+```bash
+chmod +x PingWatchdog.AppImage
+./PingWatchdog.AppImage
+```
 
-If native app notifications are unavailable, Ping Watchdog falls back to a notification-area balloon alert.
+## Getting started on Windows
 
-The app also has a system-tray icon:
+1. Open Ping Watchdog and create a site with **+ Add Site**.
+2. Enter the site's IP addresses or hostnames, one per line.
+3. Adjust the monitoring interval and outage thresholds if needed.
+4. Click **Start Monitoring**. Select a site or **All Sites** to choose what the table displays.
+5. Right-click a host to set its label, enable **Show CMD view** for command output, or open **Wallboard** for a fullscreen view.
 
-- Double-click it to reopen Ping Watchdog.
-- Right-click it to open the app, stop monitoring, or exit.
-- Minimizing the window hides it to the notification area while monitoring continues.
+Use **Settings** to configure notifications, history filters, display preferences, and updates. On Windows, **Settings → Updates** always provides a manual update check. The developer option on that page can also expose update controls in the main window and Wallboard.
 
-## Usage
+### Host status and default thresholds
 
-1. Enter one IP address or hostname per line.
-2. Click **Start Monitoring**.
-3. Watch the live status table:
-   - **ONLINE** - responding normally
-   - **SUSPECT** - one or more recent failures, but not enough to declare an outage
-   - **OFFLINE** - failure threshold reached
-4. Ping Watchdog sends a Windows notification when a host is declared offline and another when it recovers.
+| Status | Meaning |
+| --- | --- |
+| **ONLINE** | The host is replying normally. |
+| **SUSPECT** | Recent failures have not yet reached the outage threshold. |
+| **OFFLINE** | The consecutive failure threshold has been reached. |
+| **UNKNOWN** | The host has not yet established a monitoring state. |
 
-## Windows EXE
+Defaults are a **2-second interval**, **1,000 ms timeout**, **3 consecutive failures** to declare an outage, and **2 consecutive successes** to declare recovery. Notifications are sent when an outage is declared and when the host recovers, rather than for every failed ping.
 
-GitHub Actions builds a self-contained 64-bit Windows executable.
+ICMP filtering can make a reachable device appear offline. Ping Watchdog reports ping availability, not the health of every service on a host.
 
-Open the repository **Actions** tab, run **Build Windows EXE**, then download the **PingWatchdog-win-x64** artifact.
+### Windows keyboard shortcuts
 
-The executable bundles the .NET runtime and Windows App SDK dependencies, so the target Windows PC does not need a separate .NET installation.
+| Shortcut | Action |
+| --- | --- |
+| `F11` | Open Wallboard, or return to the main window from Wallboard. |
+| `Esc` in Wallboard | Return to the main window. |
+| `Ctrl+H` | Open outage history. |
+| `Ctrl+,` | Open Settings. |
+| `O` in Wallboard | Open or close Operations. |
+| `P` in Wallboard | Start or stop monitoring. |
+| `C` in Wallboard | Show or hide the command trace. |
+| `M` in Wallboard | Move to the next monitor. |
+| `H` / `S` in Wallboard | Cycle the history range / toggle suspect-event visibility. |
 
+## Configuration and data
 
-Download the latest standalone EXE from [Releases](https://github.com/JPLuker/Ping-Watchdog/releases/latest). IPs can also be separated by commas, spaces, or semicolons. The executable is unsigned. ICMP filtering can make an otherwise working device appear offline. Closing the application stops monitoring; minimizing keeps it running.
+Settings, sites, host labels, and history persist locally between launches. Export configuration from the app menu to move a setup between computers. Windows and Linux use compatible `.pingwatch.json` configuration formats.
 
+| Platform | Working configuration | Event history |
+| --- | --- | --- |
+| Windows | `%APPDATA%\PingWatchdog\autosave.pingwatch.json` | `%APPDATA%\PingWatchdog\event-history.json` |
+| Linux | `~/.config/PingWatchdog/autosave.pingwatch.json` | `~/.local/state/PingWatchdog/event-history.json` |
 
-## Interface
+Linux respects `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. Fresh installations use the bundled [default.pingwatch.json](default.pingwatch.json) as their starter configuration.
 
-Version 1.1 adds a dark interface and a Ping Watchdog application icon.
+## Development
 
-Enable **Show CMD view** to open a live console-style pane directly below the host table. Every ping attempt is displayed with the target first, for example:
+The Windows application uses C# and Windows Forms. The Linux application uses C# and Avalonia. Both target .NET 8 and use Velopack for release packaging and updates.
 
-`192.168.1.50: [14:32:08] ping 192.168.1.50 -n 1 -w 1000 -> Reply from 192.168.1.50: time=2ms TTL=128`
+Build the Windows application on Windows with the **.NET 8 SDK**:
 
-Failed attempts are highlighted in red. The pane keeps a rolling history and can be cleared without stopping monitoring.
+```powershell
+dotnet build PingWatchdog.csproj -c Release
+dotnet run --project PingWatchdog.csproj -c Release
+```
 
+Build and run the Linux application with the **.NET 8 SDK**:
 
-## Sites / Groups
+```bash
+dotnet build linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release
+dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release
+```
 
-Version 1.2 reorganizes Ping Watchdog for multi-site use.
+Run the platform's built-in checks:
 
-- Create named sites or groups from the left navigation panel.
-- Each site stores its own IP addresses and hostnames.
-- Site definitions persist between launches in the current Windows user's AppData folder.
-- Monitoring starts across every saved site at once.
-- Select **All Sites** for the combined fleet view or select one site to filter the host table.
-- The live CMD view follows the same site filter.
-- Outage and recovery notifications include the site name.
+```powershell
+# Windows
+dotnet run --project PingWatchdog.csproj -c Release -- --self-test
+dotnet run --project PingWatchdog.csproj -c Release -- --ui-smoke-test
+```
 
-The command trace still keeps the host first on every line:
+```bash
+# Linux
+dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
+```
 
-\`192.168.1.50: [Main Office] [14:32:08] ping 192.168.1.50 -n 1 -w 1000 -> Reply from 192.168.1.50: time=2ms TTL=128\`
+GitHub Actions builds and publishes Windows installer/portable packages and Linux AppImages. Windows release checks include startup and UI tests; UI screenshots are available in the workflow's `PingWatchdog-UI-*` artifact.
 
-Failed ping attempts are displayed in red.
+## Issues
 
+Report bugs through [GitHub Issues](https://github.com/JPLuker/Ping-Watchdog/issues). Include your app version, operating system, steps to reproduce the problem, and a screenshot when relevant.
 
-## Host labels and reusable configs
-
-Version 1.3 adds reusable scan definitions and host nicknames.
-
-- Right-click any host in the live table and choose **Set label / nickname**.
-- Labels persist with the site and are shown in the table, CMD trace, and outage/recovery notifications.
-- **Save Config** exports sites, hosts, labels, ping interval, timeout, failure threshold, recovery threshold, selected site, and CMD-view preference.
-- **Load Config** restores the complete scan definition so monitoring can be resumed immediately.
-- Config files use readable JSON with the `.pingwatch.json` extension.
-
-
-## Version 1.4 usability changes
-
-- **Add Site** and **Rename Site** now use focused popup dialogs; the permanent site-name textbox is gone.
-- Host-list changes auto-save when focus leaves the editor, when switching sites, when monitoring starts, and when the app closes.
-- Ping Watchdog now maintains a full automatic working-state config in the current user's AppData folder.
-- Fresh installs seed themselves from the bundled `default.pingwatch.json` file.
-- Releases are packaged as `PingWatchdog-win-x64.zip` with the EXE, starter config, and a quick-start text file.
-- Double-clicking a site is a shortcut to rename it.
-
-
-## Version 1.5 live site management
-
-Sites and host lists can be changed while monitoring is active.
-
-- Adding a host starts a new ping worker without interrupting unchanged hosts.
-- Removing a host cancels only that host's worker.
-- Renaming a site restarts only the hosts whose site identity changed.
-- Deleting a site stops only that site's workers.
-- Adding, renaming, deleting, and editing host lists stay available while the scan is running.
-- Existing hosts keep their current monitoring state when unrelated sites or hosts change.
-
-Timing and outage-threshold controls remain locked during an active scan so one scan uses consistent monitoring rules.
-
-
-## Version 1.6 automatic GitHub updates
-
-Ping Watchdog now uses Velopack for distribution and self-updates.
-
-- The app checks the public GitHub Releases feed automatically on startup and every six hours.
-- If Watchdog is idle, an available update is downloaded and applied automatically with an app restart.
-- If monitoring is active, the update downloads in the background and is applied the next time Watchdog restarts so an active monitoring session is not interrupted.
-- **Check Updates** in the header can force an immediate check.
-- GitHub Actions publishes both a normal Windows installer and a self-updating portable ZIP.
-- Velopack delta packages are generated when a prior compatible release is available, reducing future update download size.
-- Users of pre-1.6 standalone ZIP builds need to move to a 1.6 Velopack installer or portable package once. After that, manual release downloads are no longer required.
-
-The update source is the official `JPLuker/Ping-Watchdog` GitHub Releases feed.
-
-
-## Version 1.7 product UX pass
-
-Version 1.7 rebuilds the primary interface around the intended day-to-day monitoring workflow.
-
-- New product-style header and navigation rail.
-- Dashboard cards for total, online, suspect, and offline hosts.
-- Cleaner monitoring controls with stronger visual hierarchy.
-- Refined host editor and live-apply messaging.
-- Owner-drawn site navigation for a more consistent Windows dark UI.
-- More restrained status presentation in the host grid.
-- Explicit copyright/ownership presentation in the application footer and executable metadata.
-
-## Copyright and license
+## License
 
 Copyright © 2026 Joseph Luker. All rights reserved.
 
-The repository is publicly viewable, but Ping Watchdog is **not licensed as open-source software**. See [LICENSE](LICENSE) for the permissions and restrictions that apply.
-
-
-## Version 1.8 Wallboard / NOC mode
-
-Ping Watchdog now includes a purpose-built fullscreen operations display for a dedicated or secondary monitor.
-
-- Open **Wallboard** from the main header, the tray menu, or press **F11**.
-- If a second monitor is available, Wallboard opens there automatically.
-- Press **M** to move the Wallboard to the next monitor.
-- Press **Esc** or **F11** from Wallboard to return to the normal interface.
-- The topology is based on real Ping Watchdog sites and host state. It intentionally does not fake geographic locations for private IP addresses.
-- Site clusters aggregate actual Online, Suspect, Offline, and Unknown states.
-- Active outages and recent state transitions are shown beside the live topology.
-- DOWN, recovery, and suspect transitions are persisted under the current Windows user's Ping Watchdog AppData folder and survive restarts and updates.
-- Wallboard stays useful even before monitoring begins by showing configured sites and hosts as unknown/idle.
-
-
-### Wallboard live CLI trace
-
-Wallboard now includes the same live ping-command trace used by the main interface.
-
-- The CLI panel is **visible by default** in Wallboard.
-- It appears as a full-width terminal strip below the topology and outage panels.
-- Successful ping results use the existing green trace treatment; failures use red.
-- The newest output stays at the bottom like a terminal.
-- The Wallboard snapshot carries only a bounded recent slice of command history.
-- Press **C** at any time to hide or restore the CLI panel without leaving fullscreen mode.
-
-
-## Update restart and Wallboard polish
-
-- After an update finishes downloading, the update button changes to **Restart to Update** instead of forcing an immediate restart.
-- The same restart action is available from the tray menu.
-- If monitoring is active, Watchdog clearly warns that the session will stop, saves the working configuration, stops monitoring cleanly, applies the already-downloaded update, and relaunches.
-- Wallboard clock/date/status spacing was corrected so the date no longer overlaps the monitoring badge.
-- Site names are now constrained to their topology nodes, with intelligent two-line splitting and smaller fallback fonts for long names.
-
-
-## Wallboard exit behavior
-
-Pressing **Esc** or **F11** inside Wallboard now closes only the Wallboard and restores/focuses the main Ping Watchdog window. If the base window had been minimized to the tray, it is shown again automatically. A true application exit still closes both windows normally.
-
-
-## Wallboard majority-health coloring
-
-Wallboard site nodes now distinguish a partial outage from a site-wide problem:
-
-- **Green:** no declared offline hosts and the site is healthy.
-- **Yellow:** one or more hosts are down, but a strict majority of configured hosts are still replying.
-- **Red:** half or fewer of the site's configured hosts are replying.
-- Individual host dots keep their own real state colors, so a down host remains red even when its site is yellow.
-- Active outage entries remain visible regardless of the aggregate site color.
-
-
-## Version 1.9 modern desktop UI
-
-The primary Ping Watchdog window was reworked again after real-device testing.
-
-- The top app bar now keeps only four always-available actions: monitoring state, **Wallboard**, **Updates**, and a **•••** overflow menu.
-- Import/export configuration moved into the overflow menu so updater controls can never be pushed off-screen.
-- The update button always communicates its current state: Updates, Checking, Up to date, Downloading, Unmanaged, or Restart to Update.
-- The app version is shown next to the product name and in the footer.
-- Dashboard cards, host editor, and monitoring profile use tighter spacing so the host table receives more of the available window.
-- The host table hides the redundant Site column when viewing one specific site.
-- CLI trace remains optional and uses a larger share of the split only when enabled.
-- Site navigation remains explicit and DPI-safe.
-- The wording and hierarchy were normalized toward current Windows desktop conventions rather than all-caps utility-style controls.
-
-
-## Version 1.10 persistent outage history
-
-Ping Watchdog now keeps a durable operational history instead of treating Wallboard events as session-only data.
-
-- DOWN, RECOVERED, and SUSPECT transitions are written to `%APPDATA%\PingWatchdog\event-history.json`.
-- Starting a new monitoring session no longer clears prior outage history.
-- Open **••• → Outage history...** or press **Ctrl+H** for the full history window.
-- The history window shows timestamp, event type, site, host, and event details in a sortable desktop table.
-- Time filters include **Last 24 hours**, **Last 7 days**, **Last 30 days**, and **All time**.
-- **Hide suspect events** removes noisy SUSPECT transitions from the view without deleting them.
-- Time-range and suspect visibility preferences are saved with Ping Watchdog's automatic working configuration.
-- The history window also supports a site filter and CSV export.
-- Wallboard's old **Recent Events** area is now **Outage History** and uses the same saved time-range / suspect filters.
-- On Wallboard, press **H** to cycle the saved history range and **S** to show/hide suspect events.
-- Existing events from versions before 1.10 cannot be reconstructed after they were discarded; persistent history begins once 1.10 is running.
-
-
-## Version 1.11 Settings and permanent updater access
-
-Ping Watchdog now has a dedicated Settings window rather than forcing every preference into the monitoring workspace.
-
-- A permanent **Updates** control remains in the top app bar and is never hidden by responsive layout.
-- **Settings** is also permanently available in the app bar. Open it with **Ctrl+,** or from the **•••** menu.
-- Settings includes **General**, **Monitoring**, **History**, and **Updates** sections.
-- General settings include minimize-to-tray behavior, Windows outage/recovery notifications, main-window CLI visibility, and whether Wallboard opens with its CLI panel visible.
-- Monitoring settings mirror interval, timeout, failure threshold, and recovery threshold. They are locked in Settings while a monitoring session is active.
-- History settings include the saved event-history range and suspect-event visibility.
-- Updates includes current version, live updater status, a permanent **Check for Updates** / **Restart to Update** button, and an option to enable or disable automatic startup/6-hour checks.
-- Disabling automatic checks never disables the manual Check for Updates button.
-- All Settings preferences persist in Ping Watchdog's normal autosave config.
-- On very narrow windows the redundant MONITORING/IDLE badge may hide first; Updates, Wallboard, Settings, and the overflow menu remain visible.
-
-
-## Version 1.12 full-control Wallboard
-
-Wallboard is now a second operational control surface rather than a read-only display.
-
-- A permanent Wallboard toolbar provides Start/Stop Monitoring, Operations, CLI, History, Settings, Updates, monitor switching, and return-to-main controls.
-- **Operations** opens an in-Wallboard drawer without leaving fullscreen.
-- The drawer can select **All Sites** or a specific site, add/rename/delete sites, edit that site's host list, and apply changes live.
-- A live host table exposes site, host, label, current state, and latency while the topology continues updating.
-- Host labels/nicknames can be edited or cleared directly from Wallboard.
-- Ping interval, timeout, DOWN threshold, and recovery threshold can be changed from Wallboard when monitoring is stopped.
-- Configuration import/export and CLI-log clearing are available from the drawer.
-- Outage History, full Settings, and GitHub update checks can be opened directly over Wallboard.
-- All actions operate on the same MainForm state, worker set, autosave configuration, event history, and updater. There is no separate Wallboard configuration to drift out of sync.
-- Keyboard controls remain available: **O** operations, **P** start/stop, **C** CLI, **M** move monitor, **H** history range, **S** suspects, **Ctrl+H** full history, **Ctrl+,** settings, and **Esc/F11** return to the main window.
-
-
-## Version 1.13 quiet background updater
-
-Update management is no longer a primary-navigation feature for normal users.
-
-- Automatic update checks still run on launch and every six hours by default.
-- Checks and downloads happen in the background while Ping Watchdog remains usable.
-- When a release finishes downloading, Ping Watchdog presents a **Restart now?** prompt.
-- Choosing **No** leaves the update staged; it can still be applied later from Settings or the tray menu.
-- The full Updates page remains under Settings with installed version, status, automatic-update preference, and manual Check for Updates / Restart to Update action.
-- The main-window Updates button is hidden by default to reduce UI clutter.
-- Wallboard's dedicated update toolbar button is also hidden by default.
-- Settings → Updates includes **Developer: show update control in the main UI**. Enabling it restores the visible updater controls on both the main app bar and Wallboard toolbar for development/testing.
-- The developer preference is persisted in the normal autosave configuration and defaults to off for new users.
-
-
-## Version 1.14 organization tree and host topology nodes
-
-Site organization is now hierarchical rather than a flat list.
-
-- Every site can live at the root or inside a folder path.
-- Folders can contain sites and nested subfolders.
-- Empty folders persist in saved configuration.
-- The main Sites rail shows each site's folder path.
-- Open **Organize** for a filesystem-style tree with New Site, New Folder, Rename, Move, Delete, and Open Site actions.
-- Moving a folder moves all descendant folders and sites with it.
-- Deleting a folder is intentionally non-destructive: its contents move to the parent folder instead of deleting sites.
-- Existing configs remain compatible; older sites simply start at the root.
-- Manual config export/import preserves folders and site placement.
-- Wallboard Operations includes a **Folders / Organization** action that opens the same organization tree over fullscreen Wallboard.
-
-Wallboard topology now exposes the devices behind each site:
-
-- Site hubs remain the larger topology nodes.
-- Individual IP/hostname nodes orbit their site and connect back to it.
-- Host nodes use their actual live state color: green, yellow, red, or neutral/unknown.
-- If a host has a nickname/label, the node shows the label with the IP/hostname underneath.
-- Unlabeled hosts show the IP/hostname directly.
-- Larger sites use two host rings; the renderer shows up to 12 labeled endpoints around a site and summarizes additional endpoints as +N more to keep the NOC view readable.
+Ping Watchdog is proprietary software with publicly viewable source code. The [LICENSE](LICENSE) permits personal or internal business use of official compiled releases. Other uses, including modification and redistribution, require written permission from Joseph Luker.
