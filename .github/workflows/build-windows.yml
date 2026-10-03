@@ -68,6 +68,28 @@ jobs:
 
           Stop-Process -Id $process.Id -Force
 
+      - name: Exercise published UI, host selection, Settings, and Wallboard
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "publish\PingWatchdog.exe").Path
+          $process = Start-Process -FilePath $exe -ArgumentList "--ui-smoke-test" -PassThru
+          if (-not $process.WaitForExit(45000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "UI smoke test did not finish; the application may be blocked by an error dialog."
+          }
+          if ($process.ExitCode -ne 0 -or -not (Test-Path "ui-smoke-test\passed.txt")) {
+            if (Test-Path "ui-smoke-test\failed.txt") { Get-Content "ui-smoke-test\failed.txt" }
+            throw "Published Ping Watchdog failed UI smoke test (exit $($process.ExitCode))."
+          }
+
+      - name: Upload UI smoke-test screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingWatchdog-UI-${{ env.WATCHDOG_VERSION }}
+          path: ui-smoke-test/*
+          if-no-files-found: warn
+
       - name: Write release notes
         shell: pwsh
         run: |
@@ -76,9 +98,11 @@ jobs:
 
           Self-updating Windows release.
 
-          - Windows startup hotfix: restores the last stable UI startup path after the v1.14.46 launch regression.
-          - Adds a published-EXE startup smoke test to the release pipeline so an immediately crashing Windows build cannot be published as green again.
-          - Host-table selection and scroll position survive live 500 ms data refreshes, so labeling a host does not snap selection back to the first row.
+          - Restores the visual refresh using normal UI construction, with no idle startup hooks or reflection-based layout changes.
+          - Uses the supplied dog SVG exactly for the header, application/tray icon, installer, and Linux package branding.
+          - Refined cyan/teal accents and cleaner header/sidebar chrome, with version information retained in the footer.
+          - Host selection, selected column, and scroll positions survive live data refreshes.
+          - Published-EXE UI tests exercise responsive layouts, repeated host refreshes, Settings, and Wallboard with screenshots before release.
           - Checks GitHub Releases automatically on startup and every six hours.
           - Downloads updates in-app.
           - Downloads updates without interrupting monitoring, then exposes a one-click Restart to Update action.
@@ -108,7 +132,7 @@ jobs:
       - name: Build installer, portable package, and update feed
         shell: pwsh
         run: |
-          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\PingWatchdog.ico --releaseNotes release-notes.md --channel win --outputDir Releases
+          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\WatchdogIcon.ico --releaseNotes release-notes.md --channel win --outputDir Releases
 
       - name: Upload release bundle artifact
         uses: actions/upload-artifact@v4

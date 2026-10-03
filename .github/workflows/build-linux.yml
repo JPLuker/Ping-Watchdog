@@ -97,7 +97,7 @@ jobs:
 
       - name: Convert application icon for AppImage
         shell: bash
-        run: convert 'Assets/PingWatchdog.ico[0]' -resize 256x256 PingWatchdog.png
+        run: convert Assets/WatchdogLogo.png -resize 256x256 PingWatchdog.png
 
       - name: Write Linux release notes
         shell: bash

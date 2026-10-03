@@ -9,6 +9,7 @@ internal sealed class WallboardForm : Form
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
     private readonly Action _cycleHistoryWindow;
     private readonly Action _toggleSuspectHistory;
+    private readonly Icon _appIcon = BrandAssets.LoadIcon();
 
     private readonly Panel _drawer = new()
     {
@@ -107,6 +108,7 @@ internal sealed class WallboardForm : Form
         _showCli = showCliByDefault;
 
         Text = "Ping Watchdog Wallboard";
+        Icon = _appIcon;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.FromArgb(5, 9, 14);
@@ -153,6 +155,7 @@ internal sealed class WallboardForm : Form
             _timer.Stop();
             _timer.Dispose();
             _canvas.Dispose();
+            _appIcon.Dispose();
         };
     }
 

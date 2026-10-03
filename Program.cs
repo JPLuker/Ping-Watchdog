@@ -16,13 +16,16 @@ internal static class Program
     {
         VelopackApp.Build().Run();
 
-        if (args.Contains("--self-test"))
+        if (args.Contains("--self-test") || args.Contains("--ui-smoke-test"))
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             ApplicationConfiguration.Initialize();
             try
             {
-                MainForm.RunSelfTests();
-                Environment.ExitCode = 0;
+                if (args.Contains("--ui-smoke-test"))
+                    MainForm.RunUiSmokeTest();
+                else
+                    MainForm.RunSelfTests();
             }
             catch (Exception ex)
             {
@@ -624,6 +627,7 @@ public sealed class MainForm : Form
     private readonly ToolStripMenuItem _trayStopItem;
     private readonly ToolStripMenuItem _trayUpdateItem;
     private readonly Icon _appIcon;
+    private readonly Bitmap _brandBitmap;
     private readonly Font _siteItemFont = new("Segoe UI Semibold", 9.5f);
     private readonly Font _statusCellFont = new("Segoe UI Semibold", 8.5f, FontStyle.Bold);
 
@@ -699,8 +703,8 @@ public sealed class MainForm : Form
             Math.Min(900, initialWidth),
             Math.Min(560, initialHeight));
 
-        _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)
-            ?? (Icon)SystemIcons.Application.Clone();
+        _appIcon = BrandAssets.LoadIcon();
+        _brandBitmap = BrandAssets.LoadLogo();
         Icon = _appIcon;
 
         BuildGrid();
@@ -867,6 +871,7 @@ public sealed class MainForm : Form
             _siteItemFont.Dispose();
             _statusCellFont.Dispose();
             _appIcon.Dispose();
+            _brandBitmap.Dispose();
         };
 
         LoadSites();
@@ -1122,6 +1127,109 @@ public sealed class MainForm : Form
         form._siteItemFont.Dispose();
         form._statusCellFont.Dispose();
         form._appIcon.Dispose();
+        form._brandBitmap.Dispose();
+    }
+
+    // Runs the published executable's real WinForms message loop with isolated settings.
+    internal static void RunUiSmokeTest()
+    {
+        string output = Path.Combine(Environment.CurrentDirectory, "ui-smoke-test");
+        Directory.CreateDirectory(output);
+        using var form = new MainForm(false, suppressNotifications: true, persistSites: false);
+        form._autoCheckUpdates = false;
+        form._minimizeToTray = false;
+        Environment.ExitCode = 1;
+
+        void Check(bool condition, string message)
+        {
+            if (!condition)
+                throw new InvalidOperationException(message);
+        }
+
+        void Capture(Form window, string name)
+        {
+            using var bitmap = new Bitmap(window.Width, window.Height);
+            window.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            bitmap.Save(Path.Combine(output, name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+        }
+
+        form.Shown += async (_, _) =>
+        {
+            try
+            {
+                await Task.Delay(200);
+                form.WindowState = FormWindowState.Normal;
+                foreach (int width in new[] { 900, 1060, 1320 })
+                {
+                    form.ClientSize = new Size(width, 740);
+                    form.ApplyResponsiveLayout();
+                    await Task.Delay(100);
+                    Check(form.Visible && form.IsHandleCreated, "Main window did not appear.");
+                    Check(form._versionLabel.Parent is null && form._monitorStateLabel.Parent is null,
+                        "Duplicate header chrome returned.");
+                    Check(form.Controls.Find("WatchdogBrandLogo", true).Length == 1,
+                        "The supplied logo is missing or duplicated.");
+                    var title = form._brandTitleLabel!;
+                    var actions = form._headerActionsPanel!;
+                    Check(title.Parent!.Width >= title.Right, "Brand title is clipped.");
+                    Check(title.PointToScreen(new Point(title.Width, 0)).X <= actions.PointToScreen(Point.Empty).X,
+                        "Brand title overlaps header actions.");
+                    Capture(form, "main-" + width);
+                }
+
+                // Keep a non-first host, its selected column, and both scroll positions through repeated refreshes.
+                for (int i = 1; i <= 40; i++)
+                {
+                    var host = new HostMonitor("Test Site", "192.0.2." + i);
+                    form._hosts[BuildHostKey(host.Site, host.Address)] = host;
+                }
+                form.RefreshGrid();
+                var row = form._grid.Rows[25];
+                form._grid.CurrentCell = row.Cells["LabelColumn"];
+                row.Selected = true;
+                form._grid.FirstDisplayedScrollingRowIndex = 20;
+                var selected = form.GetSelectedHostIdentity();
+                for (int i = 0; i < 6; i++)
+                {
+                    await Task.Delay(100);
+                    form.RefreshGrid();
+                    Check(form.GetSelectedHostIdentity() == selected, "Refresh lost the selected host.");
+                    Check(form._grid.CurrentCell?.OwningColumn.Name == "LabelColumn", "Refresh lost the selected column.");
+                    Check(form._grid.FirstDisplayedScrollingRowIndex == 20, "Refresh lost the scroll position.");
+                }
+                Capture(form, "hosts-selected");
+                form._hosts.Clear();
+                form.RefreshGrid();
+                Check(form.GetSelectedHostIdentity() is null, "Removed host left a stale selection.");
+
+                form.OpenSettings();
+                await Task.Delay(100);
+                Check(form._settingsForm?.Visible == true, "Settings did not open.");
+                Capture(form._settingsForm!, "settings");
+                form._settingsForm!.Close();
+
+                form.OpenWallboard();
+                await Task.Delay(200);
+                Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
+                Capture(form._wallboardForm!, "wallboard");
+                form._wallboardForm!.Close();
+                await Task.Delay(100);
+                Check(form.Visible, "Closing Wallboard did not restore the main window.");
+                File.WriteAllText(Path.Combine(output, "passed.txt"), "UI smoke test passed.");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(Path.Combine(output, "failed.txt"), ex.ToString());
+                Console.Error.WriteLine(ex);
+                Environment.ExitCode = 1;
+            }
+            finally
+            {
+                form.Close();
+            }
+        };
+        Application.Run(form);
     }
 
     public void RestoreFromTray()
@@ -1309,8 +1417,8 @@ public sealed class MainForm : Form
             Margin = new Padding(0),
             Tag = "header"
         };
-        brand.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        brand.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         brand.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         brand.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -1323,8 +1431,6 @@ public sealed class MainForm : Form
             Tag = "title"
         };
 
-        _versionLabel.Margin = new Padding(10, 8, 0, 0);
-
         _brandSubtitleLabel = new Label
         {
             Text = "Availability monitor",
@@ -1333,10 +1439,23 @@ public sealed class MainForm : Form
             Tag = "muted"
         };
 
-        brand.Controls.Add(_brandTitleLabel, 0, 0);
-        brand.Controls.Add(_versionLabel, 1, 0);
-        brand.Controls.Add(_brandSubtitleLabel, 0, 1);
-        brand.SetColumnSpan(_brandSubtitleLabel, 2);
+        var logo = new PictureBox
+        {
+            Name = "WatchdogBrandLogo",
+            Image = _brandBitmap,
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Margin = new Padding(0, 0, 8, 0),
+            BackColor = Color.Transparent,
+            TabStop = false,
+            AccessibleName = "Ping Watchdog logo"
+        };
+        brand.Controls.Add(logo, 0, 0);
+        brand.SetRowSpan(logo, 2);
+        _brandTitleLabel.Margin = Padding.Empty;
+        _brandSubtitleLabel.Margin = Padding.Empty;
+        brand.Controls.Add(_brandTitleLabel, 1, 0);
+        brand.Controls.Add(_brandSubtitleLabel, 1, 1);
 
         var headerActions = new FlowLayoutPanel
         {
@@ -1355,7 +1474,6 @@ public sealed class MainForm : Form
         _settingsButton.Margin = new Padding(0, 0, 7, 0);
         _moreButton.Margin = new Padding(0);
 
-        headerActions.Controls.Add(_monitorStateLabel);
         headerActions.Controls.Add(_checkUpdateButton);
         headerActions.Controls.Add(_wallboardButton);
         headerActions.Controls.Add(_settingsButton);
@@ -1383,7 +1501,7 @@ public sealed class MainForm : Form
         };
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
@@ -1398,16 +1516,6 @@ public sealed class MainForm : Form
             Tag = "primaryText"
         }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
-
-        sitePanel.Controls.Add(new Label
-        {
-            Text = "Changes apply live",
-            AutoSize = false,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(4, 0, 0, 0),
-            Tag = "muted"
-        }, 0, 2);
 
         _addSiteButton.Text = "+ Add Site";
         _organizeButton.Text = "Organize";
@@ -1714,7 +1822,6 @@ public sealed class MainForm : Form
 
             _headerActionsPanel.WrapContents = false;
             _headerActionsPanel.MaximumSize = Size.Empty;
-            _monitorStateLabel.Visible = !veryNarrow;
             _checkUpdateButton.Visible = _showUpdateControlOnHome;
             _wallboardButton.Visible = true;
             _settingsButton.Visible = true;
@@ -1741,9 +1848,6 @@ public sealed class MainForm : Form
 
             if (_brandSubtitleLabel is not null)
                 _brandSubtitleLabel.Visible = !veryNarrow;
-
-            if (_versionLabel is not null)
-                _versionLabel.Visible = !veryNarrow;
 
             _siteList.ItemHeight = Math.Max(
                 34,
@@ -1780,7 +1884,7 @@ public sealed class MainForm : Form
         var bounds = new Rectangle(e.Bounds.X + 2, e.Bounds.Y + 2, e.Bounds.Width - 4, e.Bounds.Height - 4);
 
         using var background = new SolidBrush(selected
-            ? Color.FromArgb(36, 86, 132)
+            ? Color.FromArgb(27, 76, 94)
             : Color.FromArgb(18, 24, 32));
         using var textBrush = new SolidBrush(selected
             ? Color.White
@@ -4325,7 +4429,7 @@ public sealed class MainForm : Form
         var border = Color.FromArgb(39, 49, 61);
         var text = Color.FromArgb(234, 240, 246);
         var muted = Color.FromArgb(139, 153, 169);
-        var accent = Color.FromArgb(74, 158, 255);
+        var accent = Color.FromArgb(57, 217, 238);
 
         BackColor = window;
         ForeColor = text;
@@ -4456,19 +4560,20 @@ public sealed class MainForm : Form
         _stopButton.FlatAppearance.BorderColor = Color.FromArgb(155, 64, 75);
         _stopButton.ForeColor = Color.White;
 
-        _addSiteButton.BackColor = Color.FromArgb(29, 73, 115);
-        _addSiteButton.FlatAppearance.BorderColor = Color.FromArgb(59, 128, 196);
+        _addSiteButton.BackColor = Color.FromArgb(20, 69, 82);
+        _addSiteButton.FlatAppearance.BorderColor = Color.FromArgb(42, 170, 189);
         _deleteSiteButton.BackColor = Color.FromArgb(57, 28, 34);
         _deleteSiteButton.FlatAppearance.BorderColor = Color.FromArgb(100, 45, 55);
 
-        _wallboardButton.BackColor = Color.FromArgb(26, 77, 91);
-        _wallboardButton.FlatAppearance.BorderColor = Color.FromArgb(54, 139, 159);
+        _wallboardButton.BackColor = Color.FromArgb(20, 69, 82);
+        _wallboardButton.FlatAppearance.BorderColor = Color.FromArgb(42, 170, 189);
 
         _settingsButton.BackColor = Color.FromArgb(25, 34, 45);
         _settingsButton.FlatAppearance.BorderColor = Color.FromArgb(39, 49, 61);
 
         _moreButton.BackColor = Color.FromArgb(25, 34, 45);
         _moreButton.FlatAppearance.BorderColor = Color.FromArgb(39, 49, 61);
+        _moreButton.ForeColor = accent;
 
         _appMenu.BackColor = card;
         _appMenu.ForeColor = text;
@@ -4481,12 +4586,12 @@ public sealed class MainForm : Form
         _grid.GridColor = Color.FromArgb(31, 40, 50);
         _grid.DefaultCellStyle.BackColor = card;
         _grid.DefaultCellStyle.ForeColor = text;
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 73, 108);
+        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(34, 101, 124);
         _grid.DefaultCellStyle.SelectionForeColor = Color.White;
         _grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(16, 23, 31);
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(22, 31, 42);
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(170, 185, 201);
+        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(183, 205, 220);
         _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
         _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(22, 31, 42);
         _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
@@ -4544,6 +4649,10 @@ public sealed class MainForm : Form
 
     private void RefreshGrid()
     {
+        var selection = GetSelectedHostIdentity();
+        string? selectedColumn = _grid.CurrentCell?.OwningColumn.Name;
+        int firstDisplayedRow = _grid.FirstDisplayedScrollingRowIndex;
+        int horizontalOffset = _grid.HorizontalScrollingOffset;
         var rows = _hosts.Values
             .Where(h =>
                 _selectedSiteName is null ||
@@ -4583,6 +4692,29 @@ public sealed class MainForm : Form
 
         if (_grid.Columns["SiteColumn"] is DataGridViewColumn siteColumn)
             siteColumn.Visible = _selectedSiteName is null;
+
+        // Restore after rebinding and setting column visibility, before repainting.
+        _grid.ClearSelection();
+        _grid.CurrentCell = null;
+        if (selection is { } desired)
+        {
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                if (!string.Equals(row.Cells["SiteColumn"].Value?.ToString(), desired.Site, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(row.Cells["HostColumn"].Value?.ToString(), desired.Host, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var column = selectedColumn is not null ? _grid.Columns[selectedColumn] : null;
+                if (column?.Visible != true)
+                    column = _grid.Columns["HostColumn"];
+                _grid.CurrentCell = row.Cells[column!.Index];
+                row.Selected = true;
+                break;
+            }
+        }
+        if (firstDisplayedRow >= 0 && _grid.Rows.Count > 0)
+            _grid.FirstDisplayedScrollingRowIndex = Math.Min(firstDisplayedRow, _grid.Rows.Count - 1);
+        _grid.HorizontalScrollingOffset = horizontalOffset;
 
         foreach (DataGridViewRow row in _grid.Rows)
         {

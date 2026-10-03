@@ -1,0 +1,9 @@
+bin/
+obj/
+.tools/
+publish/
+publish-linux/
+Releases/
+Releases-linux/
+ui-smoke-test/
+.mono/

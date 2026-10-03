@@ -2,6 +2,14 @@
 
 A lightweight Windows GUI for monitoring multiple IP addresses or hostnames and alerting only when failures become meaningful.
 
+## UI and branding
+
+The main shell builds its header, sidebar, and cyan/teal accents during normal form construction. There are no idle-time UI patchers or reflection-based layout changes. Live host refreshes preserve selection by site/address, the selected column, and the scroll positions.
+
+`Assets/WatchdogLogo.svg` is the supplied dog artwork. The embedded PNG and multi-size ICO are direct renders of that SVG, shared by Windows and Linux branding. To regenerate them, install `cairosvg` and `Pillow`, then run `python tools/render_brand.py`.
+
+Windows release CI checks the published executable's normal startup, then runs `--ui-smoke-test` through the actual message loop. It exercises three window widths, repeated host refreshes, host removal, Settings, and opening/closing Wallboard. Screenshots and pass/failure details are saved in the `PingWatchdog-UI-*` Actions artifact. A failed or stalled UI test blocks publishing.
+
 ## Default monitoring behavior
 
 - Ping interval: **2 seconds**

@@ -9,6 +9,18 @@ using Avalonia.Threading;
 
 namespace PingWatchdog.Linux;
 
+internal static class BrandAssets
+{
+    internal static readonly Avalonia.Media.Imaging.Bitmap Logo = LoadLogo();
+
+    private static Avalonia.Media.Imaging.Bitmap LoadLogo()
+    {
+        using var stream = typeof(BrandAssets).Assembly.GetManifestResourceStream("PingWatchdog.Brand.Logo")
+            ?? throw new InvalidOperationException("Embedded Watchdog logo is missing.");
+        return new Avalonia.Media.Imaging.Bitmap(stream);
+    }
+}
+
 internal static class Theme
 {
     public static readonly IBrush Window = Brush("#0A0F16");
@@ -129,6 +141,7 @@ internal sealed class MainWindow : Window
         _updates = updates;
 
         Title = "Ping Watchdog";
+        Icon = new WindowIcon(BrandAssets.Logo);
         Width = 1180;
         Height = 790;
         MinWidth = 960;
@@ -209,11 +222,20 @@ internal sealed class MainWindow : Window
         header.Children.Add(new StackPanel
         {
             Margin = new Thickness(18, 11, 0, 8),
-            Spacing = 1,
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
             Children =
             {
-                Theme.Label("PING WATCHDOG", 21, FontWeight.Bold),
-                Theme.Label("Linux availability monitor", 11, color: Theme.Muted)
+                new Image { Source = BrandAssets.Logo, Width = 40, Height = 50, Stretch = Stretch.Uniform },
+                new StackPanel
+                {
+                    Spacing = 1,
+                    Children =
+                    {
+                        Theme.Label("PING WATCHDOG", 21, FontWeight.Bold),
+                        Theme.Label("Linux availability monitor", 11, color: Theme.Muted)
+                    }
+                }
             }
         });
 
@@ -1306,6 +1328,7 @@ internal sealed class WallboardWindow : Window
         _updates = updates;
         _main = main;
         Title = "Ping Watchdog Wallboard";
+        Icon = new WindowIcon(BrandAssets.Logo);
         WindowState = WindowState.FullScreen;
         SystemDecorations = SystemDecorations.None;
         Background = Theme.Window;
