@@ -63,12 +63,15 @@ jobs:
 
           Self-updating Windows release.
 
+          - Refreshed Watchdog visual identity with a new application/tray icon, integrated header mark, and refined cyan/teal accents.
+          - Removes redundant home-screen version, monitoring badge, and duplicate live-apply text while keeping version/state information in the footer and controls where it is useful.
+          - Host-table selection and scroll position now survive live 500 ms data refreshes, so labeling a host no longer snaps selection back to the first row.
           - Checks GitHub Releases automatically on startup and every six hours.
           - Downloads updates in-app.
           - Downloads updates without interrupting monitoring, then exposes a one-click Restart to Update action.
           - Restart to Update saves the current setup, stops monitoring cleanly if needed, applies the downloaded update, and relaunches.
           - Fullscreen multi-monitor Wallboard / NOC mode with live topology, majority-aware degraded-site coloring, outage feed, real host status, toggleable live CLI trace, corrected responsive labels/header spacing, and Esc/F11 returning to the base window.
-          - Version 1.9 modern desktop shell: stable app bar, always-visible updater state, overflow menu for secondary actions, tighter hierarchy, larger host workspace, and responsive navigation.
+          - Version 1.9 modern desktop shell: stable app bar, overflow menu for secondary actions, tighter hierarchy, larger host workspace, and responsive navigation.
           - Persistent outage history with saved 24h / 7d / 30d / all-time filters, optional suspect suppression, full desktop history viewer, and Wallboard history integration.
           - Full Settings window for app behavior, monitoring defaults, history, Wallboard/CLI preferences, notifications, tray behavior, and permanent manual update checks.
           - Full-control Wallboard operations mode: start/stop monitoring, site selection and management, live host editing, host labels, monitoring defaults, config import/export, CLI clearing, history, settings, updates, and monitor switching from the fullscreen NOC UI.
@@ -92,7 +95,7 @@ jobs:
       - name: Build installer, portable package, and update feed
         shell: pwsh
         run: |
-          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\PingWatchdog.ico --releaseNotes release-notes.md --channel win --outputDir Releases
+          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\WatchdogIcon.ico --releaseNotes release-notes.md --channel win --outputDir Releases
 
       - name: Upload release bundle artifact
         uses: actions/upload-artifact@v4
