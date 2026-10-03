@@ -40,7 +40,7 @@ internal static class Program
         try
         {
             AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
-            AppNotificationManager.Default.Register();
+            AppNotificationManager.Default.Register("Ping Watchdog", new Uri(BrandAssets.NotificationIconPath));
             notificationsRegistered = true;
         }
         catch
@@ -49,6 +49,7 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        WindowsBranding.Refresh();
         Application.Run(new MainForm(notificationsRegistered));
 
         if (notificationsRegistered)
@@ -1180,10 +1181,20 @@ public sealed class MainForm : Form
                         "Brand title overlaps header actions.");
                     var logo = form.Controls.Find("WatchdogBrandLogo", true)[0];
                     Check(logo.Parent!.ClientRectangle.Contains(logo.Bounds), "Brand logo is clipped.");
+                    var subtitle = form._brandSubtitleLabel!;
+                    int textTop = title.PointToScreen(Point.Empty).Y;
+                    int textBottom = subtitle.Visible
+                        ? subtitle.PointToScreen(new Point(0, subtitle.Height)).Y
+                        : title.PointToScreen(new Point(0, title.Height)).Y;
+                    int logoCenter = logo.PointToScreen(new Point(0, logo.Height / 2)).Y;
+                    Check(Math.Abs(logoCenter - (textTop + textBottom) / 2) <= 2,
+                        "Logo is not vertically centered beside the brand text.");
                     foreach (Control setting in form._settingsFlowPanel!.Controls)
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
                 }
+
+                WindowsBranding.RunShortcutSmokeTest(output);
 
                 // Keep a non-first host, its selected column, and both scroll positions through repeated refreshes.
                 for (int i = 1; i <= 40; i++)
@@ -1419,29 +1430,12 @@ public sealed class MainForm : Form
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        var brand = new TableLayoutPanel
+        var brand = new Panel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
             Margin = new Padding(0),
             Tag = "header"
         };
-        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        brand.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var brandText = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = Padding.Empty,
-            Tag = "header"
-        };
-        brandText.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        brandText.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        brandText.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         _brandTitleLabel = new Label
         {
@@ -1464,19 +1458,29 @@ public sealed class MainForm : Form
         {
             Name = "WatchdogBrandLogo",
             Image = _brandBitmap,
-            Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.Zoom,
-            Margin = new Padding(0, 0, 8, 0),
-            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            BackColor = Color.FromArgb(12, 18, 26),
             TabStop = false,
             AccessibleName = "Ping Watchdog logo"
         };
-        brand.Controls.Add(logo, 0, 0);
         _brandTitleLabel.Margin = Padding.Empty;
         _brandSubtitleLabel.Margin = Padding.Empty;
-        brandText.Controls.Add(_brandTitleLabel, 0, 0);
-        brandText.Controls.Add(_brandSubtitleLabel, 0, 1);
-        brand.Controls.Add(brandText, 1, 0);
+        brand.Controls.Add(logo);
+        brand.Controls.Add(_brandTitleLabel);
+        brand.Controls.Add(_brandSubtitleLabel);
+        // Place all three controls as one group; nested table rows previously displaced the logo.
+        brand.Layout += (_, _) =>
+        {
+            int logoSize = (int)Math.Round(42 * DeviceDpi / 96d);
+            int gap = (int)Math.Round(8 * DeviceDpi / 96d);
+            int textHeight = _brandTitleLabel.Height +
+                (_brandSubtitleLabel.Visible ? _brandSubtitleLabel.Height : 0);
+            int top = Math.Max(0, (brand.ClientSize.Height - textHeight) / 2);
+            _brandTitleLabel.Location = new Point(logoSize + gap, top);
+            _brandSubtitleLabel.Location = new Point(logoSize + gap, top + _brandTitleLabel.Height);
+            logo.Bounds = new Rectangle(0, top + (textHeight - logoSize) / 2, logoSize, logoSize);
+        };
 
         var headerActions = new FlowLayoutPanel
         {

@@ -103,6 +103,9 @@ jobs:
           - Refined cyan/teal accents and cleaner header/sidebar chrome, with version information retained in the footer.
           - Host selection, selected column, and scroll positions survive live data refreshes.
           - Published-EXE UI tests exercise responsive layouts, repeated host refreshes, Settings, and Wallboard with screenshots before release.
+          - Centers the supplied dog beside the title/subtitle and tests the header group's vertical alignment.
+          - Refreshes existing Watchdog desktop, Start menu, and pinned taskbar shortcut icons using a distinct dog icon path while preserving their launch settings.
+          - Registers notification artwork explicitly and restores the updater's app identity for consistent taskbar grouping.
           - Checks GitHub Releases automatically on startup and every six hours.
           - Downloads updates in-app.
           - Downloads updates without interrupting monitoring, then exposes a one-click Restart to Update action.
