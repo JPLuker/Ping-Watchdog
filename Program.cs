@@ -885,6 +885,7 @@ public sealed class MainForm : Form
         LoadHostEditor();
         ApplyDarkTheme();
         UpdateActionState();
+        RefreshGrid();
     }
 
     [DllImport("dwmapi.dll")]
@@ -1138,6 +1139,8 @@ public sealed class MainForm : Form
         using var form = new MainForm(false, suppressNotifications: true, persistSites: false);
         form._autoCheckUpdates = false;
         form._minimizeToTray = false;
+        // The hosted runner's 1024px desktop otherwise clamps the requested test widths.
+        form.MaximumSize = new Size(1920, 1080);
         Environment.ExitCode = 1;
 
         void Check(bool condition, string message)
@@ -1165,6 +1168,7 @@ public sealed class MainForm : Form
                     form.ApplyResponsiveLayout();
                     await Task.Delay(100);
                     Check(form.Visible && form.IsHandleCreated, "Main window did not appear.");
+                    Check(form.ClientSize.Width == width, "Runner clamped the requested window width.");
                     Check(form._versionLabel.Parent is null && form._monitorStateLabel.Parent is null,
                         "Duplicate header chrome returned.");
                     Check(form.Controls.Find("WatchdogBrandLogo", true).Length == 1,
@@ -1174,6 +1178,10 @@ public sealed class MainForm : Form
                     Check(title.Parent!.Width >= title.Right, "Brand title is clipped.");
                     Check(title.PointToScreen(new Point(title.Width, 0)).X <= actions.PointToScreen(Point.Empty).X,
                         "Brand title overlaps header actions.");
+                    var logo = form.Controls.Find("WatchdogBrandLogo", true)[0];
+                    Check(logo.Parent!.ClientRectangle.Contains(logo.Bounds), "Brand logo is clipped.");
+                    foreach (Control setting in form._settingsFlowPanel!.Controls)
+                        Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
                 }
 
@@ -1326,7 +1334,8 @@ public sealed class MainForm : Form
             HeaderText = "Host",
             DataPropertyName = "Host",
             AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 32
+            FillWeight = 32,
+            MinimumWidth = 150
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -1335,7 +1344,8 @@ public sealed class MainForm : Form
             HeaderText = "Label",
             DataPropertyName = "Label",
             AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 25
+            FillWeight = 25,
+            MinimumWidth = 140
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -1413,14 +1423,25 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 2,
+            RowCount = 1,
             Margin = new Padding(0),
             Tag = "header"
         };
         brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
         brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        brand.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         brand.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var brandText = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Tag = "header"
+        };
+        brandText.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        brandText.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        brandText.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         _brandTitleLabel = new Label
         {
@@ -1451,11 +1472,11 @@ public sealed class MainForm : Form
             AccessibleName = "Ping Watchdog logo"
         };
         brand.Controls.Add(logo, 0, 0);
-        brand.SetRowSpan(logo, 2);
         _brandTitleLabel.Margin = Padding.Empty;
         _brandSubtitleLabel.Margin = Padding.Empty;
-        brand.Controls.Add(_brandTitleLabel, 1, 0);
-        brand.Controls.Add(_brandSubtitleLabel, 1, 1);
+        brandText.Controls.Add(_brandTitleLabel, 0, 0);
+        brandText.Controls.Add(_brandSubtitleLabel, 0, 1);
+        brand.Controls.Add(brandText, 1, 0);
 
         var headerActions = new FlowLayoutPanel
         {
@@ -1829,6 +1850,16 @@ public sealed class MainForm : Form
 
             _settingsFlowPanel.WrapContents = true;
             _settingsFlowPanel.AutoScroll = false;
+            _settingsFlowPanel.PerformLayout();
+            int settingsHeight = _settingsFlowPanel.Controls.Cast<Control>()
+                .Where(control => control.Visible)
+                .Select(control => control.Bottom + control.Margin.Bottom)
+                .DefaultIfEmpty(0)
+                .Max();
+            var settingsCard = _settingsFlowPanel.Parent!;
+            _rightLayout.RowStyles[2].Height = Math.Max(
+                84,
+                settingsHeight + settingsCard.Padding.Vertical + settingsCard.Margin.Vertical);
 
             _wallboardButton.Text = narrow ? "Wallboard" : "Wallboard";
 
