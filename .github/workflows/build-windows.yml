@@ -55,6 +55,19 @@ jobs:
           Copy-Item README-FIRST.txt publish\README-FIRST.txt
           Copy-Item LICENSE publish\LICENSE
 
+      - name: Smoke test published Windows app startup
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "publish\PingWatchdog.exe").Path
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            throw "Published Ping Watchdog exited during startup smoke test with exit code $($process.ExitCode)."
+          }
+
+          Stop-Process -Id $process.Id -Force
+
       - name: Write release notes
         shell: pwsh
         run: |
@@ -63,9 +76,9 @@ jobs:
 
           Self-updating Windows release.
 
-          - Refreshed Watchdog visual identity with a new application/tray icon, integrated header mark, and refined cyan/teal accents.
-          - Removes redundant home-screen version, monitoring badge, and duplicate live-apply text while keeping version/state information in the footer and controls where it is useful.
-          - Host-table selection and scroll position now survive live 500 ms data refreshes, so labeling a host no longer snaps selection back to the first row.
+          - Windows startup hotfix: restores the last stable UI startup path after the v1.14.46 launch regression.
+          - Adds a published-EXE startup smoke test to the release pipeline so an immediately crashing Windows build cannot be published as green again.
+          - Host-table selection and scroll position survive live 500 ms data refreshes, so labeling a host does not snap selection back to the first row.
           - Checks GitHub Releases automatically on startup and every six hours.
           - Downloads updates in-app.
           - Downloads updates without interrupting monitoring, then exposes a one-click Restart to Update action.
@@ -95,7 +108,7 @@ jobs:
       - name: Build installer, portable package, and update feed
         shell: pwsh
         run: |
-          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\WatchdogIcon.ico --releaseNotes release-notes.md --channel win --outputDir Releases
+          .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\PingWatchdog.ico --releaseNotes release-notes.md --channel win --outputDir Releases
 
       - name: Upload release bundle artifact
         uses: actions/upload-artifact@v4

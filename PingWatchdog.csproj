@@ -13,7 +13,7 @@
     <Company>Joseph Luker</Company>
     <Copyright>Copyright © 2026 Joseph Luker. All rights reserved.</Copyright>
     <Description>Multi-site ICMP availability monitoring for Windows.</Description>
-    <ApplicationIcon>Assets\WatchdogIcon.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\PingWatchdog.ico</ApplicationIcon>
 
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
