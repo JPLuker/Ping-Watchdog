@@ -27,6 +27,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="linux/**/*.cs" />
+    <None Remove="linux/**" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
