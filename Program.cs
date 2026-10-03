@@ -479,7 +479,13 @@ public sealed class MainForm : Form
     private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
     private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
     private readonly Button _checkUpdateButton = new() { Text = "Updates", AutoSize = false, Width = 120 };
-    private readonly Button _wallboardButton = new() { Text = "Wallboard", AutoSize = false, Width = 88 };
+    private readonly Button _wallboardButton = new()
+    {
+        Text = "Wallboard",
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowOnly,
+        MinimumSize = new Size(88, 32)
+    };
     private readonly Button _settingsButton = new() { Text = "Settings", AutoSize = false, Width = 88 };
     private readonly Button _moreButton = new()
     {
@@ -1177,6 +1183,10 @@ public sealed class MainForm : Form
                         "The supplied logo is missing or duplicated.");
                     var title = form._brandTitleLabel!;
                     var actions = form._headerActionsPanel!;
+                    Check(form._wallboardButton.Width >= form._wallboardButton.PreferredSize.Width,
+                        "Wallboard button text is clipped.");
+                    Check(actions.ClientRectangle.Contains(form._wallboardButton.Bounds),
+                        "Wallboard button extends outside the header actions.");
                     Check(title.Parent!.Width >= title.Right, "Brand title is clipped.");
                     Check(title.PointToScreen(new Point(title.Width, 0)).X <= actions.PointToScreen(Point.Empty).X,
                         "Brand title overlaps header actions.");
@@ -1195,6 +1205,18 @@ public sealed class MainForm : Form
                     foreach (Control setting in form._settingsFlowPanel!.Controls)
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
+                }
+
+                // Larger UI text must grow the button rather than truncate its final letter.
+                var buttonFont = form._wallboardButton.Font;
+                foreach (float scale in new[] { 1.25f, 1.5f })
+                {
+                    using var largerFont = new Font(buttonFont.FontFamily, buttonFont.Size * scale, buttonFont.Style);
+                    form._wallboardButton.Font = largerFont;
+                    form._headerActionsPanel!.PerformLayout();
+                    Check(form._wallboardButton.Width >= form._wallboardButton.PreferredSize.Width,
+                        "Wallboard button is clipped with larger UI text.");
+                    form._wallboardButton.Font = buttonFont;
                 }
 
                 WindowsBranding.RunShortcutSmokeTest(output);
@@ -1233,6 +1255,31 @@ public sealed class MainForm : Form
                 form.OpenWallboard();
                 await Task.Delay(200);
                 Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
+                var canvas = (WallboardCanvas)form._wallboardForm!.Controls.Find("WallboardCanvas", true).Single();
+                Check(canvas.ClientRectangle.Contains(canvas.BrandLogoBounds), "Wallboard dog is outside the canvas.");
+                using (var rendered = new Bitmap(canvas.Width, canvas.Height))
+                using (var expected = new Bitmap(canvas.BrandLogoBounds.Width, canvas.BrandLogoBounds.Height))
+                using (var logo = BrandAssets.LoadLogo())
+                {
+                    canvas.DrawToBitmap(rendered, canvas.ClientRectangle);
+                    using (var graphics = Graphics.FromImage(expected))
+                    {
+                        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                        graphics.DrawImage(logo, new Rectangle(Point.Empty, expected.Size));
+                    }
+                    int opaque = 0, matching = 0;
+                    for (int y = 0; y < expected.Height; y++)
+                    for (int x = 0; x < expected.Width; x++)
+                    {
+                        var wanted = expected.GetPixel(x, y);
+                        if (wanted.A < 250) continue;
+                        opaque++;
+                        var actual = rendered.GetPixel(canvas.BrandLogoBounds.X + x, canvas.BrandLogoBounds.Y + y);
+                        if (Math.Abs(actual.R - wanted.R) <= 5 && Math.Abs(actual.G - wanted.G) <= 5 &&
+                            Math.Abs(actual.B - wanted.B) <= 5) matching++;
+                    }
+                    Check(opaque > 100 && matching >= opaque * 0.9, "Wallboard did not render the supplied dog artwork.");
+                }
                 Capture(form._wallboardForm!, "wallboard");
                 form._wallboardForm!.Close();
                 await Task.Delay(100);
@@ -1868,8 +1915,6 @@ public sealed class MainForm : Form
             _rightLayout.RowStyles[2].Height = Math.Max(
                 84,
                 settingsHeight + settingsCard.Padding.Vertical + settingsCard.Margin.Vertical);
-
-            _wallboardButton.Text = narrow ? "Wallboard" : "Wallboard";
 
             if (_pendingUpdateManager is null)
             {

@@ -98,6 +98,9 @@ jobs:
 
           Self-updating Windows release.
 
+          - Adds the exact supplied dog artwork beside the Wallboard title.
+          - Sizes the main window's Wallboard button to fit its text, including larger UI fonts.
+          - Verifies rendered Wallboard dog pixels and button text fit before publishing.
           - Restores the visual refresh using normal UI construction, with no idle startup hooks or reflection-based layout changes.
           - Uses the supplied dog SVG exactly for the header, application/tray icon, installer, and Linux package branding.
           - Refined cyan/teal accents and cleaner header/sidebar chrome, with version information retained in the footer.

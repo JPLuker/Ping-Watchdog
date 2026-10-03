@@ -986,6 +986,7 @@ internal sealed class WallboardForm : Form
 
 internal sealed class WallboardCanvas : Control
 {
+    private readonly Bitmap _brandBitmap = BrandAssets.LoadLogo();
     private readonly Font _brandFont = new("Segoe UI Semibold", 24, FontStyle.Bold);
     private readonly Font _subtitleFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
     private readonly Font _clockFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
@@ -1005,9 +1006,11 @@ internal sealed class WallboardCanvas : Control
 
     public WallboardSnapshot? Snapshot { get; set; }
     public bool ShowCli { get; set; } = true;
+    internal Rectangle BrandLogoBounds => new(22, 12, 58, 58);
 
     public WallboardCanvas()
     {
+        Name = "WallboardCanvas";
         DoubleBuffered = true;
         ResizeRedraw = true;
         BackColor = Color.FromArgb(5, 9, 14);
@@ -1023,6 +1026,7 @@ internal sealed class WallboardCanvas : Control
     {
         if (disposing)
         {
+            _brandBitmap.Dispose();
             _brandFont.Dispose();
             _subtitleFont.Dispose();
             _clockFont.Dispose();
@@ -1136,12 +1140,14 @@ internal sealed class WallboardCanvas : Control
         using var accentBrush = new SolidBrush(Color.FromArgb(82, 177, 202));
         using var mutedBrush = new SolidBrush(Color.FromArgb(126, 143, 160));
 
-        g.DrawString("PING WATCHDOG", _brandFont, brandBrush, 22, 14);
+        g.DrawImage(_brandBitmap, BrandLogoBounds);
+        int textLeft = BrandLogoBounds.Right + 12;
+        g.DrawString("PING WATCHDOG", _brandFont, brandBrush, textLeft, 14);
         g.DrawString(
             "NETWORK OPERATIONS WALLBOARD",
             _subtitleFont,
             accentBrush,
-            25,
+            textLeft + 3,
             57);
 
         string clock = snapshot.CapturedAt.ToString("h:mm:ss tt");
