@@ -41,7 +41,8 @@ jobs:
 
       - name: Validate starter config
         shell: bash
-        run: python3 - <<'PY'
+        run: |
+          python3 - <<'PY'
           import json
           with open('default.pingwatch.json', 'r', encoding='utf-8') as f:
               cfg = json.load(f)
