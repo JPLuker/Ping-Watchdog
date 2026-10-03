@@ -39,6 +39,7 @@ internal static class Program
 
         try
         {
+            BrandAssets.EnsureShellAssets();
             AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
             AppNotificationManager.Default.Register("Ping Watchdog", new Uri(BrandAssets.NotificationIconPath));
             notificationsRegistered = true;
@@ -1181,6 +1182,8 @@ public sealed class MainForm : Form
                         "Brand title overlaps header actions.");
                     var logo = form.Controls.Find("WatchdogBrandLogo", true)[0];
                     Check(logo.Parent!.ClientRectangle.Contains(logo.Bounds), "Brand logo is clipped.");
+                    Check(logo.Parent.Parent!.ClientRectangle.Contains(logo.Parent.Bounds),
+                        "Brand group extends outside the visible header.");
                     var subtitle = form._brandSubtitleLabel!;
                     int textTop = title.PointToScreen(Point.Empty).Y;
                     int textBottom = subtitle.Visible
@@ -1429,6 +1432,7 @@ public sealed class MainForm : Form
         };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var brand = new Panel
         {

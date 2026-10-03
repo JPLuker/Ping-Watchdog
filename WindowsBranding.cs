@@ -17,6 +17,7 @@ internal static class WindowsBranding
         // Branding repair must never prevent monitoring from starting.
         try
         {
+            BrandAssets.EnsureShellAssets();
             var locator = VelopackLocator.Current;
             string appId = locator?.AppUserModelId ?? "velopack.PingWatchdog";
             SetCurrentProcessExplicitAppUserModelID(appId);
@@ -77,10 +78,12 @@ internal static class WindowsBranding
 
     internal static void RunShortcutSmokeTest(string output)
     {
+        BrandAssets.EnsureShellAssets();
         if (!File.Exists(BrandAssets.ShellIconPath) || !File.Exists(BrandAssets.NotificationIconPath))
             throw new InvalidOperationException("Published shell/notification artwork is missing.");
         string path = Path.Combine(output, "branding-test.lnk");
         string target = Application.ExecutablePath;
+        string root = Path.GetDirectoryName(target)!;
         const string arguments = "--branding-test";
         using (var link = new ShellLink())
         {
@@ -89,21 +92,21 @@ internal static class WindowsBranding
             link.IconPath = Path.Combine(AppContext.BaseDirectory, "old-heartbeat.ico");
             link.Save(path);
         }
-        if (!RefreshShortcut(path, AppContext.BaseDirectory, "velopack.PingWatchdog", BrandAssets.ShellIconPath))
+        if (!RefreshShortcut(path, root, "velopack.PingWatchdog", BrandAssets.ShellIconPath))
             throw new InvalidOperationException("Legacy shortcut icon was not repaired.");
         using (var link = new ShellLink(path))
         {
             if (link.Target != target || link.Arguments != arguments || link.IconPath != BrandAssets.ShellIconPath)
                 throw new InvalidOperationException("Shortcut branding did not preserve its launch settings.");
         }
-        if (RefreshShortcut(path, AppContext.BaseDirectory, "velopack.PingWatchdog", BrandAssets.ShellIconPath))
+        if (RefreshShortcut(path, root, "velopack.PingWatchdog", BrandAssets.ShellIconPath))
             throw new InvalidOperationException("Shortcut branding repeats when already current.");
         using (var unrelated = new ShellLink())
         {
-            unrelated.Target = Path.Combine(AppContext.BaseDirectory, "OtherApp.exe");
+            unrelated.Target = Path.Combine(root, "OtherApp.exe");
             unrelated.Save(path);
         }
-        if (RefreshShortcut(path, AppContext.BaseDirectory, "velopack.PingWatchdog", BrandAssets.ShellIconPath))
+        if (RefreshShortcut(path, root, "velopack.PingWatchdog", BrandAssets.ShellIconPath))
             throw new InvalidOperationException("Shortcut branding changed another application.");
         File.Delete(path);
     }

@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PingWatchdog</AssemblyName>
     <RootNamespace>PingWatchdog</RootNamespace>
-    <Version>1.14.50</Version>
+    <Version>1.14.51</Version>
     <Product>Ping Watchdog</Product>
     <Authors>Joseph Luker</Authors>
     <Company>Joseph Luker</Company>
@@ -29,8 +29,6 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets/WatchdogLogo.png" LogicalName="PingWatchdog.Brand.Logo" />
     <EmbeddedResource Include="Assets/WatchdogIcon.ico" LogicalName="PingWatchdog.Brand.Icon" />
-    <Content Include="Assets/WatchdogIcon.ico" TargetPath="Assets/Watchdog-dog-v1.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="Assets/WatchdogLogo.png" TargetPath="Assets/Watchdog-dog-v1.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Remove="linux/**/*.cs" />
     <None Remove="linux/**" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
