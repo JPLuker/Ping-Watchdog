@@ -1,0 +1,157 @@
+name: Build Linux AppImage Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "linux/**"
+      - "Assets/**"
+      - "default.pingwatch.json"
+      - "LICENSE"
+      - ".github/workflows/build-linux.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      WATCHDOG_VERSION: 1.15.${{ github.run_number }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Linux packaging prerequisites
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 imagemagick
+
+      - name: Install matching Velopack CLI
+        shell: bash
+        run: dotnet tool install --tool-path ./.tools vpk --version 1.2.161
+
+      - name: Validate starter config
+        shell: bash
+        run: python3 - <<'PY'
+          import json
+          with open('default.pingwatch.json', 'r', encoding='utf-8') as f:
+              cfg = json.load(f)
+          if not cfg.get('Sites'):
+              raise SystemExit('Starter config must contain a site.')
+          PY
+
+      - name: Run Linux self-tests
+        shell: bash
+        run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -p:Version=$WATCHDOG_VERSION -- --self-test
+
+      - name: Publish self-contained Linux x64 app
+        shell: bash
+        run: |
+          dotnet publish linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained true \
+            -p:Version=$WATCHDOG_VERSION \
+            -p:PublishSingleFile=true \
+            -p:PublishTrimmed=false \
+            -o publish-linux
+          cp default.pingwatch.json publish-linux/default.pingwatch.json
+          cp LICENSE publish-linux/LICENSE
+          cat > publish-linux/README-LINUX.txt <<'EOF'
+          PING WATCHDOG FOR LINUX
+
+          Run the AppImage directly. If your file manager does not mark it executable:
+            chmod +x PingWatchdog*.AppImage
+
+          Settings:
+            ~/.config/PingWatchdog/autosave.pingwatch.json
+
+          Persistent event history:
+            ~/.local/state/PingWatchdog/event-history.json
+
+          Desktop outage/recovery notifications use notify-send when available.
+          EOF
+
+      - name: Convert application icon for AppImage
+        shell: bash
+        run: convert 'Assets/PingWatchdog.ico[0]' -resize 256x256 PingWatchdog.png
+
+      - name: Write Linux release notes
+        shell: bash
+        run: |
+          cat > release-notes-linux.md <<EOF
+          # Ping Watchdog $WATCHDOG_VERSION for Linux
+
+          Native Linux x64 AppImage powered by Avalonia.
+
+          - Same Ping Watchdog site/config schema as Windows.
+          - Multi-site ICMP monitoring with DOWN / SUSPECT / RECOVERED state logic.
+          - Live site/host edits while monitoring.
+          - Labels/nicknames, nested site folders, organization view, persistent outage history, filters, CSV history export, and command trace.
+          - Fullscreen Wallboard with site hubs plus labeled/IP host nodes.
+          - Settings and background GitHub update checks.
+          - Linux desktop notifications through notify-send when available.
+          - Self-contained .NET runtime; no separate .NET installation required.
+          - Copyright © 2026 Joseph Luker. All rights reserved.
+          EOF
+
+      - name: Download previous Linux Velopack release
+        continue-on-error: true
+        shell: bash
+        env:
+          VPK_TOKEN: ${{ github.token }}
+        run: |
+          ./.tools/vpk download github \
+            --repoUrl https://github.com/JPLuker/Ping-Watchdog \
+            --token "$VPK_TOKEN" \
+            --channel linux \
+            --pre true \
+            --outputDir Releases-linux
+
+      - name: Build Linux AppImage and update feed
+        shell: bash
+        run: |
+          ./.tools/vpk pack \
+            --packId PingWatchdog \
+            --packVersion "$WATCHDOG_VERSION" \
+            --packDir publish-linux \
+            --mainExe PingWatchdog \
+            --packTitle "Ping Watchdog" \
+            --packAuthors "Joseph Luker" \
+            --runtime linux-x64 \
+            --icon PingWatchdog.png \
+            --releaseNotes release-notes-linux.md \
+            --channel linux \
+            --outputDir Releases-linux
+
+      - name: Upload Linux build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingWatchdog-Linux-${{ env.WATCHDOG_VERSION }}
+          path: Releases-linux/*
+          if-no-files-found: error
+
+      - name: Publish Linux release to GitHub
+        shell: bash
+        env:
+          VPK_TOKEN: ${{ github.token }}
+        run: |
+          ./.tools/vpk upload github \
+            --repoUrl https://github.com/JPLuker/Ping-Watchdog \
+            --token "$VPK_TOKEN" \
+            --channel linux \
+            --outputDir Releases-linux \
+            --publish true \
+            --pre true \
+            --tag "v$WATCHDOG_VERSION-linux" \
+            --releaseName "Ping Watchdog v$WATCHDOG_VERSION (Linux Beta)" \
+            --targetCommitish "${{ github.sha }}"
