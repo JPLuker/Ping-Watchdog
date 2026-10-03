@@ -15,6 +15,7 @@ internal static class Program
             try
             {
                 LinuxSelfTest.Run();
+                LinuxRegressionTests.Run();
                 Console.WriteLine("Ping Watchdog Linux self-test passed.");
                 Environment.ExitCode = 0;
             }
@@ -26,7 +27,8 @@ internal static class Program
             return;
         }
 
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        LinuxUiRegressionTests.Enabled = args.Contains("--ui-regression-test", StringComparer.OrdinalIgnoreCase);
+        Environment.ExitCode = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
     public static AppBuilder BuildAvaloniaApp() =>

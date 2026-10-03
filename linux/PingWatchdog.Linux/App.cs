@@ -17,6 +17,12 @@ internal sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            if (LinuxUiRegressionTests.Enabled)
+            {
+                LinuxUiRegressionTests.Start(desktop);
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
             var engine = new WatchdogEngine();
             var updates = new LinuxUpdateService();
             var window = new MainWindow(engine, updates);

@@ -60,6 +60,22 @@ internal sealed record CommandLogEntry(
     bool Success,
     string Text);
 
+internal sealed record EventHistorySnapshot(
+    int StoredCount,
+    IReadOnlyList<StateEventRecord> Events);
+
+internal static class HistoryCsv
+{
+    public static async Task WriteAsync(TextWriter writer, IEnumerable<StateEventRecord> events)
+    {
+        static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+        await writer.WriteLineAsync("Timestamp,Event,Site,Host,Details");
+        foreach (var e in events)
+            await writer.WriteLineAsync(string.Join(",", Csv(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")),
+                Csv(e.Kind), Csv(e.Site), Csv(e.DisplayHost), Csv(e.Message)));
+    }
+}
+
 internal sealed record HostSnapshot(
     string Site,
     string FolderPath,
@@ -320,6 +336,33 @@ internal sealed class WatchdogEngine : IDisposable
         {
             return _sites.Select(CloneSite).ToList();
         }
+    }
+
+    // History/export must query the stored events, not the bounded live dashboard snapshot.
+    public EventHistorySnapshot HistorySnapshot(int hours, bool hideSuspects, string? site = null, DateTime? now = null)
+    {
+        lock (_gate)
+        {
+            IEnumerable<StateEventRecord> events = _events;
+            hours = NormalizeHistoryHours(hours);
+            if (hours > 0)
+            {
+                DateTime cutoff = (now ?? DateTime.Now).AddHours(-hours);
+                events = events.Where(e => e.Timestamp >= cutoff);
+            }
+            if (hideSuspects)
+                events = events.Where(e => !e.Kind.Equals("SUSPECT", StringComparison.OrdinalIgnoreCase));
+            if (site is not null)
+                events = events.Where(e => e.Site.Equals(site, StringComparison.OrdinalIgnoreCase));
+            return new EventHistorySnapshot(_events.Count, events.OrderByDescending(e => e.Timestamp).ToList());
+        }
+    }
+
+    public IReadOnlyList<string> HistorySites()
+    {
+        lock (_gate)
+            return _sites.Select(s => s.Name).Concat(_events.Select(e => e.Site))
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     public WatchdogSnapshot Snapshot()
@@ -1179,17 +1222,36 @@ internal sealed class LinuxUpdateService : IDisposable
         }
     }
 
-    public void ApplyAndRestart()
+    public void ApplyAndRestart(WatchdogEngine engine)
     {
         if (_pendingManager is null || _pendingUpdate is null)
             return;
-        _pendingManager.ApplyUpdatesAndRestart(_pendingUpdate);
+        LinuxUpdateRestart.Apply(engine, () => _pendingManager.ApplyUpdatesAndRestart(_pendingUpdate));
     }
 
     public void Dispose()
     {
         _lifetime.Cancel();
         _lifetime.Dispose();
+    }
+}
+
+internal static class LinuxUpdateRestart
+{
+    public static void Apply(WatchdogEngine engine, Action applyUpdate)
+    {
+        engine.Save();
+        bool wasMonitoring = engine.Monitoring;
+        engine.StopMonitoring();
+        try
+        {
+            applyUpdate();
+        }
+        catch
+        {
+            if (wasMonitoring) engine.StartMonitoring();
+            throw;
+        }
     }
 }
 

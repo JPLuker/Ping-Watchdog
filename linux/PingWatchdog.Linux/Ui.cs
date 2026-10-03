@@ -89,6 +89,64 @@ internal static class Theme
     }
 }
 
+// Each editor owns its draft and the site it was loaded from. A timer or another
+// window changing the selection must never save that draft into a different site.
+internal sealed class HostEditorBinding
+{
+    private readonly WatchdogEngine _engine;
+    private readonly TextBox _box;
+    private readonly Action<string> _reportError;
+    private string? _site;
+    private bool _loading;
+    private string? _lastError;
+    public bool Dirty { get; private set; }
+
+    public HostEditorBinding(WatchdogEngine engine, TextBox box, Action<string> reportError)
+    {
+        _engine = engine;
+        _box = box;
+        _reportError = reportError;
+        _box.TextChanged += (_, _) => { if (!_loading && _site is not null) { Dirty = true; _lastError = null; } };
+        _box.LostFocus += (_, _) => Commit();
+    }
+
+    public bool Commit()
+    {
+        if (!Dirty || _site is null) return true;
+        string? error = _engine.SaveHosts(_site, _box.Text ?? string.Empty);
+        if (error is not null)
+        {
+            if (_lastError != error) _reportError(error);
+            _lastError = error;
+            return false;
+        }
+        Dirty = false;
+        _lastError = null;
+        return true;
+    }
+
+    public void Refresh(WatchdogSnapshot snapshot)
+    {
+        if (Dirty && !string.Equals(_site, snapshot.SelectedSite, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Commit()) return;
+            snapshot = _engine.Snapshot();
+        }
+        if (Dirty) return;
+        _loading = true;
+        try
+        {
+            _site = snapshot.SelectedSite;
+            string text = _site is null
+                ? string.Join(Environment.NewLine, snapshot.Hosts.Select(h => $"[{h.Site}] {h.Address}"))
+                : string.Join(Environment.NewLine, snapshot.Hosts.Select(h => h.Address));
+            if (_box.Text != text) _box.Text = text;
+            _box.IsReadOnly = _site is null;
+        }
+        finally { _loading = false; }
+    }
+}
+
 internal sealed class MainWindow : Window
 {
     private readonly WatchdogEngine _engine;
@@ -129,7 +187,9 @@ internal sealed class MainWindow : Window
     private readonly List<string?> _siteKeys = new();
     private List<HostSnapshot> _hostRows = new();
     private bool _loading;
-    private bool _editorDirty;
+    private readonly HostEditorBinding _editor;
+    private bool _closed;
+    private bool _updatePromptOpen;
     private WallboardWindow? _wallboard;
     private SettingsWindow? _settings;
     private HistoryWindow? _history;
@@ -139,6 +199,7 @@ internal sealed class MainWindow : Window
     {
         _engine = engine;
         _updates = updates;
+        _editor = new HostEditorBinding(engine, _hostEditor, error => _ = AlertAsync(error));
 
         Title = "Ping Watchdog";
         Icon = new WindowIcon(BrandAssets.Logo);
@@ -150,20 +211,19 @@ internal sealed class MainWindow : Window
         Foreground = Theme.Text;
         Content = BuildLayout();
 
-        _engine.Changed += (_, _) => Dispatcher.UIThread.Post(RefreshAll);
-        _updates.Changed += (_, _) => Dispatcher.UIThread.Post(RefreshUpdateState);
-        _updates.UpdateReady += (_, version) => Dispatcher.UIThread.Post(async () => await PromptForUpdateAsync(version));
+        _engine.Changed += EngineChanged;
+        _updates.Changed += UpdatesChanged;
+        _updates.UpdateReady += UpdateReady;
         _timer.Tick += (_, _) => RefreshAll();
 
         _siteList.SelectionChanged += (_, _) =>
         {
             if (_loading) return;
             int index = _siteList.SelectedIndex;
+            if (!_editor.Commit()) { RefreshAll(); return; }
             _engine.SelectedSite = index >= 0 && index < _siteKeys.Count ? _siteKeys[index] : null;
-            _editorDirty = false;
             RefreshAll();
         };
-        _hostEditor.TextChanged += (_, _) => { if (!_loading) _editorDirty = true; };
         _showCli.IsCheckedChanged += (_, _) =>
         {
             if (_loading) return;
@@ -184,7 +244,16 @@ internal sealed class MainWindow : Window
         {
             _timer.Stop();
             _lifetime.Cancel();
+            _editor.Commit();
+            _wallboard?.CommitHostEdits();
             _engine.Save();
+        };
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _engine.Changed -= EngineChanged;
+            _updates.Changed -= UpdatesChanged;
+            _updates.UpdateReady -= UpdateReady;
         };
         KeyDown += (_, e) =>
         {
@@ -459,7 +528,7 @@ internal sealed class MainWindow : Window
 
     private void RefreshAll()
     {
-        if (_loading) return;
+        if (_loading || _closed) return;
         _loading = true;
         try
         {
@@ -478,14 +547,7 @@ internal sealed class MainWindow : Window
             RefreshSites(snapshot);
             RefreshHostRows(snapshot);
 
-            if (!_editorDirty || !_hostEditor.IsFocused)
-            {
-                _hostEditor.Text = snapshot.SelectedSite is null
-                    ? string.Join(Environment.NewLine, snapshot.Hosts.Select(host => $"[{host.Site}] {host.Address}"))
-                    : string.Join(Environment.NewLine, snapshot.Hosts.Select(host => host.Address));
-                _editorDirty = false;
-            }
-            _hostEditor.IsReadOnly = snapshot.SelectedSite is null;
+            _editor.Refresh(snapshot);
 
             bool settingsEnabled = !snapshot.Monitoring;
             _interval.IsEnabled = settingsEnabled;
@@ -551,8 +613,16 @@ internal sealed class MainWindow : Window
             _hostList.SelectedIndex = previous;
     }
 
+    private void EngineChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshAll);
+    private void UpdatesChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshUpdateState);
+    private void UpdateReady(object? sender, string version) => Dispatcher.UIThread.Post(async () =>
+    {
+        if (!_closed) await PromptForUpdateAsync(version);
+    });
+
     private void RefreshUpdateState()
     {
+        if (_closed) return;
         _updateButton.Content = _updates.ActionText;
         if (_updates.HasPendingUpdate)
             _status.Text = _updates.Status;
@@ -565,6 +635,7 @@ internal sealed class MainWindow : Window
             _engine.StopMonitoring();
             return;
         }
+        if (!_editor.Commit()) return;
         ApplyMonitoringSettings();
         _engine.StartMonitoring();
     }
@@ -579,14 +650,7 @@ internal sealed class MainWindow : Window
         _engine.ApplySettings(config);
     }
 
-    private void ApplyHosts()
-    {
-        string? selected = _engine.SelectedSite;
-        if (selected is null) return;
-        string? error = _engine.SaveHosts(selected, _hostEditor.Text ?? string.Empty);
-        if (error is not null) _ = AlertAsync(error);
-        else _editorDirty = false;
-    }
+    private void ApplyHosts() => _editor.Commit();
 
     private async Task AddSiteAsync()
     {
@@ -615,32 +679,33 @@ internal sealed class MainWindow : Window
         if (error is not null) await AlertAsync(error);
     }
 
-    private async Task RunUpdateActionAsync()
+    internal async Task RunUpdateActionAsync(Window? owner = null)
     {
         if (_updates.HasPendingUpdate)
         {
-            if (await ConfirmAsync("Restart to Update", "The update is downloaded. Restart Ping Watchdog now?"))
-            {
-                _engine.Save();
-                _engine.StopMonitoring();
-                _updates.ApplyAndRestart();
-            }
+            await PromptForUpdateAsync(null, owner);
             return;
         }
         await _updates.CheckAsync(true);
         if (!_updates.HasPendingUpdate)
-            await AlertAsync(_updates.Status, "Ping Watchdog Updates");
+            await AlertAsync(_updates.Status, "Ping Watchdog Updates", owner);
     }
 
-    private async Task PromptForUpdateAsync(string version)
+    private async Task PromptForUpdateAsync(string? version, Window? owner = null)
     {
-        bool restart = await ConfirmAsync(
-            "Ping Watchdog Update Ready",
-            $"Version {version} downloaded in the background. Restart now to apply it?");
-        if (!restart) return;
-        _engine.Save();
-        _engine.StopMonitoring();
-        _updates.ApplyAndRestart();
+        if (_closed || _updatePromptOpen) return;
+        _updatePromptOpen = true;
+        try
+        {
+            string message = version is null
+                ? "The update is downloaded. Restart Ping Watchdog now?"
+                : $"Version {version} downloaded in the background. Restart now to apply it?";
+            if (!await ConfirmAsync("Restart to Update", message, owner)) return;
+            if (!_editor.Commit() || (_wallboard is not null && !_wallboard.CommitHostEdits())) return;
+            try { _updates.ApplyAndRestart(_engine); }
+            catch (Exception ex) { await AlertAsync($"Could not apply update: {ex.Message}", "Ping Watchdog Updates", owner); }
+        }
+        finally { _updatePromptOpen = false; }
     }
 
     private void OpenWallboard()
@@ -662,7 +727,7 @@ internal sealed class MainWindow : Window
             _settings.Activate();
             return;
         }
-        _settings = new SettingsWindow(_engine, _updates);
+        _settings = new SettingsWindow(_engine, _updates, this);
         _settings.Closed += (_, _) => _settings = null;
         _settings.Show(this);
     }
@@ -726,7 +791,7 @@ internal sealed class MainWindow : Window
         return await dialog.ShowDialog<string?>(this);
     }
 
-    internal async Task<bool> ConfirmAsync(string title, string message)
+    internal async Task<bool> ConfirmAsync(string title, string message, Window? owner = null)
     {
         var dialog = new Window
         {
@@ -756,10 +821,10 @@ internal sealed class MainWindow : Window
                 }
             }
         };
-        return await dialog.ShowDialog<bool>(this);
+        return await dialog.ShowDialog<bool>(owner ?? this);
     }
 
-    internal async Task AlertAsync(string message, string title = "Ping Watchdog")
+    internal async Task AlertAsync(string message, string title = "Ping Watchdog", Window? owner = null)
     {
         var dialog = new Window
         {
@@ -782,7 +847,7 @@ internal sealed class MainWindow : Window
                 new StackPanel { HorizontalAlignment = HorizontalAlignment.Right, Children = { ok } }
             }
         };
-        await dialog.ShowDialog(this);
+        await dialog.ShowDialog(owner ?? this);
     }
 }
 
@@ -790,6 +855,7 @@ internal sealed class SettingsWindow : Window
 {
     private readonly WatchdogEngine _engine;
     private readonly LinuxUpdateService _updates;
+    private bool _closed;
     private readonly NumericUpDown _interval = Number(1, 300, 2, 1);
     private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250);
     private readonly NumericUpDown _down = Number(2, 20, 3, 1);
@@ -804,7 +870,7 @@ internal sealed class SettingsWindow : Window
     private readonly TextBlock _updateStatus = Theme.Label("Ready", 11, color: Theme.Muted);
     private readonly Button _updateAction = Theme.Button("Check for Updates", true);
 
-    public SettingsWindow(WatchdogEngine engine, LinuxUpdateService updates)
+    public SettingsWindow(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
     {
         _engine = engine;
         _updates = updates;
@@ -831,15 +897,9 @@ internal sealed class SettingsWindow : Window
         };
         Content = tabs;
 
-        _updates.Changed += (_, _) => Dispatcher.UIThread.Post(RefreshUpdate);
-        _updateAction.Click += async (_, _) =>
-        {
-            if (_updates.HasPendingUpdate)
-                _updates.ApplyAndRestart();
-            else
-                await _updates.CheckAsync(true);
-            RefreshUpdate();
-        };
+        _updates.Changed += UpdatesChanged;
+        Closed += (_, _) => { _closed = true; _updates.Changed -= UpdatesChanged; };
+        _updateAction.Click += async (_, _) => await main.RunUpdateActionAsync(this);
         Opened += (_, _) => LoadValues();
     }
 
@@ -970,8 +1030,11 @@ internal sealed class SettingsWindow : Window
         LoadValues();
     }
 
+    private void UpdatesChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshUpdate);
+
     private void RefreshUpdate()
     {
+        if (_closed) return;
         _updateStatus.Text = _updates.Status;
         _updateAction.Content = _updates.ActionText;
     }
@@ -985,6 +1048,11 @@ internal sealed class HistoryWindow : Window
     private readonly CheckBox _hideSuspects = new() { Content = "Hide suspects" };
     private readonly ComboBox _site = new() { Width = 190 };
     private readonly ListBox _events = new();
+    private readonly TextBlock _summary = Theme.Label("", 11, color: Theme.Muted);
+    private IReadOnlyList<StateEventRecord> _visibleEvents = Array.Empty<StateEventRecord>();
+    private readonly List<string?> _siteKeys = new();
+    private bool _loading = true;
+    private bool _closed;
 
     public HistoryWindow(WatchdogEngine engine)
     {
@@ -1015,13 +1083,14 @@ internal sealed class HistoryWindow : Window
 
         Content = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*"),
             Margin = new Thickness(16),
             Children =
             {
                 Theme.Label("Outage History", 20, FontWeight.Bold),
                 At(filters, 1),
-                At(_events, 2)
+                At(_summary, 2),
+                At(_events, 3)
             }
         };
 
@@ -1031,17 +1100,20 @@ internal sealed class HistoryWindow : Window
             var config = _engine.Snapshot().Settings;
             _range.SelectedIndex = config.EventHistoryHours switch { 24 => 0, 168 => 1, 720 => 2, _ => 3 };
             _hideSuspects.IsChecked = config.HideSuspectEvents;
+            _loading = false;
             Refresh();
             _timer.Start();
         };
-        Closed += (_, _) => _timer.Stop();
+        Closed += (_, _) => { _closed = true; _timer.Stop(); };
     }
+
+    private int Hours => _range.SelectedIndex switch { 0 => 24, 1 => 168, 2 => 720, _ => 0 };
 
     private void ApplyFilterPreference()
     {
-        if (_range.SelectedIndex < 0) return;
+        if (_loading || _closed || _range.SelectedIndex < 0) return;
         var config = _engine.Snapshot().Settings;
-        config.EventHistoryHours = _range.SelectedIndex switch { 0 => 24, 1 => 168, 2 => 720, _ => 0 };
+        config.EventHistoryHours = Hours;
         config.HideSuspectEvents = _hideSuspects.IsChecked == true;
         _engine.ApplySettings(config);
         Refresh();
@@ -1049,23 +1121,40 @@ internal sealed class HistoryWindow : Window
 
     private void Refresh()
     {
-        var snapshot = _engine.Snapshot();
-        string current = _site.SelectedItem?.ToString() ?? "All Sites";
-        var sites = new[] { "All Sites" }.Concat(snapshot.Sites.Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s)).ToList();
-        _site.ItemsSource = sites;
-        int siteIndex = sites.FindIndex(s => s.Equals(current, StringComparison.OrdinalIgnoreCase));
-        _site.SelectedIndex = Math.Max(0, siteIndex);
-
-        IEnumerable<StateEventRecord> events = snapshot.Events;
-        if (!current.Equals("All Sites", StringComparison.OrdinalIgnoreCase))
-            events = events.Where(e => e.Site.Equals(current, StringComparison.OrdinalIgnoreCase));
-        _events.ItemsSource = events.OrderByDescending(e => e.Timestamp)
-            .Select(e => $"{e.Timestamp:yyyy-MM-dd HH:mm:ss}  {e.Kind,-10}  {e.Site,-20}  {e.DisplayHost,-30}  {e.Message}")
-            .ToList();
+        if (_loading || _closed) return;
+        _loading = true;
+        try
+        {
+            string? selected = _site.SelectedIndex >= 0 && _site.SelectedIndex < _siteKeys.Count
+                ? _siteKeys[_site.SelectedIndex] : null;
+            var keys = new List<string?> { null };
+            keys.AddRange(_engine.HistorySites());
+            if (!_siteKeys.SequenceEqual(keys))
+            {
+                _siteKeys.Clear();
+                _siteKeys.AddRange(keys);
+                _site.ItemsSource = keys.Select(key => key ?? "All Sites").ToList();
+                _site.SelectedIndex = Math.Max(0, keys.FindIndex(key => string.Equals(key, selected, StringComparison.OrdinalIgnoreCase)));
+            }
+            selected = _site.SelectedIndex >= 0 && _site.SelectedIndex < _siteKeys.Count ? _siteKeys[_site.SelectedIndex] : null;
+            var history = _engine.HistorySnapshot(Hours, _hideSuspects.IsChecked == true, selected);
+            _summary.Text = $"Showing {history.Events.Count:N0} of {history.StoredCount:N0} stored events • filters do not delete history";
+            if (!_visibleEvents.SequenceEqual(history.Events))
+            {
+                _visibleEvents = history.Events;
+                _events.ItemsSource = _visibleEvents
+                    .Select(e => $"{e.Timestamp:yyyy-MM-dd HH:mm:ss}  {e.Kind,-10}  {e.Site,-20}  {e.DisplayHost,-30}  {e.Message}")
+                    .ToList();
+            }
+        }
+        finally { _loading = false; }
     }
 
     private async Task ExportCsvAsync()
     {
+        Refresh();
+        // Capture the shown rows before opening the picker. Timer ticks cannot change this export.
+        var events = _visibleEvents.ToList();
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export Ping Watchdog Outage History",
@@ -1074,15 +1163,10 @@ internal sealed class HistoryWindow : Window
         });
         if (file is null) return;
 
-        var snapshot = _engine.Snapshot();
         await using var stream = await file.OpenWriteAsync();
+        if (stream.CanSeek) stream.SetLength(0);
         using var writer = new StreamWriter(stream);
-        await writer.WriteLineAsync("Timestamp,Event,Site,Host,Details");
-        foreach (var e in snapshot.Events)
-        {
-            static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
-            await writer.WriteLineAsync(string.Join(",", Csv(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")), Csv(e.Kind), Csv(e.Site), Csv(e.DisplayHost), Csv(e.Message)));
-        }
+        await HistoryCsv.WriteAsync(writer, events);
     }
 
     private static Control At(Control control, int row)
@@ -1096,6 +1180,7 @@ internal sealed class HistoryWindow : Window
 internal sealed class OrganizationWindow : Window
 {
     private readonly WatchdogEngine _engine;
+    private bool _closed;
     private readonly ListBox _items = new();
     private readonly List<OrgItem> _rows = new();
 
@@ -1139,11 +1224,15 @@ internal sealed class OrganizationWindow : Window
         };
         _items.DoubleTapped += (_, _) => OpenSelected();
         Opened += (_, _) => Refresh();
-        _engine.Changed += (_, _) => Dispatcher.UIThread.Post(Refresh);
+        _engine.Changed += EngineChanged;
+        Closed += (_, _) => { _closed = true; _engine.Changed -= EngineChanged; };
     }
+
+    private void EngineChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(Refresh);
 
     private void Refresh()
     {
+        if (_closed) return;
         _rows.Clear();
         var folders = _engine.FolderSnapshot();
         foreach (var folder in folders)
@@ -1319,6 +1408,9 @@ internal sealed class WallboardWindow : Window
     private readonly ComboBox _site = new() { Width = 330 };
     private readonly TextBox _hosts = new() { AcceptsReturn = true, MinHeight = 110, FontFamily = new FontFamily("monospace") };
     private readonly List<string?> _siteKeys = new();
+    private readonly HostEditorBinding _editor;
+    private readonly Button _updateButton = Theme.Button("Check for Updates");
+    private bool _closed;
     private bool _showCli;
     private bool _loading;
 
@@ -1327,6 +1419,7 @@ internal sealed class WallboardWindow : Window
         _engine = engine;
         _updates = updates;
         _main = main;
+        _editor = new HostEditorBinding(engine, _hosts, error => _ = _main.AlertAsync(error, owner: this));
         Title = "Ping Watchdog Wallboard";
         Icon = new WindowIcon(BrandAssets.Logo);
         WindowState = WindowState.FullScreen;
@@ -1340,15 +1433,18 @@ internal sealed class WallboardWindow : Window
         {
             if (_loading) return;
             int index = _site.SelectedIndex;
+            if (!_editor.Commit()) { Refresh(); return; }
             _engine.SelectedSite = index >= 0 && index < _siteKeys.Count ? _siteKeys[index] : null;
             Refresh();
         };
         _timer.Tick += (_, _) => Refresh();
         Opened += (_, _) => { Refresh(); _timer.Start(); };
-        Closed += (_, _) => { _timer.Stop(); _main.Show(); _main.Activate(); };
+        Closing += (_, _) => _editor.Commit();
+        Closed += (_, _) => { _closed = true; _timer.Stop(); _main.Show(); _main.Activate(); };
         KeyDown += (_, e) =>
         {
             if (e.Key is Key.Escape or Key.F11) { e.Handled = true; Close(); }
+            else if (_hosts.IsKeyboardFocusWithin || _site.IsKeyboardFocusWithin) return;
             else if (e.Key == Key.O) { e.Handled = true; _ops.IsVisible = !_ops.IsVisible; }
             else if (e.Key == Key.C) { e.Handled = true; _showCli = !_showCli; Refresh(); }
             else if (e.Key == Key.P) { e.Handled = true; ToggleMonitoring(); }
@@ -1365,11 +1461,11 @@ internal sealed class WallboardWindow : Window
         var ops = Theme.Button("Operations", true); ops.Click += (_, _) => _ops.IsVisible = !_ops.IsVisible;
         var cli = Theme.Button("CLI"); cli.Click += (_, _) => { _showCli = !_showCli; Refresh(); };
         var history = Theme.Button("History"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
-        var settings = Theme.Button("Settings"); settings.Click += (_, _) => new SettingsWindow(_engine, _updates).Show(this);
+        var settings = Theme.Button("Settings"); settings.Click += (_, _) => new SettingsWindow(_engine, _updates, _main).Show(this);
         var organize = Theme.Button("Organize"); organize.Click += (_, _) => new OrganizationWindow(_engine).Show(this);
-        var updates = Theme.Button("Updates"); updates.Click += async (_, _) => await _updates.CheckAsync(true);
+        _updateButton.Click += async (_, _) => await _main.RunUpdateActionAsync(this);
         var main = Theme.Button("Main Window"); main.Click += (_, _) => Close();
-        foreach (var button in new[] { start, ops, cli, history, settings, organize, updates, main }) actions.Children.Add(button);
+        foreach (var button in new[] { start, ops, cli, history, settings, organize, _updateButton, main }) actions.Children.Add(button);
         Grid.SetColumn(actions, 1); toolbar.Children.Add(actions); root.Children.Add(toolbar);
 
         var content = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions("Auto,*") };
@@ -1395,11 +1491,11 @@ internal sealed class WallboardWindow : Window
         _ops.Children.Add(_site);
         _ops.Children.Add(Theme.Label("Hosts", 10, FontWeight.Bold, Theme.Muted));
         _ops.Children.Add(_hosts);
-        var apply = Theme.Button("Apply Hosts", true); apply.Click += (_, _) => { if (_engine.SelectedSite is { } site) _engine.SaveHosts(site, _hosts.Text ?? ""); };
+        var apply = Theme.Button("Apply Hosts", true); apply.Click += (_, _) => _editor.Commit();
         _ops.Children.Add(apply);
         var add = Theme.Button("+ Add Site"); add.Click += async (_, _) => { string? name = await PromptAsync("Add Site", "Site name:"); if (!string.IsNullOrWhiteSpace(name)) _engine.AddSite(name); };
         var organize = Theme.Button("Folders / Organization"); organize.Click += (_, _) => new OrganizationWindow(_engine).Show(this);
-        var settings = Theme.Button("Settings"); settings.Click += (_, _) => new SettingsWindow(_engine, _updates).Show(this);
+        var settings = Theme.Button("Settings"); settings.Click += (_, _) => new SettingsWindow(_engine, _updates, _main).Show(this);
         var history = Theme.Button("Outage History"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
         var clear = Theme.Button("Clear CLI"); clear.Click += (_, _) => _engine.ClearCommandLog();
         foreach (var button in new[] { add, organize, settings, history, clear }) _ops.Children.Add(button);
@@ -1407,7 +1503,7 @@ internal sealed class WallboardWindow : Window
 
     private void Refresh()
     {
-        if (_loading) return;
+        if (_loading || _closed) return;
         _loading = true;
         try
         {
@@ -1421,8 +1517,9 @@ internal sealed class WallboardWindow : Window
             _cli.IsVisible = _showCli;
             _cli.Text = string.Join(Environment.NewLine, snapshot.Commands.TakeLast(90).Select(c => c.Text));
             RefreshSiteCombo(snapshot);
-            if (!_hosts.IsFocused && snapshot.SelectedSite is not null)
-                _hosts.Text = string.Join(Environment.NewLine, snapshot.Hosts.Select(h => h.Address));
+            _editor.Refresh(snapshot);
+            _updateButton.Content = _updates.ActionText;
+            ToolTip.SetTip(_updateButton, _updates.Status);
             DrawTopology(snapshot);
         }
         finally { _loading = false; }
@@ -1511,8 +1608,11 @@ internal sealed class WallboardWindow : Window
         Canvas.SetLeft(label, left); Canvas.SetTop(label, top); _topology.Children.Add(label);
     }
 
+    internal bool CommitHostEdits() => _editor.Commit();
+
     private void ToggleMonitoring()
     {
+        if (!_editor.Commit()) return;
         if (_engine.Monitoring) _engine.StopMonitoring(); else _engine.StartMonitoring();
         Refresh();
     }

@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfuse2 imagemagick
+          sudo apt-get install -y libfuse2 imagemagick xvfb libx11-6 libice6 libsm6 libfontconfig1
 
       - name: Install matching Velopack CLI
         shell: bash
@@ -66,6 +66,10 @@ jobs:
       - name: Run Linux self-tests
         shell: bash
         run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -p:Version=$WATCHDOG_VERSION -- --self-test
+
+      - name: Run Linux desktop regressions
+        shell: bash
+        run: timeout 90s xvfb-run -a dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test
 
       - name: Publish self-contained Linux x64 app
         shell: bash

@@ -1,0 +1,32 @@
+name: Validate Linux Correctness
+
+on:
+  pull_request:
+    paths:
+      - "linux/**"
+      - ".github/workflows/validate-linux.yml"
+  push:
+    branches: [ "linux/phase-1-correctness" ]
+    paths:
+      - "linux/**"
+      - ".github/workflows/validate-linux.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  correctness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install desktop test prerequisites
+        run: sudo apt-get update && sudo apt-get install -y xvfb libx11-6 libice6 libsm6 libfontconfig1
+      - name: Run core regressions
+        run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
+      - name: Run desktop regressions
+        run: timeout 90s xvfb-run -a dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test
