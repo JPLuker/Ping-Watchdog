@@ -67,6 +67,7 @@ internal static class LinuxUiRegressionTests
     {
         await Task.Delay(100);
         var editor = Field<TextBox>(main, "_hostEditor");
+        await CheckHostPanelLayoutAsync(main, editor);
         editor.Text = "127.0.0.1\n127.0.0.3";
         engine.Save();
         await Task.Delay(850);
@@ -231,6 +232,40 @@ internal static class LinuxUiRegressionTests
         }
         using var reloaded = new WatchdogEngine(Path.GetDirectoryName(engine.ConfigPath)!);
         Check(reloaded.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "UI host edits survive restart");
+    }
+
+    private static async Task CheckHostPanelLayoutAsync(MainWindow main, TextBox editor)
+    {
+        double width = main.Width, height = main.Height;
+        var heading = main.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Selected site hosts");
+        foreach (var size in new[] { new Size(width, height), new Size(main.MinWidth, main.MinHeight) })
+        {
+            main.Width = size.Width;
+            main.Height = size.Height;
+            await Task.Delay(150);
+            var titlePoint = heading.TranslatePoint(new Point(), main)!.Value;
+            var editorPoint = editor.TranslatePoint(new Point(), main)!.Value;
+            var card = editor.GetVisualAncestors().OfType<Border>().First();
+            var cardPoint = card.TranslatePoint(new Point(), main)!.Value;
+            Check(heading.Bounds.Height >= heading.DesiredSize.Height - 1 && editorPoint.Y >= titlePoint.Y + heading.Bounds.Height + 7,
+                $"Host panel reserves the full heading and gap at {size.Width}x{size.Height}");
+            Check(editorPoint.Y + editor.Bounds.Height <= cardPoint.Y + card.Bounds.Height - card.Padding.Bottom + 1,
+                $"Host editor stays inside its card at {size.Width}x{size.Height}");
+            Check(editor.Bounds.Height >= 94, "Host editor retains its usable height");
+            if (Environment.GetEnvironmentVariable("WATCHDOG_UI_PREVIEW") == "1")
+            {
+                using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)main.Bounds.Width, (int)main.Bounds.Height));
+                bitmap.Render(main);
+                using var stream = new MemoryStream();
+                bitmap.Save(stream);
+                string png = Convert.ToBase64String(stream.ToArray());
+                for (int i = 0; i < png.Length; i += 4096)
+                    Console.WriteLine($"HOST_PANEL_PREVIEW_{(int)size.Width}x{(int)size.Height}:{png.Substring(i, Math.Min(4096, png.Length - i))}");
+            }
+        }
+        main.Width = width;
+        main.Height = height;
+        await Task.Delay(150);
     }
 
     private static async Task RunWallboardParityAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)

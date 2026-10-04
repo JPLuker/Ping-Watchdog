@@ -169,7 +169,7 @@ internal sealed class MainWindow : Window
     private readonly TextBox _hostEditor = new()
     {
         AcceptsReturn = true,
-        MinHeight = 94,
+        Height = 94,
         FontFamily = new FontFamily("monospace"),
         TextWrapping = TextWrapping.NoWrap
     };
@@ -428,7 +428,7 @@ internal sealed class MainWindow : Window
 
         var right = new Grid
         {
-            RowDefinitions = new RowDefinitions("86,132,Auto,*,Auto"),
+            RowDefinitions = new RowDefinitions("86,Auto,Auto,*,Auto"),
             Margin = new Thickness(8, 12, 12, 12)
         };
         Grid.SetColumn(right, 1);
@@ -442,7 +442,7 @@ internal sealed class MainWindow : Window
 
         var editorCard = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
             Margin = new Thickness(4)
         };
         editorCard.Children.Add(new Grid
