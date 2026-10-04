@@ -26,7 +26,7 @@ internal static class Presentation
         new("Site", "Site", 78), new("Host", "Host", 112), new("Label", "Label", 82),
         new("Status", "Status", 67), new("Latency", "ms", 48)
     };
-    public static int Header(double width) => width < 1080 ? 70 : HeaderHeight;
+    public static int HeaderForWidth(double width) => width < 1080 ? 70 : HeaderHeight;
     public static int Sidebar(double width) => width < 960 ? 176 : width < 1080 ? 196 : SidebarWidth;
     public static UiPoint[] SitePoints(int count, double x, double y, double width, double height, int coreRadius)
     {

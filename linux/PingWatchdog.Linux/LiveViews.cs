@@ -19,6 +19,8 @@ internal sealed class HostRow : INotifyPropertyChanged
     public string HostAddress => Host.Address;
     public string Label => Host.Label;
     public string Status => Host.State.ToString().ToUpperInvariant();
+    public string WallboardStatus => Host.State.ToString();
+    public string WallboardLatency => Host.LatencyMs?.ToString() ?? "—";
     public string Latency => Host.LatencyMs is null ? "—" : $"{Host.LatencyMs} ms";
     public string Failures => Host.Failures.ToString();
     public string LastReply => Host.LastReply?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";

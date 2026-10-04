@@ -94,7 +94,7 @@ internal sealed partial class MainWindow
         var copyright = Theme.Label($"{_updates.Version} · © 2026 Joseph Luker · All rights reserved.", 11, color: Theme.Muted);
         copyright.Margin = new Thickness(0, 4, 12, 4); Grid.SetColumn(copyright, 1); footer.Children.Add(copyright);
         Grid.SetRow(footer, 2); root.Children.Add(footer);
-        SizeChanged += (_, _) => { _navigationColumn.Width = new GridLength(Presentation.Sidebar(Bounds.Width)); root.RowDefinitions[0].Height = new GridLength(Presentation.Header(Bounds.Width)); };
+        SizeChanged += (_, _) => { _navigationColumn.Width = new GridLength(Presentation.Sidebar(Bounds.Width)); root.RowDefinitions[0].Height = new GridLength(Presentation.HeaderForWidth(Bounds.Width)); };
         return root;
     }
 }

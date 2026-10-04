@@ -88,8 +88,8 @@ internal sealed class HostTableView : Grid
         int index = 0;
         foreach (var column in Columns)
         {
-            var text = UiTheme.Label(column.Header, 12.7, FontWeight.Normal, UiTheme.Brush("#B7CDDC"));
-            text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
+            var text = UiTheme.Label(column.Header, _compact ? 12 : 12.7, FontWeight.Normal, UiTheme.Brush("#B7CDDC"));
+            text.Margin = new Thickness(_compact ? 4 : 10, 0); text.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(text, index++); _head.Children.Add(text);
         }
         // Item templates depend on the selected scope; retain the collection and selected item.
@@ -107,11 +107,11 @@ internal sealed class HostTableView : Grid
         row.Children.Clear(); int index = 0;
         foreach (var column in Columns)
         {
-            var text = new TextBlock { FontSize = 12.7, Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center,
+            var text = new TextBlock { FontSize = _compact ? 12 : 12.7, Margin = new Thickness(_compact ? 4 : 10, 0), VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis };
-            text.Bind(TextBlock.TextProperty, new Binding(column.Key == "Host" ? nameof(HostRow.HostAddress) : column.Key));
+            text.Bind(TextBlock.TextProperty, new Binding(column.Key == "Host" ? nameof(HostRow.HostAddress) : _compact && column.Key == "Status" ? nameof(HostRow.WallboardStatus) : _compact && column.Key == "Latency" ? nameof(HostRow.WallboardLatency) : column.Key));
             text.Bind(TextBlock.ForegroundProperty, new Binding(nameof(HostRow.Foreground)));
-            text.Bind(ToolTip.TipProperty, new Binding(column.Key == "Host" ? nameof(HostRow.HostAddress) : column.Key));
+            text.Bind(ToolTip.TipProperty, new Binding(column.Key == "Host" ? nameof(HostRow.HostAddress) : _compact && column.Key == "Status" ? nameof(HostRow.WallboardStatus) : _compact && column.Key == "Latency" ? nameof(HostRow.WallboardLatency) : column.Key));
             Grid.SetColumn(text, index++); row.Children.Add(text);
         }
         ApplyWidths(row);
@@ -162,7 +162,7 @@ internal sealed class HistoryTableView : Grid
         SizeChanged += (_, _) => { foreach (var row in _rows.ToArray()) Fit(row); };
         int index = 0;
         foreach (var column in Presentation.HistoryColumns) {
-            var text = UiTheme.Label(column.Header, 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
+            var text = UiTheme.Label(column.Header, _compact ? 12 : 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(text, index++); head.Children.Add(text);
         }
         var header = new ScrollViewer { Content = head, Background = UiTheme.Brush("#161F2A"), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };

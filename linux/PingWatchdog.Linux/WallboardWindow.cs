@@ -320,9 +320,9 @@ internal sealed partial class WallboardWindow : Window
     }
 
     private void AddLine(Point start, Point end, IBrush brush, double thickness) => _topology.Children.Add(new Line { StartPoint = start, EndPoint = end, Stroke = brush, StrokeThickness = thickness, Opacity = 0.45 });
-    private void AddCircle(double left, double top, double size, IBrush brush)
+    private void AddCircle(double left, double top, double size, IBrush brush, IBrush? fill = null)
     {
-        var circle = new Ellipse { Width = size, Height = size, Fill = Theme.Brush("#0A1119"), Stroke = brush, StrokeThickness = 2 };
+        var circle = new Ellipse { Width = size, Height = size, Fill = fill ?? Theme.Brush("#0F171F"), Stroke = brush, StrokeThickness = 2 };
         Canvas.SetLeft(circle, left); Canvas.SetTop(circle, top); _topology.Children.Add(circle);
     }
     private void AddText(string text, double left, double top, double size, IBrush brush, FontWeight weight, double width, bool centered = false)

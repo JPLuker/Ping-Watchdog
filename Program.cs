@@ -1819,7 +1819,7 @@ public sealed class MainForm : Form
 
         try
         {
-            _rootLayout.RowStyles[0].Height = Presentation.Header(width);
+            _rootLayout.RowStyles[0].Height = Presentation.HeaderForWidth(width);
 
             _workspaceSplit.Panel1MinSize = veryNarrow ? 165 : 174;
             int requestedSidebar = Presentation.Sidebar(width);

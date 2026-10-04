@@ -97,7 +97,7 @@ internal sealed partial class WallboardWindow
         int coreRadius = Math.Clamp((int)Math.Min(width, height) / 11, 38, 58);
         var points = Presentation.SitePoints(sites.Count, 18, 8, width - 36, height - 16, coreRadius);
         for (int i = 0; i < sites.Count; i++) AddLine(center, new Point(points[i].X, points[i].Y), Theme.State(AggregateSite(sites[i])), 1.4);
-        AddCircle(center.X - coreRadius, center.Y - coreRadius, coreRadius * 2, Theme.Cyan);
+        AddCircle(center.X - coreRadius, center.Y - coreRadius, coreRadius * 2, Theme.Brush("#4DBED0"), Theme.Brush("#0F2730"));
         AddText("WATCHDOG", center.X - coreRadius, center.Y - 8, 12, Theme.Text, FontWeight.Bold, coreRadius * 2, true);
         for (int i = 0; i < sites.Count; i++)
         {
