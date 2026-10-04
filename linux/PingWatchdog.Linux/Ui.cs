@@ -328,7 +328,7 @@ internal sealed partial class MainWindow : Window
             Spacing = 2,
             Children =
             {
-                Theme.Label(title, 10, FontWeight.Bold, Theme.Muted),
+                Theme.Label(title, 12, FontWeight.Normal, Theme.Muted),
                 value
             }
         };
@@ -344,12 +344,12 @@ internal sealed partial class MainWindow : Window
             Spacing = 2,
             Children =
             {
-                Theme.Label(title, 9, FontWeight.Bold, Theme.Muted),
+                Theme.Label(title, 12, FontWeight.Normal, Theme.Muted),
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 4,
-                    Children = { input, Theme.Label(suffix, 10, color: Theme.Muted) }
+                    Children = { input, Theme.Label(suffix, 12, color: Theme.Muted) }
                 }
             }
         };
@@ -377,7 +377,7 @@ internal sealed partial class MainWindow : Window
             _startStop.IsEnabled = !snapshot.Monitoring; _stop.IsEnabled = snapshot.Monitoring;
             _siteHeader.Text = snapshot.SelectedSite is null ? "All Sites • Hosts" : $"{snapshot.SelectedSite} • Hosts";
             _hostTable.SetScope(snapshot.SelectedSite is null);
-            _startStop.Background = snapshot.Monitoring ? Theme.Brush("#7A2531") : Theme.Brush("#176D4D");
+            _startStop.Background = Theme.Brush("#1F7852");
 
             var allHosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
             _total.Text = allHosts.Count.ToString();
@@ -881,7 +881,7 @@ internal sealed class SettingsWindow : Window
             {
                 new TextBlock { Text = label, Width = 210, Foreground = Theme.Text, VerticalAlignment = VerticalAlignment.Center },
                 control,
-                Theme.Label(suffix, 10, color: Theme.Muted)
+                Theme.Label(suffix, 12, color: Theme.Muted)
             }
         };
     }
@@ -1083,7 +1083,8 @@ internal sealed class OrganizationWindow : Window
 {
     private readonly WatchdogEngine _engine;
     private bool _closed;
-    private readonly ListBox _items = new();
+    private readonly TreeView _items = new();
+    private readonly TextBlock _details = Theme.Label("Select a site or folder to organize.", 12.7, color: Theme.Muted);
     private readonly List<OrgItem> _rows = new();
 
     public OrganizationWindow(WatchdogEngine engine)
@@ -1098,7 +1099,7 @@ internal sealed class OrganizationWindow : Window
         Background = Theme.Window;
         Foreground = Theme.Text;
 
-        var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var toolbar = new WrapPanel();
         var newSite = Theme.Button("New Site", true);
         var newFolder = Theme.Button("New Folder");
         var rename = Theme.Button("Rename");
@@ -1111,19 +1112,21 @@ internal sealed class OrganizationWindow : Window
         move.Click += async (_, _) => await MoveAsync();
         delete.Click += async (_, _) => await DeleteAsync();
         open.Click += (_, _) => OpenSelected();
-        foreach (var button in new[] { newSite, newFolder, rename, move, delete, open }) toolbar.Children.Add(button);
+        foreach (var button in new[] { newSite, newFolder, rename, move, delete, open }) { button.Margin = new Thickness(0, 2, 6, 2); toolbar.Children.Add(button); }
 
         Content = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"),
             Margin = new Thickness(16),
             Children =
             {
                 Theme.Label("Site Organization", 20, FontWeight.Bold),
                 At(toolbar, 1),
-                At(_items, 2)
+                At(_items, 2),
+                At(_details, 3)
             }
         };
+        _items.SelectionChanged += (_, _) => _details.Text = Selected is { } selected ? selected.IsFolder ? $"Folder: {selected.Key}" : $"Site: {selected.Key} • {_engine.SiteDefinitions().FirstOrDefault(s => s.Name == selected.Key)?.Hosts.Count ?? 0} hosts" : "Select a site or folder to organize.";
         _items.DoubleTapped += (_, _) => OpenSelected();
         Opened += (_, _) => Refresh();
         _engine.Changed += EngineChanged;
@@ -1135,22 +1138,35 @@ internal sealed class OrganizationWindow : Window
     private void Refresh()
     {
         if (_closed) return;
+        string? selectedKey = Selected is { } previous ? $"{previous.IsFolder}:{previous.Key}" : null;
+        var expanded = _items.GetVisualDescendants().OfType<TreeViewItem>()
+            .Where(item => item.IsExpanded && item.DataContext is OrgItem).Select(item => ((OrgItem)item.DataContext!).Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool first = _rows.Count == 0;
         _rows.Clear();
-        var folders = _engine.FolderSnapshot();
-        foreach (var folder in folders)
+        var roots = new List<TreeViewItem>();
+        var folders = new Dictionary<string, TreeViewItem>(StringComparer.OrdinalIgnoreCase);
+        TreeViewItem? selection = null;
+        foreach (var folder in _engine.FolderSnapshot().OrderBy(f => f.Count(ch => ch == '/')).ThenBy(f => f))
         {
-            int depth = folder.Count(ch => ch == '/');
-            _rows.Add(new OrgItem(true, folder, $"{new string(' ', depth * 3)}▾ {folder.Split('/').Last()}"));
+            var model = new OrgItem(true, folder, folder.Split('/').Last()); _rows.Add(model);
+            var item = new TreeViewItem { Header = model.Display, DataContext = model, IsExpanded = first || expanded.Contains(folder) };
+            folders[folder] = item;
+            string parent = folder.Contains('/') ? folder[..folder.LastIndexOf('/')] : "";
+            if (folders.TryGetValue(parent, out var parentItem)) parentItem.Items.Add(item); else roots.Add(item);
+            if (selectedKey == $"True:{folder}") selection = item;
         }
         foreach (var site in _engine.SiteDefinitions().OrderBy(s => s.FolderPath).ThenBy(s => s.Name))
         {
-            int depth = string.IsNullOrWhiteSpace(site.FolderPath) ? 0 : site.FolderPath.Count(ch => ch == '/') + 1;
-            _rows.Add(new OrgItem(false, site.Name, $"{new string(' ', depth * 3)}• {site.Name}  ({site.Hosts.Count})"));
+            var model = new OrgItem(false, site.Name, $"{site.Name} ({site.Hosts.Count})"); _rows.Add(model);
+            var item = new TreeViewItem { Header = model.Display, DataContext = model };
+            if (folders.TryGetValue(site.FolderPath, out var folder)) folder.Items.Add(item); else roots.Add(item);
+            if (selectedKey == $"False:{site.Name}") selection = item;
         }
-        _items.ItemsSource = _rows.Select(row => row.Display).ToList();
+        _items.ItemsSource = roots;
+        _items.SelectedItem = selection;
     }
 
-    private OrgItem? Selected => _items.SelectedIndex >= 0 && _items.SelectedIndex < _rows.Count ? _rows[_items.SelectedIndex] : null;
+    private OrgItem? Selected => (_items.SelectedItem as TreeViewItem)?.DataContext as OrgItem;
 
     private string CurrentFolder()
     {

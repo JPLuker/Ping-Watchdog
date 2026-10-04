@@ -82,7 +82,7 @@ internal sealed partial class MainWindow
         workspace.Children.Add(right); root.Children.Add(workspace);
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Brush("#0B1017") };
         _status.Margin = new Thickness(4, 4); footer.Children.Add(_status);
-        var copyright = Theme.Label($"v{_updates.Version} · © 2026 Joseph Luker · All rights reserved.", 11, color: Theme.Muted);
+        var copyright = Theme.Label($"{_updates.Version} · © 2026 Joseph Luker · All rights reserved.", 11, color: Theme.Muted);
         copyright.Margin = new Thickness(0, 4, 12, 4); Grid.SetColumn(copyright, 1); footer.Children.Add(copyright);
         Grid.SetRow(footer, 2); root.Children.Add(footer);
         SizeChanged += (_, _) => _navigationColumn.Width = new GridLength(Presentation.Sidebar(Bounds.Width));

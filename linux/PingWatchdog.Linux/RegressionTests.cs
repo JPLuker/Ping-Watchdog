@@ -7,6 +7,7 @@ internal static class LinuxRegressionTests
 {
     public static void Run()
     {
+        MonitoringRegressionTests.RunAsync().GetAwaiter().GetResult();
         string root = Path.Combine(Path.GetTempPath(), "ping-watchdog-regression-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try

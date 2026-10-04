@@ -36,6 +36,19 @@ jobs:
           name: windows-reference-ui
           path: ui-smoke-test/*
   correctness:
+    name: Linux ${{ matrix.backend }} at ${{ matrix.scale }}x
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { backend: x11, scale: "1" }
+          - { backend: x11, scale: "1.5" }
+          - { backend: x11, scale: "2" }
+          - { backend: wayland, scale: "1" }
+    env:
+      WATCHDOG_BACKEND: ${{ matrix.backend }}
+      AVALONIA_SCREEN_SCALE_FACTORS: ${{ matrix.scale }}
+      WATCHDOG_EXPECTED_SCALE: ${{ matrix.scale }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -44,10 +57,15 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Install desktop test prerequisites
-        run: sudo apt-get update && sudo apt-get install -y xvfb openbox dbus-x11 libx11-6 libice6 libsm6 libfontconfig1
+        run: sudo apt-get update && sudo apt-get install -y xvfb openbox dbus-x11 libx11-6 libice6 libsm6 libfontconfig1 weston libegl1 libgl1-mesa-dri libwayland-client0
       - name: Run core regressions
         run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
       - name: Run desktop regressions
         env:
           WATCHDOG_UI_PREVIEW: "1"
-        run: timeout 90s dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c 'openbox >/tmp/watchdog-openbox.log 2>&1 & dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test'
+        run: timeout 120s dbus-run-session -- bash linux/test-desktop.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-ui-${{ matrix.backend }}-${{ matrix.scale }}
+          path: ui-regression-images/*

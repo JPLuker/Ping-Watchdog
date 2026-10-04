@@ -56,7 +56,7 @@ internal sealed class HostTableView : Grid
     private bool _showSite = true;
     public HostTableView(ListBox list, bool compact = false)
     {
-        _list = list; _compact = compact;
+        _list = list; _compact = compact; _list.Height = double.NaN;
         RowDefinitions = new RowDefinitions($"{Presentation.TableHeaderHeight},*");
         Background = UiTheme.Brush(Presentation.Card);
         _list.Background = UiTheme.Brush(Presentation.Card); _list.BorderThickness = new Thickness(0); _list.Padding = new Thickness(0);
@@ -80,7 +80,7 @@ internal sealed class HostTableView : Grid
         });
         SetScope(true);
     }
-    private TableColumn[] Columns => (_compact ? Presentation.HostColumns.Where(c => c.Key is "Host" or "Label" or "Status") : Presentation.HostColumns.Where(c => _showSite || c.Key != "Site")).ToArray();
+    private TableColumn[] Columns => (_compact ? Presentation.HostColumns.Where(c => c.Key is "Site" or "Host" or "Label" or "Status" or "Latency") : Presentation.HostColumns.Where(c => _showSite || c.Key != "Site")).ToArray();
     public void SetScope(bool showSite)
     {
         if (_showSite == showSite && _head.Children.Count > 0) return;
@@ -124,13 +124,13 @@ internal sealed class HostTableView : Grid
     private void ApplyWidths(Grid grid)
     {
         var columns = Columns;
-        double minimum = columns.Sum(c => _compact ? c.Key == "Status" ? 75 : 135 : c.Width);
+        double minimum = columns.Sum(c => _compact ? c.Key is "Status" or "Latency" ? 75 : 135 : c.Width);
         double width = Math.Max(minimum, Bounds.Width - 16);
         double extra = width - minimum, weight = columns.Sum(c => c.Weight);
         grid.Width = width; grid.ColumnDefinitions.Clear();
         foreach (var column in columns)
         {
-            double baseline = _compact ? column.Key == "Status" ? 75 : 135 : column.Width;
+            double baseline = _compact ? column.Key is "Status" or "Latency" ? 75 : 135 : column.Width;
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(baseline + (weight > 0 ? extra * column.Weight / weight : 0))));
         }
     }

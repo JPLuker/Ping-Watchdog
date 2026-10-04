@@ -189,6 +189,8 @@ internal sealed partial class WallboardWindow : Window
             _state.Text = snapshot.Monitoring ? "LIVE MONITORING" : "IDLE / CONFIG VIEW";
             _state.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Cyan;
             _startStop.Content = snapshot.Monitoring ? "Stop Monitoring" : "Start Monitoring";
+            _startStop.Background = Theme.Brush(snapshot.Monitoring ? "#5D262D" : "#1F7852");
+            _updateButton.IsVisible = snapshot.Settings.ShowUpdateControlOnHome;
             var hosts = snapshot.Hosts;
             int[] counts = { hosts.Count, hosts.Count(h => h.State == HostState.Online), hosts.Count(h => h.State == HostState.Suspect), hosts.Count(h => h.State == HostState.Offline) };
             for (int i = 0; i < counts.Length; i++) _statValues[i].Text = counts[i].ToString();

@@ -123,6 +123,8 @@ internal sealed class HostRuntime
     public DateTime? OutageStarted { get; set; }
 }
 
+internal sealed record ProbeResult(bool Success, long? LatencyMs, string Text);
+
 internal sealed class WatchdogEngine : IDisposable
 {
     private const int MaxCommandEntries = 2500;
@@ -138,9 +140,13 @@ internal sealed class WatchdogEngine : IDisposable
     private readonly string _historyPath;
     private CancellationTokenSource? _sessionToken;
     private bool _disposed;
+    private readonly Func<string, int, CancellationToken, Task<ProbeResult>> _probe;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
-    public WatchdogEngine(string? storageRoot = null)
+    public WatchdogEngine(string? storageRoot = null, Func<string, int, CancellationToken, Task<ProbeResult>>? probe = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
+        _probe = probe ?? NativeProbeAsync;
+        _delay = delay ?? Task.Delay;
         _configDirectory = storageRoot ?? ResolveConfigDirectory();
         _configPath = Path.Combine(_configDirectory, "autosave.pingwatch.json");
         _historyPath = Path.Combine(ResolveStateDirectory(storageRoot), "event-history.json");
@@ -532,48 +538,52 @@ internal sealed class WatchdogEngine : IDisposable
 
             var token = CancellationTokenSource.CreateLinkedTokenSource(_sessionToken.Token);
             _hostTokens[item.Key] = token;
-            _ = MonitorHostAsync(item.Key, runtime, token.Token);
+            _ = MonitorHostAsync(item.Key, runtime, token);
         }
     }
 
-    private async Task MonitorHostAsync(string key, HostRuntime host, CancellationToken token)
+    private static async Task<ProbeResult> NativeProbeAsync(string address, int timeout, CancellationToken token)
     {
-        while (!token.IsCancellationRequested)
+        try
         {
-            bool success = false;
-            long? latency = null;
-            string result;
+            using var ping = new Ping();
+            PingReply reply = await ping.SendPingAsync(address, timeout).WaitAsync(token);
+            bool success = reply.Status == IPStatus.Success;
+            return new ProbeResult(success, success ? reply.RoundtripTime : null,
+                success ? $"Reply from {reply.Address}: time={reply.RoundtripTime}ms" : $"FAILED ({reply.Status})");
+        }
+        catch (Exception ex) when (ex is PingException or InvalidOperationException or ArgumentException)
+        {
+            return new ProbeResult(false, null, $"FAILED ({ex.GetType().Name})");
+        }
+    }
 
-            try
+    private async Task MonitorHostAsync(string key, HostRuntime host, CancellationTokenSource source)
+    {
+        // Keep a token value: the owner may dispose its source while a probe is pending.
+        CancellationToken token = source.Token;
+        try
+        {
+            while (!token.IsCancellationRequested)
             {
-                using var ping = new Ping();
-                PingReply reply = await ping.SendPingAsync(host.Address, Config.PingTimeoutMs);
-                success = reply.Status == IPStatus.Success;
-                latency = success ? reply.RoundtripTime : null;
-                result = success
-                    ? $"Reply from {reply.Address}: time={reply.RoundtripTime}ms"
-                    : $"FAILED ({reply.Status})";
-            }
-            catch (Exception ex) when (ex is PingException or InvalidOperationException or ArgumentException)
-            {
-                result = $"FAILED ({ex.GetType().Name})";
-            }
-
-            ProcessProbe(host, success, latency);
-            AppendCommand(host, success, result);
-            RaiseChanged();
-
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(Config.PingIntervalSeconds), token);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
+                ProbeResult result = await _probe(host.Address, Config.PingTimeoutMs, token);
+                lock (_gate)
+                {
+                    // A stopped, removed, or superseded host must never publish a late reply.
+                    if (token.IsCancellationRequested || !Monitoring || !_hosts.TryGetValue(key, out var current) || !ReferenceEquals(current, host)) break;
+                    ProcessProbe(host, result.Success, result.LatencyMs);
+                    AppendCommand(host, result.Success, result.Text);
+                }
+                RaiseChanged();
+                await _delay(TimeSpan.FromSeconds(Config.PingIntervalSeconds), token);
             }
         }
-
-        _hostTokens.TryRemove(key, out _);
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally
+        {
+            // An old loop cannot remove the token belonging to a restarted host.
+            ((ICollection<KeyValuePair<string, CancellationTokenSource>>)_hostTokens).Remove(new(key, source));
+        }
     }
 
     private void ProcessProbe(HostRuntime host, bool success, long? latency)

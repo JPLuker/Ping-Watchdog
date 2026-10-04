@@ -66,6 +66,9 @@ internal static class LinuxUiRegressionTests
     private static async Task RunAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
     {
         await Task.Delay(100);
+        if (double.TryParse(Environment.GetEnvironmentVariable("WATCHDOG_EXPECTED_SCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double expectedScale))
+            Check(Math.Abs(main.RenderScaling - expectedScale) < .01, $"Desktop render scale is {expectedScale}");
+        await CheckDesktopPresentationAsync(engine, updates, main);
         var editor = Field<TextBox>(main, "_hostEditor");
         await CheckHostPanelLayoutAsync(main, editor);
         editor.Text = "127.0.0.1\n127.0.0.3";
@@ -238,7 +241,7 @@ internal static class LinuxUiRegressionTests
     {
         double width = main.Width, height = main.Height;
         var heading = Field<TextBlock>(main, "_siteHeader");
-        foreach (var size in new[] { new Size(width, height), new Size(main.MinWidth, main.MinHeight) })
+        foreach (var size in new[] { new Size(width, height), new Size(1060, 740), new Size(main.MinWidth, main.MinHeight) })
         {
             main.Width = size.Width;
             main.Height = size.Height;
@@ -252,16 +255,7 @@ internal static class LinuxUiRegressionTests
             Check(editorPoint.Y + editor.Bounds.Height <= cardPoint.Y + card.Bounds.Height - card.Padding.Bottom + 1,
                 $"Host editor stays inside its card at {size.Width}x{size.Height}");
             Check(editor.Bounds.Height >= 60, "Host editor retains its usable height");
-            if (Environment.GetEnvironmentVariable("WATCHDOG_UI_PREVIEW") == "1")
-            {
-                using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)main.Bounds.Width, (int)main.Bounds.Height));
-                bitmap.Render(main);
-                using var stream = new MemoryStream();
-                bitmap.Save(stream);
-                string png = Convert.ToBase64String(stream.ToArray());
-                for (int i = 0; i < png.Length; i += 4096)
-                    Console.WriteLine($"HOST_PANEL_PREVIEW_{(int)size.Width}x{(int)size.Height}:{png.Substring(i, Math.Min(4096, png.Length - i))}");
-            }
+            SavePreview(main, $"main-{(int)size.Width}x{(int)size.Height}");
         }
         main.Width = width;
         main.Height = height;
@@ -398,16 +392,87 @@ internal static class LinuxUiRegressionTests
         await task;
     }
 
-    private static void EmitWallboardPreview(WallboardWindow wall, string name)
+    private static void EmitWallboardPreview(WallboardWindow wall, string name) => SavePreview(wall, "wallboard-" + name);
+
+    private static void SavePreview(Window window, string name)
     {
         if (Environment.GetEnvironmentVariable("WATCHDOG_UI_PREVIEW") != "1") return;
-        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)wall.Bounds.Width, (int)wall.Bounds.Height));
-        bitmap.Render(wall);
-        using var stream = new MemoryStream();
+        Directory.CreateDirectory("ui-regression-images");
+        double scale = window.RenderScaling;
+        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)Math.Ceiling(window.Bounds.Width * scale), (int)Math.Ceiling(window.Bounds.Height * scale)), new Vector(96 * scale, 96 * scale));
+        bitmap.Render(window);
+        using var stream = File.Create(Path.Combine("ui-regression-images", name + ".png"));
         bitmap.Save(stream);
-        string png = Convert.ToBase64String(stream.ToArray());
-        for (int i = 0; i < png.Length; i += 4096)
-            Console.WriteLine($"WALLBOARD_PREVIEW_{name}:{png.Substring(i, Math.Min(4096, png.Length - i))}");
+    }
+
+    private static async Task CheckDesktopPresentationAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
+    {
+        Check(main.GetVisualDescendants().OfType<Image>().Any(i => ReferenceEquals(i.Source, BrandAssets.Logo) && i.Bounds.Width == 42), "Main uses the shared dog branding at the Windows size");
+        var timeout = Field<NumericUpDown>(main, "_timeout");
+        decimal? original = timeout.Value;
+        timeout.Value = 10000;
+        await Task.Delay(50);
+        var text = timeout.GetVisualDescendants().OfType<TextBox>().Single();
+        Check(text.Text == "10000" && text.Bounds.Width >= 55, "Numeric field shows its full maximum value");
+        timeout.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.RepeatButton>().Single(b => b.Name == "PART_DecreaseButton")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Check(timeout.Value == 9750, "Numeric down button changes the value");
+        text.Text = "2000";
+        timeout.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.RepeatButton>().Single(b => b.Name == "PART_IncreaseButton")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Check(timeout.Value == 2250, "Numeric field accepts a typed value before spinning");
+        timeout.Value = original;
+
+        var settings = new SettingsWindow(engine, updates, main);
+        settings.Show(main);
+        await Task.Delay(100);
+        var navigation = settings.GetVisualDescendants().OfType<ListBox>().Single();
+        Check(navigation.ItemCount == 4 && navigation.Items.Cast<string>().SequenceEqual(PingWatchdog.Shared.Presentation.SettingsPages), "Settings uses Windows page navigation");
+        foreach (var size in new[] { new Size(900, 650), new Size(760, 540) })
+        {
+            settings.Width = size.Width; settings.Height = size.Height;
+            foreach (int page in Enumerable.Range(0, 4))
+            {
+                navigation.SelectedIndex = page;
+                await Task.Delay(70);
+                var save = settings.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Save Settings");
+                var position = save.TranslatePoint(new Point(), settings)!.Value;
+                Check(position.Y >= 0 && position.Y + save.Bounds.Height <= settings.Bounds.Height, $"Settings footer is reachable on page {page} at {size}");
+                SavePreview(settings, $"settings-{page}-{size.Width}x{size.Height}");
+            }
+        }
+        settings.Close();
+
+        var history = new HistoryWindow(engine); history.Show(main);
+        await Task.Delay(100);
+        foreach (var size in new[] { new Size(1080, 650), new Size(820, 480) })
+        {
+            history.Width = size.Width; history.Height = size.Height;
+            await Task.Delay(80);
+            Check(Field<ListBox>(history, "_events").Bounds.Height > 100, $"History retains usable rows at {size}");
+            SavePreview(history, $"history-{size.Width}x{size.Height}");
+        }
+        history.Close();
+        engine.AddFolder("", "Organization fixture"); engine.AddFolder("Organization fixture", "Nested");
+        engine.MoveSite("Beta", "Organization fixture/Nested");
+        var organization = new OrganizationWindow(engine); organization.Show(main);
+        await Task.Delay(100);
+        var tree = Field<TreeView>(organization, "_items");
+        var nested = tree.Items.OfType<TreeViewItem>().Single(i => i.Header?.ToString() == "Organization fixture").Items.OfType<TreeViewItem>().Single();
+        Check(nested.Items.OfType<TreeViewItem>().Single().Header!.ToString()!.StartsWith("Beta"), "Organization uses a true folder/site hierarchy");
+        tree.SelectedItem = nested.Items[0];
+        engine.SetLabel("Beta", "127.0.0.2", "Organization label");
+        await Task.Delay(100);
+        Check((tree.SelectedItem as TreeViewItem)?.Header?.ToString()?.StartsWith("Beta") == true, "Organization refresh preserves selected site");
+        foreach (var size in new[] { new Size(760, 620), new Size(620, 460) })
+        {
+            organization.Width = size.Width; organization.Height = size.Height;
+            await Task.Delay(80); Check(tree.Bounds.Height > 150, $"Organization tree remains usable at {size}");
+            SavePreview(organization, $"organization-{size.Width}x{size.Height}");
+        }
+        organization.Close();
+        engine.MoveSite("Beta", ""); engine.DeleteFolder("Organization fixture/Nested"); engine.DeleteFolder("Organization fixture"); engine.SetLabel("Beta", "127.0.0.2", "");
+        engine.SelectedSite = "Alpha";
     }
 
     private static object? Invoke(object target, string name) => target.GetType()

@@ -37,7 +37,7 @@ internal sealed partial class WallboardWindow
             new Image { Source = BrandAssets.Logo, Width = 58, Height = 58, Stretch = Stretch.Uniform },
             new StackPanel { Children = { Theme.Label("PING WATCHDOG", 32, FontWeight.Normal), Theme.Label("NETWORK OPERATIONS WALLBOARD", 12, color: Theme.Cyan) } }
         } });
-        _clock.FontSize = 32; _date.FontSize = 12; _state.FontSize = 11;
+        _clock.FontSize = 32; _clock.FontWeight = FontWeight.Normal; _state.FontWeight = FontWeight.Normal; _date.FontSize = 12; _state.FontSize = 11;
         var clock = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right, Children = { _clock, _date,
             new Border { Background = Theme.Brush("#303A46"), Padding = new Thickness(12, 4), Width = 220, Child = _state } } };
         Grid.SetColumn(clock, 1); header.Children.Add(clock); _board.Children.Add(header);
@@ -71,7 +71,7 @@ internal sealed partial class WallboardWindow
         _opsCard = Theme.CardBorder(new ScrollViewer { Content = _ops, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, new Thickness(0));
         _opsCard.Background = Theme.Brush("#0A1017"); _opsCard.IsVisible = false;
         Grid.SetColumn(_opsCard, 1); workspace.Children.Add(_opsCard); Grid.SetRow(workspace, 1); root.Children.Add(workspace);
-        _board.SizeChanged += (_, _) => _reportsCard.Width = Math.Clamp(_board.Bounds.Width * .29, 280, 440);
+        _board.SizeChanged += (_, _) => _reportsCard.Width = Math.Clamp(_board.Bounds.Width * .29, 320, 440);
         SizeChanged += (_, _) => { _opsCard.Width = Math.Clamp(Bounds.Width / 3, 360, 440); _ops.Width = _opsCard.Width - 28; };
         return root;
     }
@@ -80,8 +80,8 @@ internal sealed partial class WallboardWindow
     {
         _topology.Children.Clear();
         var sites = snapshot.Sites.Where(s => snapshot.SelectedSite is null || s.Name.Equals(snapshot.SelectedSite, StringComparison.OrdinalIgnoreCase)).ToList();
-        double width = Math.Max(580, _topologyScroll.Bounds.Width), height = Math.Max(320, _topologyScroll.Bounds.Height);
-        if (sites.Any(s => s.Hosts.Count > 0)) { width = Math.Max(740, width); height = Math.Max(520, height); }
+        double width = Math.Max(300, _topologyScroll.Bounds.Width), height = Math.Max(210, _topologyScroll.Bounds.Height);
+        if (sites.Any(s => s.Hosts.Count > 0)) { width = Math.Max(580, width); height = Math.Max(380, height); }
         _topology.Width = width; _topology.Height = height;
         var center = new Point(width / 2, height / 2);
         double maxRadius = Math.Min(width, height) / 2 - 18;
@@ -106,10 +106,17 @@ internal sealed partial class WallboardWindow
             AddText(site.Name, point.X - 33, point.Y - 20, 11, Theme.Text, FontWeight.Bold, 66, true);
             AddText($"{site.Hosts.Count(h => h.State == HostState.Online)}/{site.Hosts.Count} online", point.X - 33, point.Y + 10, 9, Theme.Muted, FontWeight.Normal, 66, true);
             for (int h = 0; h < visible; h++) {
-                var host = site.Hosts[h]; var hp = Presentation.HostPoint(h, visible, points[i]); AddCircle(hp.X - 5, hp.Y - 5, 10, Theme.State(host.State));
-                double left = Math.Clamp(hp.X + 9, 4, width - 152), top = Math.Clamp(hp.Y - 14, 4, height - 34);
-                AddText(string.IsNullOrWhiteSpace(host.Label) ? host.Address : host.Label, left, top, 10, Theme.Text, FontWeight.Bold, 148);
-                if (!string.IsNullOrWhiteSpace(host.Label)) AddText(host.Address, left, top + 14, 9, Theme.Muted, FontWeight.Normal, 148);
+                var host = site.Hosts[h]; var hp = Presentation.HostPoint(h, visible, points[i]); var node = new Ellipse { Width = 10, Height = 10, Fill = Theme.State(host.State), Stroke = Theme.Brush("#E1ECF6"), StrokeThickness = 1 }; Canvas.SetLeft(node, hp.X - 5); Canvas.SetTop(node, hp.Y - 5); _topology.Children.Add(node);
+                double captionWidth = 124, captionHeight = string.IsNullOrWhiteSpace(host.Label) ? 22 : 34;
+                double left = Math.Clamp(hp.X >= point.X ? hp.X + 9 : hp.X - captionWidth - 9, 4, width - captionWidth - 4);
+                double top = Math.Clamp(hp.Y - captionHeight / 2, 4, height - captionHeight - 4);
+                var caption = new StackPanel { Children = {
+                    Theme.Label(string.IsNullOrWhiteSpace(host.Label) ? host.Address : host.Label, 10, FontWeight.Normal),
+                } };
+                if (!string.IsNullOrWhiteSpace(host.Label)) caption.Children.Add(Theme.Label(host.Address, 9, color: Theme.Muted));
+                foreach (var text in caption.Children.OfType<TextBlock>()) text.TextTrimming = TextTrimming.CharacterEllipsis;
+                var box = new Border { Width = captionWidth, Height = captionHeight, Padding = new Thickness(5, 2), Background = Theme.Brush("#070D13"), BorderBrush = Theme.State(host.State), BorderThickness = new Thickness(1), Child = caption };
+                Canvas.SetLeft(box, left); Canvas.SetTop(box, top); _topology.Children.Add(box);
             }
             if (site.Hosts.Count > visible) AddText($"+{site.Hosts.Count - visible} more hosts", Math.Clamp(point.X - 55, 0, width - 140), Math.Clamp(point.Y + 86, 0, height - 20), 10, Theme.Muted, FontWeight.Normal, 140);
         }

@@ -21,6 +21,7 @@
     <Compile Include="../../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
     <EmbeddedResource Include="../../Assets/WatchdogLogo.png" LogicalName="PingWatchdog.Brand.Logo" />
     <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.3" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
     <PackageReference Include="Velopack" Version="1.2.161" />
