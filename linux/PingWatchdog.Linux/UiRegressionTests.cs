@@ -258,6 +258,9 @@ internal static class LinuxUiRegressionTests
         var topology = Field<Canvas>(wall, "_topology");
         Check(topology.Children.OfType<TextBlock>().Any(t => t.Text!.StartsWith("+5 more hosts")), "Wallboard topology reports hidden host count");
         Check(topology.Children.OfType<TextBlock>().Any(t => t.Text == "Alpha") && !topology.Children.OfType<TextBlock>().Any(t => t.Text == "Beta"), "Topology respects selected site scope");
+        await Task.Delay(100);
+        Check(topology.Children.OfType<TextBlock>().All(t => Canvas.GetLeft(t) >= 0 && Canvas.GetLeft(t) + t.Width <= topology.Width), "Topology labels stay within their scrollable canvas");
+        EmitWallboardPreview(wall, "operations");
         Field<NumericUpDown>(wall, "_interval").Value = 23;
         await Task.Delay(850);
         Check(ReferenceEquals(source, list.ItemsSource) && ReferenceEquals(row, list.SelectedItem), "Wallboard live refresh preserves rows and keyed selection");
@@ -302,6 +305,10 @@ internal static class LinuxUiRegressionTests
         wall.GetType().GetMethod("RefreshReports", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(wall, new object[] { fixture });
         Check(Field<TextBlock>(wall, "_outageSummary").Text == "1 offline · 1 suspect"
             && Field<TextBlock>(wall, "_activeOutages").Text!.Contains("Down for 3m"), "Wallboard active outages include live duration and suspect state");
+        Invoke(wall, "ToggleOperations");
+        await Task.Delay(100);
+        EmitWallboardPreview(wall, "reports");
+        Invoke(wall, "ToggleOperations");
         Check(WallboardWindow.NextScreenIndex(2, 3) == 0 && WallboardWindow.NextScreenIndex(0, 1) == 0, "Monitor cycling wraps and supports a single display");
         await (Task)Invoke(wall, "MoveToNextScreenAsync")!;
         Check(wall.WindowState == WindowState.FullScreen, "Single-display monitor action preserves fullscreen");
@@ -315,6 +322,20 @@ internal static class LinuxUiRegressionTests
             input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
         Check(wall.IsVisible && !engine.Monitoring && Field<bool>(wall, "_showCli") == cli, "Wallboard input owns all shortcut keystrokes including Escape");
         Field<Button>(wall, "_startStop").Focus();
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, KeyModifiers = KeyModifiers.Control });
+        Check(Field<bool>(wall, "_showCli") == cli, "Wallboard Ctrl+C does not trigger CLI shortcut");
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.H, KeyModifiers = KeyModifiers.Control });
+        await Task.Delay(100);
+        var shortcutHistory = lifetime.Windows.Single(w => w is HistoryWindow);
+        Check(shortcutHistory.IsVisible, "Wallboard Ctrl+H opens full History");
+        shortcutHistory.Close();
+        wall.Activate(); Field<Button>(wall, "_startStop").Focus();
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.OemComma, KeyModifiers = KeyModifiers.Control });
+        await Task.Delay(100);
+        var shortcutSettings = lifetime.Windows.Single(w => w is SettingsWindow);
+        Check(shortcutSettings.IsVisible, "Wallboard Ctrl+comma opens Settings");
+        shortcutSettings.Close();
+        wall.Activate(); Field<Button>(wall, "_startStop").Focus();
         wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C });
         Check(engine.Config.WallboardShowCli != cli, "Wallboard CLI shortcut persists preference");
         wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.H });
@@ -337,6 +358,18 @@ internal static class LinuxUiRegressionTests
         dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "OK")
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         await task;
+    }
+
+    private static void EmitWallboardPreview(WallboardWindow wall, string name)
+    {
+        if (Environment.GetEnvironmentVariable("WATCHDOG_UI_PREVIEW") != "1") return;
+        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)wall.Bounds.Width, (int)wall.Bounds.Height));
+        bitmap.Render(wall);
+        using var stream = new MemoryStream();
+        bitmap.Save(stream);
+        string png = Convert.ToBase64String(stream.ToArray());
+        for (int i = 0; i < png.Length; i += 4096)
+            Console.WriteLine($"WALLBOARD_PREVIEW_{name}:{png.Substring(i, Math.Min(4096, png.Length - i))}");
     }
 
     private static object? Invoke(object target, string name) => target.GetType()

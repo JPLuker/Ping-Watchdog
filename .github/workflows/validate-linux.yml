@@ -29,4 +29,6 @@ jobs:
       - name: Run core regressions
         run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
       - name: Run desktop regressions
+        env:
+          WATCHDOG_UI_PREVIEW: "1"
         run: timeout 90s dbus-run-session -- xvfb-run -a bash -c 'openbox >/tmp/watchdog-openbox.log 2>&1 & dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test'

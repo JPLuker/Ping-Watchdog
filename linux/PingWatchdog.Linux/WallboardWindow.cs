@@ -161,7 +161,7 @@ internal sealed class WallboardWindow : Window
         Grid.SetRow(workspace, 2); root.Children.Add(workspace);
         _cli.Margin = new Thickness(10, 4, 10, 4);
         Grid.SetRow(_cli, 3); root.Children.Add(_cli);
-        var shortcuts = Theme.Label("O Operations   P Start/Stop   C CLI   H History range   S Suspect history   M Next monitor   Esc / F11 Main window", 10, color: Theme.Muted);
+        var shortcuts = Theme.Label("O Operations   P Start/Stop   C CLI   H History range   S Suspect history   M Next monitor   Ctrl+H History   Ctrl+, Settings   Esc / F11 Main window", 10, color: Theme.Muted);
         shortcuts.TextWrapping = TextWrapping.Wrap;
         shortcuts.Margin = new Thickness(12, 5);
         Grid.SetRow(shortcuts, 4); root.Children.Add(shortcuts);
@@ -475,6 +475,14 @@ internal sealed class WallboardWindow : Window
     {
         // Dialogs and text/numeric/dropdown editors own their keystrokes, including Esc.
         if (this.GetVisualDescendants().OfType<Control>().Any(c => c.IsKeyboardFocusWithin && c is TextBox or ComboBox or NumericUpDown)) return;
+        if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.H)
+        {
+            new HistoryWindow(_engine).Show(this); e.Handled = true; return;
+        }
+        if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.OemComma)
+        {
+            new SettingsWindow(_engine, _updates, _main).Show(this); e.Handled = true; return;
+        }
         if (e.KeyModifiers != KeyModifiers.None) return;
         switch (e.Key)
         {
