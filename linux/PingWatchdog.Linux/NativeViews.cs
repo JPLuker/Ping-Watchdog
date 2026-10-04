@@ -68,7 +68,7 @@ internal sealed class HostTableView : Grid
         _list.ItemTemplate = new FuncDataTemplate<HostRow>((host, _) =>
         {
             var row = BuildGrid(false); row.DataContext = host;
-            _realized.Add(row); row.DetachedFromVisualTree += (_, _) => _realized.Remove(row);
+            _realized.Add(row); row.AttachedToVisualTree += (_, _) => { if (!_realized.Contains(row)) _realized.Add(row); ApplyWidths(row); }; row.DetachedFromVisualTree += (_, _) => _realized.Remove(row);
             return new Border { BorderBrush = UiTheme.Brush("#1F2832"), BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
         });
         _header.Content = _head; _header.Background = UiTheme.Brush("#161F2A"); Children.Add(_header);
@@ -131,7 +131,49 @@ internal sealed class HostTableView : Grid
         foreach (var column in columns)
         {
             double baseline = _compact ? column.Key == "Status" ? 75 : 135 : column.Width;
-            grid.ColumnDefinitions.Add(new ColumnDefinition(baseline + (weight > 0 ? extra * column.Weight / weight : 0)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(baseline + (weight > 0 ? extra * column.Weight / weight : 0))));
         }
+    }
+}
+
+internal sealed record HistoryRow(StateEventRecord Event)
+{
+    public string Timestamp => Event.Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+    public string Kind => Event.Kind;
+    public string Site => Event.Site;
+    public string Host => Event.DisplayHost;
+    public string Details => Event.Message;
+    public IBrush Foreground => Kind == "DOWN" ? UiTheme.Red : Kind == "SUSPECT" ? UiTheme.Yellow : UiTheme.Green;
+}
+internal sealed class HistoryTableView : Grid
+{
+    public HistoryTableView(ListBox list)
+    {
+        RowDefinitions = new RowDefinitions($"{Presentation.TableHeaderHeight},*");
+        var head = new Grid();
+        foreach (var column in Presentation.HistoryColumns) head.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(column.Width)));
+        int index = 0;
+        foreach (var column in Presentation.HistoryColumns) {
+            var text = UiTheme.Label(column.Header, 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(text, index++); head.Children.Add(text);
+        }
+        var header = new ScrollViewer { Content = head, Background = UiTheme.Brush("#161F2A"), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        Children.Add(header); Grid.SetRow(list, 1); Children.Add(list);
+        list.Padding = new Thickness(0); list.Background = UiTheme.Card; list.BorderThickness = new Thickness(0);
+        list.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(0)), new Setter(ListBoxItem.MinHeightProperty, 34d) } });
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Auto);
+        list.ItemTemplate = new FuncDataTemplate<HistoryRow>((_, _) => {
+            var row = new Grid { Height = Presentation.TableRowHeight };
+            int i = 0;
+            foreach (var column in Presentation.HistoryColumns) {
+                row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(column.Width)));
+                var text = new TextBlock { FontSize = 12.7, Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                text.Bind(TextBlock.TextProperty, new Binding(column.Key)); text.Bind(ToolTip.TipProperty, new Binding(column.Key));
+                text.Bind(TextBlock.ForegroundProperty, new Binding(nameof(HistoryRow.Foreground)));
+                Grid.SetColumn(text, i++); row.Children.Add(text);
+            }
+            return new Border { BorderBrush = UiTheme.Border, BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
+        });
+        list.AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) => { if (e.Source is ScrollViewer scroll) header.Offset = new Vector(scroll.Offset.X, 0); });
     }
 }

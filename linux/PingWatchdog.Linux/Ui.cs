@@ -794,27 +794,34 @@ internal sealed class SettingsWindow : Window
         _updates = updates;
         _main = main;
         Title = "Settings • Ping Watchdog";
-        Width = 780;
-        Height = 620;
-        MinWidth = 650;
-        MinHeight = 520;
+        Width = 900;
+        Height = 650;
+        MinWidth = 760;
+        MinHeight = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Theme.Window;
         Foreground = Theme.Text;
 
-        _historyRange.ItemsSource = new[] { "Last 24 hours", "Last 7 days", "Last 30 days", "All time" };
-        var tabs = new TabControl
-        {
-            Margin = new Thickness(16),
-            ItemsSource = new[]
-            {
-                new TabItem { Header = "General", Content = GeneralPage() },
-                new TabItem { Header = "Monitoring", Content = MonitoringPage() },
-                new TabItem { Header = "History", Content = HistoryPage() },
-                new TabItem { Header = "Updates", Content = UpdatesPage() }
-            }
-        };
-        Content = tabs;
+        _historyRange.ItemsSource = Presentation.HistoryRanges;
+        var root = new Grid { RowDefinitions = new RowDefinitions("80,*,68") };
+        var header = new StackPanel { Margin = new Thickness(32, 18), Children = {
+            Theme.Label("Settings", 26.7, FontWeight.SemiBold),
+            Theme.Label("Configure Ping Watchdog without crowding the monitoring workspace.", 12.7, color: Theme.Muted)
+        } };
+        root.Children.Add(header);
+        var workspace = new Grid { ColumnDefinitions = new ColumnDefinitions("186,*") };
+        var nav = new ListBox { ItemsSource = Presentation.SettingsPages, Margin = new Thickness(14, 20, 10, 0), Background = Theme.Brush(Presentation.Navigation), BorderThickness = new Thickness(0) };
+        workspace.Children.Add(nav);
+        var pages = new Control[] { GeneralPage(), MonitoringPage(), HistoryPage(), UpdatesPage() };
+        var page = new ContentControl(); Grid.SetColumn(page, 1); workspace.Children.Add(page);
+        nav.SelectionChanged += (_, _) => { if (nav.SelectedIndex >= 0) page.Content = pages[nav.SelectedIndex]; };
+        nav.SelectedIndex = 0;
+        Grid.SetRow(workspace, 1); root.Children.Add(workspace);
+        var save = Theme.Button("Save Settings", true); save.Click += (_, _) => SaveValues();
+        var close = Theme.Button("Close"); close.Click += (_, _) => Close();
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 32, 12), Children = { save, close } };
+        Grid.SetRow(footer, 2); root.Children.Add(footer); Content = root;
 
         _updates.Changed += UpdatesChanged;
         Closed += (_, _) => { _closed = true; _updates.Changed -= UpdatesChanged; };
@@ -824,70 +831,44 @@ internal sealed class SettingsWindow : Window
 
     private Control GeneralPage()
     {
-        var save = Theme.Button("Save Settings", true);
-        save.Click += (_, _) => SaveValues();
-        var import = Theme.Button("Import Config...");
-        var export = Theme.Button("Export Config...");
+        var import = Theme.Button("Import Config..."); var export = Theme.Button("Export Config...");
         import.Click += async (_, _) => { await _main.ImportConfigAsync(this); LoadValues(); };
         export.Click += async (_, _) => await _main.ExportConfigAsync(this);
-        return Page(
-            Theme.Label("Application behavior", 16, FontWeight.Bold),
-            _showCli,
-            _wallboardCli,
-            _notifications,
-            _minimizeToTray,
-            _trayStatus,
-            save,
-            Theme.Label("Configuration", 14, FontWeight.Bold),
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { import, export } });
+        return Page("General", "Application behavior and display defaults.",
+            Section("Window behavior", "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues.", _minimizeToTray, _trayStatus),
+            Section("Notifications", "Controls outage and recovery notifications. Monitoring and history recording continue either way.", _notifications),
+            Section("CLI displays", "", _showCli, _wallboardCli),
+            Section("Configuration", "Import or export the same configuration schema used by Windows.", new WrapPanel { Children = { import, export } }));
     }
-
-    private Control MonitoringPage()
-    {
-        var save = Theme.Button("Save Monitoring Defaults", true);
-        save.Click += (_, _) => SaveValues();
-        return Page(
-            Theme.Label("Monitoring defaults", 16, FontWeight.Bold),
-            Row("Ping interval", _interval, "seconds"),
-            Row("Ping timeout", _timeout, "milliseconds"),
-            Row("Declare DOWN after", _down, "failures"),
-            Row("Declare RECOVERED after", _recover, "successes"),
-            Theme.Label("Timing controls are locked while monitoring is active.", 10, color: Theme.Muted),
-            save);
-    }
-
+    private Control MonitoringPage() => Page("Monitoring", "Ping cadence and outage detection defaults.",
+        Section("Monitoring defaults", "Timing controls are locked while monitoring is active.",
+            Row("Ping interval", _interval, "seconds"), Row("Ping timeout", _timeout, "milliseconds"),
+            Row("Declare DOWN after", _down, "failures"), Row("Declare RECOVERED after", _recover, "successes")));
     private Control HistoryPage()
     {
-        var save = Theme.Button("Save History Defaults", true);
-        save.Click += (_, _) => SaveValues();
-        return Page(
-            Theme.Label("Outage history", 16, FontWeight.Bold),
-            Row("Default range", _historyRange, ""),
-            _hideSuspects,
-            Theme.Label("Filters never delete stored events.", 10, color: Theme.Muted),
-            save);
+        var history = Theme.Button("Open Outage History"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
+        return Page("History", "Saved history range and event filters.", Section("Outage history", "Filters never delete stored events.", Row("Default range", _historyRange, ""), _hideSuspects, history));
     }
-
-    private Control UpdatesPage()
+    private Control UpdatesPage() => Page("Updates", "Version, automatic checks, and update installation.",
+        Section("Installed version", "", Theme.Label(_updates.Version, 13.3, FontWeight.SemiBold), _updateStatus, _updateAction),
+        Section("Update preferences", "Checks run in the background; downloaded updates prompt for a restart.", _autoUpdates, _developerUpdate));
+    private static Control Page(string title, string subtitle, params Control[] controls)
     {
-        var save = Theme.Button("Save Update Preferences", true);
-        save.Click += (_, _) => SaveValues();
-        return Page(
-            Theme.Label("Updates", 16, FontWeight.Bold),
-            Theme.Label($"Installed: {_updates.Version}", 12, FontWeight.Bold),
-            _updateStatus,
-            _autoUpdates,
-            _developerUpdate,
-            _updateAction,
-            Theme.Label("Linux releases use the self-updating AppImage channel.", 10, color: Theme.Muted),
-            save);
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Margin = new Thickness(30, 24, 26, 24) };
+        root.Children.Add(new StackPanel { Spacing = 4, Margin = new Thickness(6, 0, 0, 20), Children = {
+            Theme.Label(title, 21.3, FontWeight.SemiBold), Theme.Label(subtitle, 12.7, color: Theme.Muted)
+        } });
+        var stack = new StackPanel { Spacing = 12 };
+        foreach (var control in controls) stack.Children.Add(control);
+        var scroll = new ScrollViewer { Content = stack, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        Grid.SetRow(scroll, 1); root.Children.Add(scroll); return root;
     }
-
-    private static StackPanel Page(params Control[] controls)
+    private static Control Section(string title, string description, params Control[] controls)
     {
-        var panel = new StackPanel { Margin = new Thickness(18), Spacing = 12 };
-        foreach (var control in controls) panel.Children.Add(control);
-        return panel;
+        var stack = new StackPanel { Spacing = 10, Children = { Theme.Label(title, 14, FontWeight.SemiBold) } };
+        foreach (var control in controls) stack.Children.Add(control);
+        if (!string.IsNullOrWhiteSpace(description)) stack.Children.Add(new TextBlock { Text = description, FontSize = 12.7, Foreground = Theme.Muted, TextWrapping = TextWrapping.Wrap });
+        return Theme.CardBorder(stack, new Thickness(0));
     }
 
     private static Control Row(string label, Control control, string suffix)
@@ -980,20 +961,20 @@ internal sealed class HistoryWindow : Window
     {
         _engine = engine;
         Title = "Outage History • Ping Watchdog";
-        Width = 980;
+        Width = 1080;
         Height = 650;
-        MinWidth = 760;
+        MinWidth = 820;
         MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Theme.Window;
         Foreground = Theme.Text;
 
-        _range.ItemsSource = new[] { "Last 24 hours", "Last 7 days", "Last 30 days", "All time" };
+        _range.ItemsSource = Presentation.HistoryRanges;
         _range.SelectionChanged += (_, _) => ApplyFilterPreference();
         _hideSuspects.IsCheckedChanged += (_, _) => ApplyFilterPreference();
         _site.SelectionChanged += (_, _) => Refresh();
 
-        var filters = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var filters = new WrapPanel { Orientation = Orientation.Horizontal };
         filters.Children.Add(Theme.Label("Range", 10, color: Theme.Muted));
         filters.Children.Add(_range);
         filters.Children.Add(Theme.Label("Site", 10, color: Theme.Muted));
@@ -1002,6 +983,7 @@ internal sealed class HistoryWindow : Window
         var export = Theme.Button("Export CSV");
         export.Click += async (_, _) => await ExportCsvAsync();
         filters.Children.Add(export);
+        foreach (var control in filters.Children) control.Margin = new Thickness(0, 4, 8, 4);
 
         Content = new Grid
         {
@@ -1012,7 +994,7 @@ internal sealed class HistoryWindow : Window
                 Theme.Label("Outage History", 20, FontWeight.Bold),
                 At(filters, 1),
                 At(_summary, 2),
-                At(_events, 3)
+                At(new HistoryTableView(_events), 3)
             }
         };
 
@@ -1064,9 +1046,7 @@ internal sealed class HistoryWindow : Window
             if (!_visibleEvents.SequenceEqual(history.Events))
             {
                 _visibleEvents = history.Events;
-                _events.ItemsSource = _visibleEvents
-                    .Select(e => $"{e.Timestamp:yyyy-MM-dd HH:mm:ss}  {e.Kind,-10}  {e.Site,-20}  {e.DisplayHost,-30}  {e.Message}")
-                    .ToList();
+                _events.ItemsSource = _visibleEvents.Select(e => new HistoryRow(e)).ToList();
             }
         }
         finally { _loading = false; }

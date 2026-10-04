@@ -11,7 +11,7 @@ internal sealed partial class MainWindow
 {
     private readonly Button _stop = Theme.Button("Stop");
     private readonly TextBlock _siteHeader = Theme.Label("Selected site hosts", 13.7, FontWeight.SemiBold);
-    private readonly ColumnDefinition _navigationColumn = new(Presentation.SidebarWidth);
+    private readonly ColumnDefinition _navigationColumn = new(new GridLength(Presentation.SidebarWidth));
     private HostTableView _hostTable = null!;
 
     private Control BuildLayout()
@@ -59,7 +59,7 @@ internal sealed partial class MainWindow
         editorHead.Children.Add(_siteHeader); editorHead.Children.Add(Right(Theme.Label("Saved automatically • Applies live", 11.3, color: Theme.Muted)));
         editor.Children.Add(editorHead);
         _hostEditor.Height = 60; _hostEditor.MinHeight = 60; _hostEditor.FontSize = 12.7;
-        _hostEditor.Watermark = "One IP or hostname per line\n192.168.1.1\n8.8.8.8\nserver01";
+        _hostEditor.PlaceholderText = "One IP or hostname per line\n192.168.1.1\n8.8.8.8\nserver01";
         _hostEditor.Background = Theme.Brush(Presentation.Input); _hostEditor.BorderBrush = Theme.Border;
         Grid.SetRow(_hostEditor, 1); editor.Children.Add(_hostEditor);
         var editorBorder = Theme.CardBorder(editor, new Thickness(0, 0, 0, 10)); editorBorder.Padding = new Thickness(14, 10, 14, 12);
