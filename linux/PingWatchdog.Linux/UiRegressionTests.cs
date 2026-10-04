@@ -100,6 +100,7 @@ internal static class LinuxUiRegressionTests
         hosts.Text = "127.0.0.1\n127.0.0.6";
         wallboard.Close();
         Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "Closing Wallboard persists edits");
+        await RunWallboardParityAsync(engine, updates, main);
 
         var history = new HistoryWindow(engine);
         history.Show(main);
@@ -229,6 +230,112 @@ internal static class LinuxUiRegressionTests
         }
         using var reloaded = new WatchdogEngine(Path.GetDirectoryName(engine.ConfigPath)!);
         Check(reloaded.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "UI host edits survive restart");
+    }
+
+    private static async Task RunWallboardParityAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
+    {
+        var originalSettings = engine.Snapshot().Settings;
+        string originalHosts = string.Join(Environment.NewLine, engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts);
+        engine.SelectedSite = "Alpha";
+        var wall = new WallboardWindow(engine, updates, main);
+        wall.Show();
+        await Task.Delay(150);
+        Invoke(wall, "ToggleOperations");
+        await Task.Delay(100);
+        Check(Field<Border>(wall, "_opsCard").IsVisible && !Field<Border>(wall, "_reportsCard").IsVisible,
+            "Wallboard operations drawer occupies its own grid cell and replaces reports");
+        Check(wall.GetVisualDescendants().OfType<Image>().Any(i => ReferenceEquals(i.Source, BrandAssets.Logo)), "Wallboard displays the embedded Watchdog dog");
+        Check(wall.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Import Config...")
+            && wall.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Export Config..."), "Wallboard offers shared native config actions");
+        engine.SaveHosts("Alpha", originalHosts + "\n" + string.Join("\n", Enumerable.Range(10, 15).Select(i => $"127.0.0.{i}")));
+        Invoke(wall, "Refresh");
+        var list = Field<ListBox>(wall, "_hostList");
+        list.SelectedIndex = 0;
+        var row = list.SelectedItem;
+        var source = list.ItemsSource;
+        Check(list.ItemCount == 17, "Wallboard live list includes hosts beyond the twelve topology nodes");
+        var topology = Field<Canvas>(wall, "_topology");
+        Check(topology.Children.OfType<TextBlock>().Any(t => t.Text!.StartsWith("+5 more hosts")), "Wallboard topology reports hidden host count");
+        Check(topology.Children.OfType<TextBlock>().Any(t => t.Text == "Alpha") && !topology.Children.OfType<TextBlock>().Any(t => t.Text == "Beta"), "Topology respects selected site scope");
+        Field<NumericUpDown>(wall, "_interval").Value = 23;
+        await Task.Delay(850);
+        Check(ReferenceEquals(source, list.ItemsSource) && ReferenceEquals(row, list.SelectedItem), "Wallboard live refresh preserves rows and keyed selection");
+        Check(Field<NumericUpDown>(wall, "_interval").Value == 23, "Wallboard refresh preserves pending timing edits");
+        await CompleteTextDialogAsync(wall, "EditLabelAsync", "Edit Host Label", "Wallboard router");
+        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels["127.0.0.1"] == "Wallboard router", "Wallboard labels save the selected host");
+        Check(ReferenceEquals(row, list.SelectedItem) && ((HostRow)row!).Text.Contains("Wallboard router"), "Wallboard label edits update selected row in place");
+        await (Task)Invoke(wall, "ClearLabelAsync")!;
+        Check(!engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels.ContainsKey("127.0.0.1"), "Wallboard clear label removes the label");
+        Check((bool)Invoke(wall, "ApplyTiming")! && engine.Config.PingIntervalSeconds == 23, "Wallboard applies timing settings");
+        Invoke(wall, "ToggleMonitoring");
+        Check(engine.Monitoring && !Field<NumericUpDown>(wall, "_timeout").IsEnabled, "Wallboard locks timing while monitoring");
+        Invoke(wall, "ToggleMonitoring");
+        Check(!engine.Monitoring && Field<NumericUpDown>(wall, "_timeout").IsEnabled, "Wallboard stop restores timing controls");
+        await CompleteTextDialogAsync(wall, "AddSiteAsync", "Add Site", "Wallboard fixture");
+        Check(engine.SelectedSite == "Wallboard fixture", "Wallboard Add Site selects the new site");
+        Field<TextBox>(wall, "_hosts").Text = "127.0.0.90";
+        await CompleteTextDialogAsync(wall, "RenameSiteAsync", "Rename Site", "Wallboard renamed");
+        Check(engine.SelectedSite == "Wallboard renamed" && engine.SiteDefinitions().Single(s => s.Name == "Wallboard renamed").Hosts.Contains("127.0.0.90"), "Wallboard rename commits pending hosts and retains site identity");
+        var deleteTask = (Task)Invoke(wall, "DeleteSiteAsync")!;
+        await Task.Delay(100);
+        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
+        var confirm = lifetime.Windows.Single(w => w.Title == "Delete Site");
+        confirm.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Yes")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        await deleteTask;
+        Check(!engine.SiteDefinitions().Any(s => s.Name == "Wallboard renamed"), "Wallboard delete removes the confirmed site");
+        engine.SelectedSite = null;
+        Invoke(wall, "Refresh");
+        Check(!Field<Button>(wall, "_rename").IsEnabled && !Field<Button>(wall, "_delete").IsEnabled && Field<TextBox>(wall, "_hosts").IsReadOnly,
+            "Wallboard All Sites disables site-specific destructive actions and host editor");
+        Field<ComboBox>(wall, "_range").SelectedIndex = 3;
+        Field<CheckBox>(wall, "_hideSuspects").IsChecked = false;
+        Check(Field<TextBlock>(wall, "_historySummary").Text!.Contains("301 matching / 301 stored"), "Wallboard recent-history counts use all stored events");
+        Field<CheckBox>(wall, "_hideSuspects").IsChecked = true;
+        Check(Field<TextBlock>(wall, "_historySummary").Text!.Contains("300 matching"), "Wallboard suspect filter applies consistently");
+        var snapshot = engine.Snapshot();
+        var fixture = snapshot with { Hosts = new[] {
+            snapshot.Hosts[0] with { State = HostState.Offline, OutageStarted = DateTime.Now.AddMinutes(-3), Label = "Offline fixture" },
+            snapshot.Hosts[1] with { State = HostState.Suspect, Failures = 2, Label = "Suspect fixture" }
+        } };
+        wall.GetType().GetMethod("RefreshReports", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(wall, new object[] { fixture });
+        Check(Field<TextBlock>(wall, "_outageSummary").Text == "1 offline · 1 suspect"
+            && Field<TextBlock>(wall, "_activeOutages").Text!.Contains("Down for 3m"), "Wallboard active outages include live duration and suspect state");
+        Check(WallboardWindow.NextScreenIndex(2, 3) == 0 && WallboardWindow.NextScreenIndex(0, 1) == 0, "Monitor cycling wraps and supports a single display");
+        await (Task)Invoke(wall, "MoveToNextScreenAsync")!;
+        Check(wall.WindowState == WindowState.FullScreen, "Single-display monitor action preserves fullscreen");
+        // Global shortcuts must leave typed input and modifiers alone.
+        var input = Field<TextBox>(wall, "_hosts");
+        input.BringIntoView();
+        await Task.Delay(80);
+        Check(input.Focus(), "Wallboard editor receives focus for shortcut tests");
+        bool cli = Field<bool>(wall, "_showCli");
+        foreach (var key in new[] { Key.C, Key.P, Key.H, Key.S, Key.O, Key.M, Key.Escape })
+            input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+        Check(wall.IsVisible && !engine.Monitoring && Field<bool>(wall, "_showCli") == cli, "Wallboard input owns all shortcut keystrokes including Escape");
+        Field<Button>(wall, "_startStop").Focus();
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C });
+        Check(engine.Config.WallboardShowCli != cli, "Wallboard CLI shortcut persists preference");
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.H });
+        Check(engine.Config.EventHistoryHours == 24, "Wallboard history-range shortcut cycles filters");
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.S });
+        Check(!engine.Config.HideSuspectEvents, "Wallboard suspect shortcut changes history filter");
+        wall.Close();
+        engine.SaveHosts("Alpha", originalHosts);
+        engine.ApplySettings(originalSettings);
+        engine.SelectedSite = "Alpha";
+    }
+
+    private static async Task CompleteTextDialogAsync(WallboardWindow wall, string method, string title, string text)
+    {
+        var task = (Task)Invoke(wall, method)!;
+        await Task.Delay(100);
+        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
+        var dialog = lifetime.Windows.Single(w => w.Title == title);
+        dialog.GetVisualDescendants().OfType<TextBox>().Single().Text = text;
+        dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "OK")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        await task;
     }
 
     private static object? Invoke(object target, string name) => target.GetType()

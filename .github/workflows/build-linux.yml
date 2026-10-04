@@ -120,7 +120,9 @@ jobs:
           - Incremental CLI trace rows: successful replies green, failures red, optional live following.
           - Stable host/site rows preserve selection and scroll during live updates.
           - Nested site folders, organization view, full persistent outage history, filters, and filtered CSV export.
-          - Fullscreen Wallboard with site hubs plus labeled/IP host nodes.
+          - Fullscreen Wallboard with scoped, scrollable topology and explicit host overflow counts.
+          - Wallboard site operations, stable live host list, label actions, timing controls, native config import/export, and outage/history panels.
+          - Watchdog branding, monitor cycling, and keyboard controls with safe text-entry behavior.
           - Settings and background GitHub update checks on the Linux beta channel.
           - Linux desktop notifications through notify-send when available.
           - Self-contained .NET runtime; no separate .NET installation required.
