@@ -207,15 +207,10 @@ internal sealed partial class MainWindow : Window
         _updates = updates;
         _commandBox = new CliTraceView(_engine.ClearCommandLog);
         _hostList.ItemsSource = _hostRows;
-        _hostList.ItemTemplate = new FuncDataTemplate<HostRow>((_, _) =>
-        {
-            var label = LiveRows.BoundText(nameof(HostRow.Text));
-            label.Bind(TextBlock.ForegroundProperty, new Binding(nameof(HostRow.Foreground)));
-            return label;
-        });
-        ScrollViewer.SetHorizontalScrollBarVisibility(_hostList, Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
         _siteList.ItemsSource = _siteRows;
-        _siteList.ItemTemplate = new FuncDataTemplate<SiteRow>((_, _) => LiveRows.BoundText(nameof(SiteRow.Text)));
+        _siteList.ItemTemplate = new FuncDataTemplate<SiteRow>((_, _) => {
+            var text = Theme.Label("", 12.7); text.Bind(TextBlock.TextProperty, new Binding(nameof(SiteRow.Text))); return text;
+        });
         _editor = new HostEditorBinding(engine, _hostEditor, error => _ = AlertAsync(error));
 
         Title = "Ping Watchdog";
