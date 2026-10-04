@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfuse2 imagemagick xvfb dbus-x11 libx11-6 libice6 libsm6 libfontconfig1
+          sudo apt-get install -y libfuse2 imagemagick xvfb openbox dbus-x11 libx11-6 libice6 libsm6 libfontconfig1
 
       - name: Install matching Velopack CLI
         shell: bash
@@ -69,7 +69,7 @@ jobs:
 
       - name: Run Linux desktop regressions
         shell: bash
-        run: timeout 90s dbus-run-session -- xvfb-run -a dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test
+        run: timeout 90s dbus-run-session -- xvfb-run -a bash -c 'openbox >/tmp/watchdog-openbox.log 2>&1 & dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test'
 
       - name: Publish self-contained Linux x64 app
         shell: bash

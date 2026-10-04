@@ -199,6 +199,8 @@ internal static class LinuxUiRegressionTests
             engine.StartMonitoring();
             main.WindowState = WindowState.Minimized;
             await tray.MinimizeAsync();
+            await Task.Delay(150);
+            Console.WriteLine($"Tray minimize state: available={tray.Available}, preference={engine.Config.MinimizeToTray}, visible={main.IsVisible}, state={main.WindowState}, monitoring={engine.Monitoring}");
             Check(!main.IsVisible && engine.Monitoring, "Minimize to tray hides the window while monitoring continues");
             hostAvailable = false;
             await tray.RefreshAsync();
