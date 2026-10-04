@@ -103,12 +103,12 @@ internal sealed class WallboardWindow : Window
         };
         _hostList.SelectionChanged += (_, _) => UpdateLabelActions();
         _hostList.DoubleTapped += async (_, _) => await EditLabelAsync();
-        _hostList.PointerPressed += (_, e) =>
+        _hostList.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (!e.GetCurrentPoint(_hostList).Properties.IsRightButtonPressed) return;
             if (e.Source is Visual source && source.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault() is { } item)
                 _hostList.SelectedItem = item.DataContext;
-        };
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         var editMenu = new MenuItem { Header = "Edit Label..." };
         var clearMenu = new MenuItem { Header = "Clear Label" };
         editMenu.Click += async (_, _) => await EditLabelAsync();
@@ -371,11 +371,18 @@ internal sealed class WallboardWindow : Window
             AddLine(new Point(left + 44, top + 49), sitePoint, Theme.State(AggregateSite(site)), 2);
             AddCircle(sitePoint.X - 18, sitePoint.Y - 18, 36, Theme.State(AggregateSite(site)));
             int visible = Math.Min(12, site.Hosts.Count);
+            for (int column = 0; column < (visible + 5) / 6; column++)
+            {
+                double trunk = left + 90 + column * 168;
+                int count = Math.Min(6, visible - column * 6);
+                AddLine(sitePoint, new Point(trunk, sitePoint.Y), Theme.State(AggregateSite(site)), 1);
+                AddLine(new Point(trunk, top + 64), new Point(trunk, top + 64 + (count - 1) * 39), Theme.State(AggregateSite(site)), 1);
+            }
             for (int h = 0; h < visible; h++)
             {
                 var host = site.Hosts[h];
                 var point = new Point(left + 98 + h / 6 * 168, top + 64 + h % 6 * 39);
-                AddLine(sitePoint, point, Theme.State(host.State), 1);
+                AddLine(new Point(point.X - 8, point.Y), point, Theme.State(host.State), 1);
                 AddCircle(point.X - 4, point.Y - 4, 8, Theme.State(host.State));
                 AddText(string.IsNullOrWhiteSpace(host.Label) ? host.Address : host.Label, point.X + 9, point.Y - 11, 10, Theme.Text, FontWeight.Bold, 148);
                 AddText(string.IsNullOrWhiteSpace(host.Label) ? host.State.ToString() : host.Address, point.X + 9, point.Y + 3, 9, Theme.State(host.State), FontWeight.Normal, 148);

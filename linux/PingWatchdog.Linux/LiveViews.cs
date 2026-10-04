@@ -104,8 +104,9 @@ internal sealed class CliTraceView : Border
         _list.ItemsSource = _rows;
         _list.ItemTemplate = new FuncDataTemplate<CommandLogEntry>((entry, _) => new TextBlock
         {
-            Text = entry!.Text, FontFamily = new FontFamily("monospace"), FontSize = 11,
-            Foreground = entry.Success ? WatchdogTheme.Green : WatchdogTheme.Red,
+            // Avalonia clears content to null while recycling a virtualized container.
+            Text = entry?.Text ?? string.Empty, FontFamily = new FontFamily("monospace"), FontSize = 11,
+            Foreground = entry is null ? WatchdogTheme.Muted : entry.Success ? WatchdogTheme.Green : WatchdogTheme.Red,
             Margin = new Thickness(0, 1), TextWrapping = TextWrapping.NoWrap
         });
         ScrollViewer.SetHorizontalScrollBarVisibility(_list, Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);

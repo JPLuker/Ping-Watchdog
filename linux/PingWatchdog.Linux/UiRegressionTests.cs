@@ -185,6 +185,7 @@ internal static class LinuxUiRegressionTests
         var successLabel = (TextBlock)traceList.ItemTemplate!.Build(success)!;
         var failureLabel = (TextBlock)traceList.ItemTemplate.Build(failure)!;
         Check(Equals(successLabel.Foreground, Theme.Green) && Equals(failureLabel.Foreground, Theme.Red), "CLI renders success green and failure red per command");
+        Check(((TextBlock)traceList.ItemTemplate.Build(null)!).Text == string.Empty, "CLI recycled null content renders safely");
         var traceRows = traceList.ItemsSource;
         trace.Refresh(new[] { success, failure });
         Check(ReferenceEquals(traceRows, traceList.ItemsSource), "CLI refresh preserves its list collection");
