@@ -255,6 +255,9 @@ internal static class LinuxUiRegressionTests
         var row = list.SelectedItem;
         var source = list.ItemsSource;
         Check(list.ItemCount == 17, "Wallboard live list includes hosts beyond the twelve topology nodes");
+        var compactHost = (TextBlock)list.ItemTemplate!.Build(row)!;
+        Check(compactHost.TextWrapping == Avalonia.Media.TextWrapping.Wrap && compactHost.Width <= 300,
+            "Wallboard host rows wrap within the operations drawer");
         var topology = Field<Canvas>(wall, "_topology");
         Check(topology.Children.OfType<TextBlock>().Any(t => t.Text!.StartsWith("+5 more hosts")), "Wallboard topology reports hidden host count");
         Check(topology.Children.OfType<TextBlock>().Any(t => t.Text == "Alpha") && !topology.Children.OfType<TextBlock>().Any(t => t.Text == "Beta"), "Topology respects selected site scope");

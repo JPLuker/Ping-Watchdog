@@ -80,10 +80,11 @@ internal sealed class WallboardWindow : Window
         _hostList.ItemTemplate = new FuncDataTemplate<HostRow>((_, _) => new TextBlock
         {
             FontFamily = new FontFamily("monospace"), FontSize = 11,
-            [!TextBlock.TextProperty] = new Binding(nameof(HostRow.Text)),
+            Width = 300, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3),
+            [!TextBlock.TextProperty] = new Binding(nameof(HostRow.WallboardText)),
             [!TextBlock.ForegroundProperty] = new Binding(nameof(HostRow.Foreground))
         });
-        ScrollViewer.SetHorizontalScrollBarVisibility(_hostList, Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+        ScrollViewer.SetHorizontalScrollBarVisibility(_hostList, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
         Content = BuildLayout();
         _site.SelectionChanged += (_, _) =>
         {

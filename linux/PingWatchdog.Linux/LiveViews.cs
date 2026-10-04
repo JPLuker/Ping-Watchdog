@@ -17,6 +17,7 @@ internal sealed class HostRow : INotifyPropertyChanged
     public HostSnapshot Host { get; private set; }
     public string Key => Host.Site + "\u001f" + Host.Address;
     public string Text => $"{Host.State,-8}  {Host.Site,-18}  {Host.Address,-24}  {Host.Label,-20}  {(Host.LatencyMs is null ? "—" : $"{Host.LatencyMs} ms"),-9}  failures {Host.Failures}";
+    public string WallboardText => $"{Host.State} · {Host.Address} · {(Host.LatencyMs is null ? "—" : $"{Host.LatencyMs} ms")}\n{Host.Site}{(string.IsNullOrWhiteSpace(Host.Label) ? "" : $" · {Host.Label}")} · {Host.Failures} failure(s)";
     public IBrush Foreground => Theme.State(Host.State);
     public event PropertyChangedEventHandler? PropertyChanged;
     public void Update(HostSnapshot host)
@@ -24,6 +25,7 @@ internal sealed class HostRow : INotifyPropertyChanged
         if (Host == host) return;
         Host = host;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WallboardText)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Foreground)));
     }
 }
