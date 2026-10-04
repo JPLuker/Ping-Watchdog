@@ -162,7 +162,7 @@ internal sealed class HistoryTableView : Grid
         SizeChanged += (_, _) => { foreach (var row in _rows.ToArray()) Fit(row); };
         int index = 0;
         foreach (var column in Presentation.HistoryColumns) {
-            var text = UiTheme.Label(column.Header, _compact ? 12 : 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
+            var text = UiTheme.Label(column.Header, 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(text, index++); head.Children.Add(text);
         }
         var header = new ScrollViewer { Content = head, Background = UiTheme.Brush("#161F2A"), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };

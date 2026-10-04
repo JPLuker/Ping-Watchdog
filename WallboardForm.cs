@@ -1039,13 +1039,13 @@ internal sealed class WallboardCanvas : Control
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
-        const int headerBandHeight = 116;
+        const int headerBandHeight = Presentation.WallboardHeaderHeight;
         int statsTop = headerBandHeight;
-        int statsHeight = 82;
+        int statsHeight = Presentation.WallboardStatsHeight;
         DrawStats(g, snapshot, statsTop, statsHeight);
 
         int bodyTop = statsTop + statsHeight + 18;
-        int footerHeight = 34;
+        int footerHeight = Presentation.WallboardFooterHeight;
         int sidebarWidth = Math.Clamp((int)(ClientSize.Width * 0.29), 320, 440);
         int gap = 16;
         int availableBodyHeight = Math.Max(
@@ -1501,20 +1501,9 @@ internal sealed class WallboardCanvas : Control
         for (int i = 0; i < visible; i++)
         {
             var host = site.Hosts[i];
-            bool outerRing = visible > 7 && i >= 6;
-            int ringIndex = outerRing ? i - 6 : i;
-            int ringCount = outerRing ? visible - 6 : Math.Min(visible, 6);
-            int orbitRadius = baseOrbitRadius + (outerRing ? 44 : 0);
-
-            double angleOffset = outerRing ? Math.PI / Math.Max(1, ringCount) : 0;
-            double angle =
-                (-Math.PI / 2) +
-                (Math.PI * 2 * ringIndex / Math.Max(1, ringCount)) +
-                angleOffset;
-
-            var point = new Point(
-                siteCenter.X + (int)(Math.Cos(angle) * orbitRadius),
-                siteCenter.Y + (int)(Math.Sin(angle) * orbitRadius));
+            double angle = Presentation.HostAngle(i, visible);
+            var sharedPoint = Presentation.HostPoint(i, visible, new UiPoint(siteCenter.X, siteCenter.Y), baseOrbitRadius);
+            var point = new Point((int)sharedPoint.X, (int)sharedPoint.Y);
 
             Color stateColor = StateColor(host.State, 255);
 
@@ -1903,13 +1892,13 @@ internal sealed class WallboardCanvas : Control
 
     private static Color StateColor(HostState state, int alpha)
     {
-        return state switch
-        {
-            HostState.Online => Color.FromArgb(alpha, 77, 211, 141),
-            HostState.Suspect => Color.FromArgb(alpha, 244, 189, 68),
-            HostState.Offline => Color.FromArgb(alpha, 255, 98, 109),
-            _ => Color.FromArgb(alpha, 102, 122, 141)
+        string value = state switch {
+            HostState.Online => Presentation.WallboardOnline,
+            HostState.Suspect => Presentation.WallboardSuspect,
+            HostState.Offline => Presentation.WallboardOffline,
+            _ => Presentation.WallboardUnknown
         };
+        return Color.FromArgb(alpha, ColorTranslator.FromHtml(value));
     }
 
     private static void DrawCenteredText(
