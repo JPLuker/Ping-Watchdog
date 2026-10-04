@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.ObjectModel;
 
 namespace PingWatchdog.Linux;
 
@@ -76,6 +77,47 @@ internal static class LinuxRegressionTests
             LinuxUpdateRestart.Apply(engine, () => Check(!engine.Monitoring, "Successful update stops monitoring"));
             Check(!engine.Monitoring, "Monitoring stays stopped on successful restart");
             Check(engine.HistorySnapshot(0, false, now: now).StoredCount >= 601, "Filtering/export/update never deletes history");
+
+            Check(engine.SetLabel("Default Site", "127.0.0.1", "Loopback router") is null, "Label can be changed");
+            Check(engine.AddFolder("", "North") is null, "Config folder fixture");
+            Check(engine.MoveSite("Default Site", "North") is null, "Config site-folder fixture");
+            settings = engine.Snapshot().Settings;
+            settings.MinimizeToTray = false;
+            engine.ApplySettings(settings);
+            string exported = engine.ExportConfigJson();
+            int storedEvents = engine.HistorySnapshot(0, false).StoredCount;
+            foreach (string badJson in new[] { "{", "null", "{}", "{\"Sites\":[null]}" })
+            {
+                Check(engine.ImportConfigJson(badJson) is not null, "Invalid config is rejected: " + badJson);
+                Check(engine.ExportConfigJson() == exported, "Rejected config does not modify current setup");
+            }
+            using (var imported = new WatchdogEngine(Path.Combine(root, "roundtrip")))
+            {
+                Check(imported.ImportConfigJson(exported) is null, "Exported configuration imports successfully");
+                var site = imported.SiteDefinitions().Single();
+                Check(site.FolderPath == "North" && site.Labels["127.0.0.1"] == "Loopback router", "Import retains folders and labels");
+                Check(!imported.Config.MinimizeToTray, "Import retains tray preference");
+                Check(imported.SetLabel(site.Name, "127.0.0.1", "") is null && imported.SiteDefinitions().Single().Labels.Count == 0, "Clear label removes persisted label");
+            }
+            engine.StartMonitoring();
+            Check(engine.ImportConfigJson("{}") is not null && engine.Monitoring, "Rejected import does not interrupt monitoring");
+            Check(engine.ImportConfigJson(exported) is null && engine.Monitoring, "Valid import restarts an active session");
+            engine.StopMonitoring();
+            Check(engine.HistorySnapshot(0, false).StoredCount >= storedEvents, "Import retains outage history");
+
+            var firstHost = new HostSnapshot("Alpha", "", "127.0.0.1", "", HostState.Online, 1, 0, null, null);
+            var secondHost = firstHost with { Address = "127.0.0.2" };
+            var rows = new ObservableCollection<HostRow>();
+            LiveRows.Hosts(rows, new[] { firstHost, secondHost });
+            var retained = rows[1];
+            int resets = 0;
+            rows.CollectionChanged += (_, _) => resets++;
+            LiveRows.Hosts(rows, new[] { firstHost, secondHost with { State = HostState.Offline, Failures = 3 } });
+            Check(resets == 0 && ReferenceEquals(retained, rows[1]), "Ping-state updates preserve collection and row identity");
+            LiveRows.Hosts(rows, new[] { secondHost, firstHost });
+            Check(ReferenceEquals(retained, rows[0]), "Host reorder retains keyed row identity");
+            LiveRows.Hosts(rows, new[] { firstHost });
+            Check(rows.Count == 1 && rows[0].Host.Address == "127.0.0.1", "Removed host cannot leave a stale selected row");
         }
         finally
         {

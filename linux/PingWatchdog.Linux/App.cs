@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 
@@ -26,10 +27,14 @@ internal sealed class App : Application
             var engine = new WatchdogEngine();
             var updates = new LinuxUpdateService();
             var window = new MainWindow(engine, updates);
+            var tray = new LinuxTrayService(this, window, engine, updates);
+            window.AttachTray(tray);
 
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             desktop.MainWindow = window;
             desktop.Exit += (_, _) =>
             {
+                tray.Dispose();
                 updates.Dispose();
                 engine.Dispose();
             };

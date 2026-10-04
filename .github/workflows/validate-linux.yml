@@ -6,7 +6,7 @@ on:
       - "linux/**"
       - ".github/workflows/validate-linux.yml"
   push:
-    branches: [ "linux/phase-1-correctness" ]
+    branches: [ "linux/**" ]
     paths:
       - "linux/**"
       - ".github/workflows/validate-linux.yml"
@@ -25,8 +25,8 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Install desktop test prerequisites
-        run: sudo apt-get update && sudo apt-get install -y xvfb libx11-6 libice6 libsm6 libfontconfig1
+        run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11 libx11-6 libice6 libsm6 libfontconfig1
       - name: Run core regressions
         run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
       - name: Run desktop regressions
-        run: timeout 90s xvfb-run -a dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test
+        run: timeout 90s dbus-run-session -- xvfb-run -a dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test

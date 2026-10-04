@@ -16,7 +16,7 @@ Completed and validated on October 3, 2026. Core and real desktop regression sui
 
 ## Phase 2: main application parity
 
-Host label edit/clear, configuration import/export, Linux tray integration and preference, individually colored CLI entries, and stable list selection/scroll during refresh.
+Implemented: host label edit/clear, native configuration import/export, Linux tray menu and minimize preference with a safe taskbar fallback, individually colored CLI entries in Main and Wallboard, and persistent site/host/trace collections with keyed selection. Invalid imports leave the current setup intact; timing edits survive refreshes. Core and desktop regressions are being validated before release.
 
 ## Phase 3: Wallboard parity
 

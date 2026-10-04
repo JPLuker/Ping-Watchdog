@@ -988,16 +988,20 @@ internal sealed class WatchdogEngine : IDisposable
 
     public string? ImportConfigJson(string json)
     {
-        WatchdogConfig? loaded;
+        WatchdogConfig candidate;
         try
         {
-            loaded = JsonSerializer.Deserialize<WatchdogConfig>(json);
+            var loaded = JsonSerializer.Deserialize<WatchdogConfig>(json);
+            if (loaded is null) return "The configuration file was empty.";
+            candidate = SanitizeConfig(loaded);
+            if (candidate.Sites.Count == 0) return "The configuration contains no valid sites.";
+            if (candidate.SelectedSite is not null && !candidate.Sites.Any(s => s.Name.Equals(candidate.SelectedSite, StringComparison.OrdinalIgnoreCase)))
+                candidate.SelectedSite = null;
         }
         catch (Exception ex)
         {
             return $"Could not read configuration: {ex.Message}";
         }
-        if (loaded is null) return "The configuration file was empty.";
 
         bool restart;
         lock (_gate)
@@ -1006,7 +1010,8 @@ internal sealed class WatchdogEngine : IDisposable
             if (restart)
                 StopMonitoring();
 
-            Config = SanitizeConfig(loaded);
+            Config = candidate;
+            _hosts.Clear();
             _sites.Clear();
             _sites.AddRange(Config.Sites);
             _folders.Clear();

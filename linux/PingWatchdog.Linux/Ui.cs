@@ -1,4 +1,8 @@
+using System.Collections.ObjectModel;
 using Avalonia;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
+using Avalonia.VisualTree;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -170,14 +174,7 @@ internal sealed class MainWindow : Window
         TextWrapping = TextWrapping.NoWrap
     };
     private readonly ListBox _hostList = new();
-    private readonly TextBox _commandBox = new()
-    {
-        AcceptsReturn = true,
-        IsReadOnly = true,
-        FontFamily = new FontFamily("monospace"),
-        MinHeight = 118,
-        TextWrapping = TextWrapping.NoWrap
-    };
+    private readonly CliTraceView _commandBox;
     private readonly NumericUpDown _interval = Number(1, 300, 2, 1, 82);
     private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250, 94);
     private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 74);
@@ -187,11 +184,17 @@ internal sealed class MainWindow : Window
     private readonly Button _updateButton = Theme.Button("Updates");
     private readonly TextBlock _status = Theme.Label("Ready", 11, color: Theme.Muted);
     private readonly List<string?> _siteKeys = new();
-    private List<HostSnapshot> _hostRows = new();
+    private readonly ObservableCollection<HostRow> _hostRows = new();
+    private readonly ObservableCollection<SiteRow> _siteRows = new();
+    private LinuxTrayService? _tray;
+    private readonly Button _editLabel = Theme.Button("Edit Label");
+    private readonly Button _clearLabel = Theme.Button("Clear Label");
     private bool _loading;
     private readonly HostEditorBinding _editor;
     private bool _closed;
     private bool _updatePromptOpen;
+    private bool _backgroundStarted;
+    private (int, int, int, int)? _timingBaseline;
     private WallboardWindow? _wallboard;
     private SettingsWindow? _settings;
     private HistoryWindow? _history;
@@ -201,6 +204,17 @@ internal sealed class MainWindow : Window
     {
         _engine = engine;
         _updates = updates;
+        _commandBox = new CliTraceView(_engine.ClearCommandLog);
+        _hostList.ItemsSource = _hostRows;
+        _hostList.ItemTemplate = new FuncDataTemplate<HostRow>((_, _) =>
+        {
+            var label = LiveRows.BoundText(nameof(HostRow.Text));
+            label.Bind(TextBlock.ForegroundProperty, new Binding(nameof(HostRow.Foreground)));
+            return label;
+        });
+        ScrollViewer.SetHorizontalScrollBarVisibility(_hostList, Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+        _siteList.ItemsSource = _siteRows;
+        _siteList.ItemTemplate = new FuncDataTemplate<SiteRow>((_, _) => LiveRows.BoundText(nameof(SiteRow.Text)));
         _editor = new HostEditorBinding(engine, _hostEditor, error => _ = AlertAsync(error));
 
         Title = "Ping Watchdog";
@@ -235,12 +249,40 @@ internal sealed class MainWindow : Window
         };
         _startStop.Click += (_, _) => ToggleMonitoring();
         _updateButton.Click += async (_, _) => await RunUpdateActionAsync();
+        _editLabel.Click += async (_, _) => await EditLabelAsync();
+        _clearLabel.Click += async (_, _) => await ClearLabelAsync();
+        _hostList.SelectionChanged += (_, _) => UpdateLabelActions();
+        _hostList.DoubleTapped += async (_, _) => await EditLabelAsync();
+        var editMenu = new MenuItem { Header = "Edit Label..." };
+        var clearMenu = new MenuItem { Header = "Clear Label" };
+        editMenu.Click += async (_, _) => await EditLabelAsync();
+        clearMenu.Click += async (_, _) => await ClearLabelAsync();
+        _hostList.ContextMenu = new ContextMenu { ItemsSource = new[] { editMenu, clearMenu } };
+        _hostList.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            if (!e.GetCurrentPoint(_hostList).Properties.IsRightButtonPressed) return;
+            if (e.Source is Control control)
+            {
+                var row = new[] { control }.Concat(control.GetVisualAncestors().OfType<Control>())
+                    .Select(c => c.DataContext).OfType<HostRow>().FirstOrDefault();
+                if (row is not null) _hostList.SelectedItem = row;
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        PropertyChanged += async (_, e) =>
+        {
+            if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized && _tray is not null)
+                await _tray.MinimizeAsync();
+        };
 
         Opened += (_, _) =>
         {
             RefreshAll();
             _timer.Start();
-            _ = _updates.RunBackgroundAsync(() => _engine.Config.AutoCheckUpdates);
+            if (!_backgroundStarted)
+            {
+                _backgroundStarted = true;
+                _ = _updates.RunBackgroundAsync(() => _engine.Config.AutoCheckUpdates);
+            }
         };
         Closing += (_, _) =>
         {
@@ -256,6 +298,7 @@ internal sealed class MainWindow : Window
             _engine.Changed -= EngineChanged;
             _updates.Changed -= UpdatesChanged;
             _updates.UpdateReady -= UpdateReady;
+            _tray?.Dispose();
         };
         KeyDown += (_, e) =>
         {
@@ -347,7 +390,7 @@ internal sealed class MainWindow : Window
 
         var nav = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto,Auto,Auto"),
             Margin = new Thickness(12, 12, 8, 12)
         };
         nav.Children.Add(Theme.Label("Sites", 13, FontWeight.Bold));
@@ -375,11 +418,17 @@ internal sealed class MainWindow : Window
         siteActions.Children.Add(delete);
         Grid.SetRow(siteActions, 4);
         nav.Children.Add(siteActions);
+        var import = Theme.Button("Import Config...");
+        import.Click += async (_, _) => await ImportConfigAsync();
+        Grid.SetRow(import, 5); nav.Children.Add(import);
+        var export = Theme.Button("Export Config...");
+        export.Click += async (_, _) => await ExportConfigAsync();
+        Grid.SetRow(export, 6); nav.Children.Add(export);
         workspace.Children.Add(nav);
 
         var right = new Grid
         {
-            RowDefinitions = new RowDefinitions("86,132,84,*,Auto"),
+            RowDefinitions = new RowDefinitions("86,132,Auto,*,Auto"),
             Margin = new Thickness(8, 12, 12, 12)
         };
         Grid.SetColumn(right, 1);
@@ -421,10 +470,9 @@ internal sealed class MainWindow : Window
         Grid.SetRow(editorBorder, 1);
         right.Children.Add(editorBorder);
 
-        var monitorRow = new StackPanel
+        var monitorRow = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4)
         };
@@ -434,20 +482,25 @@ internal sealed class MainWindow : Window
         monitorRow.Children.Add(Setting("Recover after", _recoverAfter, "successes"));
         monitorRow.Children.Add(_showCli);
         monitorRow.Children.Add(_startStop);
+        foreach (var control in monitorRow.Children) control.Margin = new Thickness(4, 2);
         var monitorBorder = Theme.CardBorder(monitorRow);
         Grid.SetRow(monitorBorder, 2);
         right.Children.Add(monitorBorder);
 
-        var hostAndCli = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        var hostAndCli = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
+        var hostActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
+            Children = { Theme.Label("Live hosts", 12, FontWeight.Bold), _editLabel, _clearLabel } };
+        hostAndCli.Children.Add(hostActions);
         _hostList.Background = Theme.Panel;
         _hostList.BorderBrush = Theme.Border;
         _hostList.BorderThickness = new Thickness(1);
+        Grid.SetRow(_hostList, 1);
         hostAndCli.Children.Add(_hostList);
         _commandBox.Background = Theme.Brush("#070C12");
-        _commandBox.Foreground = Theme.Green;
         _commandBox.BorderBrush = Theme.Border;
         _commandBox.Margin = new Thickness(0, 8, 0, 0);
-        Grid.SetRow(_commandBox, 1);
+        _commandBox.Height = 160;
+        Grid.SetRow(_commandBox, 2);
         hostAndCli.Children.Add(_commandBox);
         Grid.SetRow(hostAndCli, 3);
         right.Children.Add(hostAndCli);
@@ -556,8 +609,11 @@ internal sealed class MainWindow : Window
             _timeout.IsEnabled = settingsEnabled;
             _downAfter.IsEnabled = settingsEnabled;
             _recoverAfter.IsEnabled = settingsEnabled;
-            if (settingsEnabled)
+            var timing = (snapshot.Settings.PingIntervalSeconds, snapshot.Settings.PingTimeoutMs,
+                snapshot.Settings.FailureThreshold, snapshot.Settings.RecoveryThreshold);
+            if (settingsEnabled && _timingBaseline != timing)
             {
+                _timingBaseline = timing;
                 _interval.Value = snapshot.Settings.PingIntervalSeconds;
                 _timeout.Value = snapshot.Settings.PingTimeoutMs;
                 _downAfter.Value = snapshot.Settings.FailureThreshold;
@@ -565,7 +621,7 @@ internal sealed class MainWindow : Window
             }
             _showCli.IsChecked = snapshot.Settings.ShowCommandView;
             _commandBox.IsVisible = snapshot.Settings.ShowCommandView;
-            _commandBox.Text = string.Join(Environment.NewLine, snapshot.Commands.TakeLast(120).Select(entry => entry.Text));
+            _commandBox.Refresh(snapshot.Commands);
 
             _updateButton.IsVisible = snapshot.Settings.ShowUpdateControlOnHome;
             RefreshUpdateState();
@@ -581,38 +637,108 @@ internal sealed class MainWindow : Window
 
     private void RefreshSites(WatchdogSnapshot snapshot)
     {
-        string? previous = snapshot.SelectedSite;
-        _siteKeys.Clear();
-        var items = new List<string>();
-        _siteKeys.Add(null);
-        items.Add($"All Sites ({snapshot.Sites.Sum(site => site.Hosts.Count)})");
-        foreach (var site in snapshot.Sites
-            .OrderBy(site => site.FolderPath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(site => site.Name, StringComparer.OrdinalIgnoreCase))
+        var rows = new List<SiteRow> { new(null, $"All Sites ({snapshot.Sites.Sum(site => site.Hosts.Count)})") };
+        foreach (var site in snapshot.Sites.OrderBy(s => s.FolderPath, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
         {
-            _siteKeys.Add(site.Name);
-            string path = string.IsNullOrWhiteSpace(site.FolderPath)
-                ? site.Name
-                : $"{site.FolderPath.Replace("/", " › ")} › {site.Name}";
-            items.Add($"{path} ({site.Hosts.Count})");
+            string path = string.IsNullOrWhiteSpace(site.FolderPath) ? site.Name : $"{site.FolderPath.Replace("/", " › ")} › {site.Name}";
+            rows.Add(new SiteRow(site.Name, $"{path} ({site.Hosts.Count})"));
         }
-        _siteList.ItemsSource = items;
-        int index = previous is null ? 0 : _siteKeys.FindIndex(key => key?.Equals(previous, StringComparison.OrdinalIgnoreCase) == true);
-        _siteList.SelectedIndex = Math.Max(0, index);
+        LiveRows.Sites(_siteRows, rows);
+        _siteKeys.Clear();
+        _siteKeys.AddRange(_siteRows.Select(r => r.Key));
+        int index = snapshot.SelectedSite is null ? 0 : _siteKeys.FindIndex(key => string.Equals(key, snapshot.SelectedSite, StringComparison.OrdinalIgnoreCase));
+        if (_siteList.SelectedIndex != Math.Max(0, index)) _siteList.SelectedIndex = Math.Max(0, index);
     }
 
     private void RefreshHostRows(WatchdogSnapshot snapshot)
     {
-        int previous = _hostList.SelectedIndex;
-        _hostRows = snapshot.Hosts.ToList();
-        _hostList.ItemsSource = _hostRows.Select(host =>
+        string? selected = (_hostList.SelectedItem as HostRow)?.Key;
+        var scroll = _hostList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        var offset = scroll?.Offset;
+        LiveRows.Hosts(_hostRows, snapshot.Hosts);
+        if (selected is not null)
+            _hostList.SelectedItem = _hostRows.FirstOrDefault(row => row.Key.Equals(selected, StringComparison.OrdinalIgnoreCase));
+        if (offset is { } saved && scroll is not null) scroll.Offset = saved;
+        UpdateLabelActions();
+    }
+
+    private void UpdateLabelActions()
+    {
+        var host = (_hostList.SelectedItem as HostRow)?.Host;
+        _editLabel.IsEnabled = host is not null;
+        _clearLabel.IsEnabled = host is not null && !string.IsNullOrWhiteSpace(host.Label);
+    }
+
+    private async Task EditLabelAsync()
+    {
+        var host = (_hostList.SelectedItem as HostRow)?.Host;
+        if (host is null) return;
+        string? label = await PromptAsync("Edit Host Label", $"Label for {host.Address} ({host.Site}):", host.Label);
+        if (label is null) return;
+        string? error = _engine.SetLabel(host.Site, host.Address, label);
+        if (error is not null) await AlertAsync(error);
+    }
+
+    private async Task ClearLabelAsync()
+    {
+        var host = (_hostList.SelectedItem as HostRow)?.Host;
+        if (host is null) return;
+        string? error = _engine.SetLabel(host.Site, host.Address, string.Empty);
+        if (error is not null) await AlertAsync(error);
+    }
+
+    internal bool CommitHostEdits() => _editor.Commit() && (_wallboard is null || _wallboard.CommitHostEdits());
+    internal void AttachTray(LinuxTrayService tray) => _tray = tray;
+    internal string TrayStatus => _tray?.Status ?? "System tray unavailable";
+    internal void RestoreFromTray() { WindowState = WindowState.Normal; Show(); Activate(); }
+    internal void ExitApplication()
+    {
+        if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+        else Close();
+    }
+
+    internal async Task ExportConfigAsync(Window? owner = null)
+    {
+        owner ??= this;
+        if (!CommitHostEdits()) return;
+        try
         {
-            string label = string.IsNullOrWhiteSpace(host.Label) ? "" : $"  {host.Label}";
-            string latency = host.LatencyMs is null ? "—" : $"{host.LatencyMs} ms";
-            return $"{host.State,-8}  {host.Site,-18}  {host.Address,-24}{label,-20}  {latency,-9}  failures {host.Failures}";
-        }).ToList();
-        if (previous >= 0 && previous < _hostRows.Count)
-            _hostList.SelectedIndex = previous;
+            var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Export Ping Watchdog Configuration", SuggestedFileName = "watchdog.pingwatch.json", DefaultExtension = "pingwatch.json",
+                FileTypeChoices = new[] { new FilePickerFileType("Ping Watchdog configuration") { Patterns = new[] { "*.pingwatch.json" } } }
+            });
+            if (file is null || !CommitHostEdits()) return;
+            await using var stream = await file.OpenWriteAsync();
+            if (stream.CanSeek) stream.SetLength(0);
+            using var writer = new StreamWriter(stream);
+            await writer.WriteAsync(_engine.ExportConfigJson());
+        }
+        catch (Exception ex) { await AlertAsync($"Could not export configuration: {ex.Message}", owner: owner); }
+    }
+
+    internal async Task ImportConfigAsync(Window? owner = null)
+    {
+        owner ??= this;
+        try
+        {
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Import Ping Watchdog Configuration", AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType("Ping Watchdog configuration") { Patterns = new[] { "*.pingwatch.json", "*.json" } } }
+            });
+            if (files.Count == 0) return;
+            await using var stream = await files[0].OpenReadAsync();
+            using var reader = new StreamReader(stream);
+            string json = await reader.ReadToEndAsync();
+            if (!await ConfirmAsync("Import Configuration", "Replace the current sites, hosts, labels, and settings? Outage history is retained. Active monitoring restarts with the imported configuration.", owner)) return;
+            if (!CommitHostEdits()) return;
+            string? error = _engine.ImportConfigJson(json);
+            if (error is not null) await AlertAsync(error, owner: owner);
+            else RefreshAll();
+        }
+        catch (Exception ex) { await AlertAsync($"Could not import configuration: {ex.Message}", owner: owner); }
     }
 
     private void EngineChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshAll);
@@ -630,7 +756,7 @@ internal sealed class MainWindow : Window
             _status.Text = _updates.Status;
     }
 
-    private void ToggleMonitoring()
+    internal void ToggleMonitoring()
     {
         if (_engine.Monitoring)
         {
@@ -697,6 +823,7 @@ internal sealed class MainWindow : Window
     {
         if (_closed || _updatePromptOpen) return;
         _updatePromptOpen = true;
+        owner ??= _wallboard is { IsVisible: true } ? _wallboard : this;
         try
         {
             string message = version is null
@@ -710,7 +837,7 @@ internal sealed class MainWindow : Window
         finally { _updatePromptOpen = false; }
     }
 
-    private void OpenWallboard()
+    internal void OpenWallboard()
     {
         if (_wallboard is not null)
         {
@@ -856,6 +983,9 @@ internal sealed class MainWindow : Window
 internal sealed class SettingsWindow : Window
 {
     private readonly WatchdogEngine _engine;
+    private readonly MainWindow _main;
+    private readonly CheckBox _minimizeToTray = new() { Content = "Minimize to system tray (when available)" };
+    private readonly TextBlock _trayStatus = Theme.Label("", 10, color: Theme.Muted);
     private readonly LinuxUpdateService _updates;
     private bool _closed;
     private readonly NumericUpDown _interval = Number(1, 300, 2, 1);
@@ -876,6 +1006,7 @@ internal sealed class SettingsWindow : Window
     {
         _engine = engine;
         _updates = updates;
+        _main = main;
         Title = "Settings • Ping Watchdog";
         Width = 780;
         Height = 620;
@@ -909,12 +1040,20 @@ internal sealed class SettingsWindow : Window
     {
         var save = Theme.Button("Save Settings", true);
         save.Click += (_, _) => SaveValues();
+        var import = Theme.Button("Import Config...");
+        var export = Theme.Button("Export Config...");
+        import.Click += async (_, _) => { await _main.ImportConfigAsync(this); LoadValues(); };
+        export.Click += async (_, _) => await _main.ExportConfigAsync(this);
         return Page(
             Theme.Label("Application behavior", 16, FontWeight.Bold),
             _showCli,
             _wallboardCli,
             _notifications,
-            save);
+            _minimizeToTray,
+            _trayStatus,
+            save,
+            Theme.Label("Configuration", 14, FontWeight.Bold),
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { import, export } });
     }
 
     private Control MonitoringPage()
@@ -1001,6 +1140,8 @@ internal sealed class SettingsWindow : Window
         _showCli.IsChecked = config.ShowCommandView;
         _wallboardCli.IsChecked = config.WallboardShowCli;
         _notifications.IsChecked = config.NotificationsEnabled;
+        _minimizeToTray.IsChecked = config.MinimizeToTray;
+        _trayStatus.Text = _main.TrayStatus;
         _autoUpdates.IsChecked = config.AutoCheckUpdates;
         _developerUpdate.IsChecked = config.ShowUpdateControlOnHome;
         _hideSuspects.IsChecked = config.HideSuspectEvents;
@@ -1024,11 +1165,13 @@ internal sealed class SettingsWindow : Window
         config.ShowCommandView = _showCli.IsChecked == true;
         config.WallboardShowCli = _wallboardCli.IsChecked == true;
         config.NotificationsEnabled = _notifications.IsChecked == true;
+        config.MinimizeToTray = _minimizeToTray.IsChecked == true;
         config.AutoCheckUpdates = _autoUpdates.IsChecked == true;
         config.ShowUpdateControlOnHome = _developerUpdate.IsChecked == true;
         config.HideSuspectEvents = _hideSuspects.IsChecked == true;
         config.EventHistoryHours = _historyRange.SelectedIndex switch { 0 => 24, 1 => 168, 2 => 720, _ => 0 };
-        _engine.ApplySettings(config);
+        string? error = _engine.ApplySettings(config);
+        if (error is not null) { _ = _main.AlertAsync(error, owner: this); return; }
         LoadValues();
     }
 
@@ -1405,7 +1548,7 @@ internal sealed class WallboardWindow : Window
     private readonly TextBlock _date = Theme.Label("", 12, color: Theme.Muted);
     private readonly TextBlock _state = Theme.Label("IDLE", 11, FontWeight.Bold);
     private readonly TextBlock _stats = Theme.Label("", 12, FontWeight.Bold);
-    private readonly TextBox _cli = new() { IsReadOnly = true, AcceptsReturn = true, FontFamily = new FontFamily("monospace"), MinHeight = 120 };
+    private readonly CliTraceView _cli;
     private readonly StackPanel _ops = new() { Width = 370, Spacing = 8, IsVisible = false, Margin = new Thickness(12) };
     private readonly ComboBox _site = new() { Width = 330 };
     private readonly TextBox _hosts = new() { AcceptsReturn = true, MinHeight = 110, FontFamily = new FontFamily("monospace") };
@@ -1421,6 +1564,7 @@ internal sealed class WallboardWindow : Window
         _engine = engine;
         _updates = updates;
         _main = main;
+        _cli = new CliTraceView(_engine.ClearCommandLog);
         _editor = new HostEditorBinding(engine, _hosts, error => _ = _main.AlertAsync(error, owner: this));
         Title = "Ping Watchdog Wallboard";
         Icon = new WindowIcon(BrandAssets.Logo);
@@ -1480,7 +1624,7 @@ internal sealed class WallboardWindow : Window
         Grid.SetColumn(_ops, 1); Grid.SetRowSpan(_ops, 2); content.Children.Add(Theme.CardBorder(_ops, new Thickness(8)));
         Grid.SetRow(content, 1); root.Children.Add(content);
 
-        _cli.Background = Theme.Brush("#060A0F"); _cli.Foreground = Theme.Green; _cli.Margin = new Thickness(10, 4, 10, 10);
+        _cli.Background = Theme.Brush("#060A0F"); _cli.Margin = new Thickness(10, 4, 10, 10);
         Grid.SetRow(_cli, 2); root.Children.Add(_cli);
         return root;
     }
@@ -1517,7 +1661,7 @@ internal sealed class WallboardWindow : Window
             var hosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
             _stats.Text = $"TOTAL {hosts.Count}     ONLINE {hosts.Count(h => h.State == HostState.Online)}     SUSPECT {hosts.Count(h => h.State == HostState.Suspect)}     OFFLINE {hosts.Count(h => h.State == HostState.Offline)}";
             _cli.IsVisible = _showCli;
-            _cli.Text = string.Join(Environment.NewLine, snapshot.Commands.TakeLast(90).Select(c => c.Text));
+            _cli.Refresh(snapshot.Commands);
             RefreshSiteCombo(snapshot);
             _editor.Refresh(snapshot);
             _updateButton.Content = _updates.ActionText;
@@ -1537,7 +1681,7 @@ internal sealed class WallboardWindow : Window
             items.Add(site.Name);
             _siteKeys.Add(site.Name);
         }
-        _site.ItemsSource = items;
+        if (_site.ItemsSource is not IEnumerable<string> current || !current.SequenceEqual(items)) _site.ItemsSource = items;
         int selected = snapshot.SelectedSite is null ? 0 : _siteKeys.FindIndex(key => key?.Equals(snapshot.SelectedSite, StringComparison.OrdinalIgnoreCase) == true);
         _site.SelectedIndex = Math.Max(0, selected);
     }

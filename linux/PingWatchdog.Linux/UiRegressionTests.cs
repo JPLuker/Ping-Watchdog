@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia;
+using Avalonia.VisualTree;
 
 namespace PingWatchdog.Linux;
 
@@ -32,8 +34,13 @@ internal static class LinuxUiRegressionTests
         var updates = new LinuxUpdateService();
         var main = new MainWindow(engine, updates);
         desktop.MainWindow = main;
-        main.Opened += (_, _) => Dispatcher.UIThread.Post(async () =>
+        bool started = false;
+        main.Opened += (_, _) =>
         {
+            if (started) return;
+            started = true;
+            Dispatcher.UIThread.Post(async () =>
+            {
             int exitCode = 0;
             try
             {
@@ -52,7 +59,8 @@ internal static class LinuxUiRegressionTests
                 engine.Dispose();
                 try { Directory.Delete(root, true); } catch { }
             }
-        });
+            });
+        };
     }
 
     private static async Task RunAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
@@ -124,9 +132,90 @@ internal static class LinuxUiRegressionTests
         await Task.Delay(100);
         Check(editor.IsReadOnly, "All Sites editor is read only");
         Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "Programmatic main refresh cannot overwrite a newer Wallboard edit");
+
+        engine.SelectedSite = "Alpha";
+        await Task.Delay(100);
+        var hostList = Field<ListBox>(main, "_hostList");
+        hostList.SelectedIndex = 0;
+        var selectedRow = hostList.SelectedItem;
+        var itemSource = hostList.ItemsSource;
+        var sites = Field<ListBox>(main, "_siteList").ItemsSource;
+        Field<NumericUpDown>(main, "_interval").Value = 30;
+        await Task.Delay(850);
+        Check(ReferenceEquals(hostList.ItemsSource, itemSource) && ReferenceEquals(hostList.SelectedItem, selectedRow), "Timer refresh preserves host collection and selection");
+        Check(ReferenceEquals(Field<ListBox>(main, "_siteList").ItemsSource, sites), "Timer refresh preserves site collection");
+        Check(Field<NumericUpDown>(main, "_interval").Value == 30, "Timer refresh preserves unsaved timing controls");
+        Check(hostList.ContextMenu is not null && Field<Button>(main, "_editLabel").IsEnabled, "Host label actions are available from selection and context menu");
+        var editTask = (Task)Invoke(main, "EditLabelAsync")!;
+        await Task.Delay(100);
+        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
+        var labelDialog = lifetime.Windows.Single(w => w.Title == "Edit Host Label");
+        labelDialog.GetVisualDescendants().OfType<TextBox>().Single().Text = "Edge router";
+        labelDialog.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "OK")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        await editTask;
+        await Task.Delay(100);
+        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels["127.0.0.1"] == "Edge router", "Host label dialog saves the selected address");
+        Check(ReferenceEquals(hostList.SelectedItem, selectedRow) && ((HostRow)selectedRow!).Text.Contains("Edge router"), "Label refresh updates the selected row in place");
+        Field<Button>(main, "_clearLabel").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        await Task.Delay(100);
+        Check(!engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels.ContainsKey("127.0.0.1"), "Clear Label UI removes the label");
+
+        var trace = Field<CliTraceView>(main, "_commandBox");
+        var success = new CommandLogEntry(DateTime.Now, "Alpha", "127.0.0.1", "", true, "127.0.0.1: ping -c 1 -W 1 127.0.0.1 -> Reply");
+        var failure = success with { Timestamp = DateTime.Now.AddTicks(1), Success = false, Text = "127.0.0.1: ping -c 1 -W 1 127.0.0.1 -> FAILED" };
+        trace.IsVisible = true;
+        trace.Refresh(new[] { success, failure });
+        var traceList = Field<ListBox>(trace, "_list");
+        var successLabel = (TextBlock)traceList.ItemTemplate!.Build(success)!;
+        var failureLabel = (TextBlock)traceList.ItemTemplate.Build(failure)!;
+        Check(Equals(successLabel.Foreground, Theme.Green) && Equals(failureLabel.Foreground, Theme.Red), "CLI renders success green and failure red per command");
+        var traceRows = traceList.ItemsSource;
+        trace.Refresh(new[] { success, failure });
+        Check(ReferenceEquals(traceRows, traceList.ItemsSource), "CLI refresh preserves its list collection");
+        trace.Refresh(Array.Empty<CommandLogEntry>());
+        Check(traceList.ItemCount == 0, "CLI clear removes visible rows");
+
+        settings = new SettingsWindow(engine, updates, main);
+        settings.Show(main);
+        Field<CheckBox>(settings, "_minimizeToTray").IsChecked = false;
+        Invoke(settings, "SaveValues");
+        Check(!engine.Config.MinimizeToTray, "Settings UI saves minimize-to-tray preference");
+        Check(settings.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Import Config...")
+            && settings.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Export Config..."), "Settings exposes native config import/export actions");
+        settings.Close();
+        bool hostAvailable = true;
+        using (var tray = new LinuxTrayService(Application.Current!, main, engine, updates, () => Task.FromResult(hostAvailable)))
+        {
+            main.AttachTray(tray);
+            await tray.RefreshAsync();
+            Check(tray.Available, "Native tray exporter is initialized on the Linux session bus");
+            var menu = Field<TrayIcon>(tray, "_icon").Menu!;
+            Check(menu.Items.OfType<NativeMenuItem>().Any(i => i.Header == "Open Wallboard")
+                && menu.Items.OfType<NativeMenuItem>().Any(i => i.Header == "Exit"), "Tray menu exposes restore, Wallboard, and exit operations");
+            var prefs = engine.Snapshot().Settings;
+            prefs.MinimizeToTray = true;
+            engine.ApplySettings(prefs);
+            engine.StartMonitoring();
+            main.WindowState = WindowState.Minimized;
+            await tray.MinimizeAsync();
+            Check(!main.IsVisible && engine.Monitoring, "Minimize to tray hides the window while monitoring continues");
+            hostAvailable = false;
+            await tray.RefreshAsync();
+            Check(main.IsVisible && main.WindowState == WindowState.Normal && engine.Monitoring, "Loss of tray host restores a reachable monitoring window");
+            main.WindowState = WindowState.Minimized;
+            await tray.MinimizeAsync();
+            Check(main.IsVisible, "Missing tray host uses normal taskbar minimize");
+            tray.Restore();
+            Check(main.IsVisible && main.WindowState == WindowState.Normal, "Tray restore opens the main window");
+            engine.StopMonitoring();
+        }
         using var reloaded = new WatchdogEngine(Path.GetDirectoryName(engine.ConfigPath)!);
         Check(reloaded.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "UI host edits survive restart");
     }
+
+    private static object? Invoke(object target, string name) => target.GetType()
+        .GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(target, null);
 
     private static T Field<T>(object target, string name) => (T)(target.GetType()
         .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(target)
