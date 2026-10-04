@@ -22,7 +22,7 @@ Completed and validated on October 3, 2026: host label edit/clear, native config
 
 Implemented: native site add/rename/delete and organization, a complete stable live host list with label edit/clear, timing/threshold controls that preserve drafts and lock while monitoring, shared native config actions, active outages with durations, recent stored-history queries and filters, Watchdog dog branding, monitor cycling, and shortcuts that respect editors. The topology follows site scope, scrolls for larger configurations, and explicitly counts hosts beyond its twelve nodes per site.
 
-Validation pending: core and real desktop regressions, then Linux beta release. Physical monitor moves and desktop-specific behavior remain Phase 4/5 verification.
+Completed and validated on October 4, 2026 (UTC): core regressions and real Avalonia desktop regressions pass under Xvfb/Openbox with a Linux session bus. Both the operations drawer and report view were rendered and inspected. The new coverage also exposed and fixed a shared CLI virtualized-row recycling crash. Physical monitor moves and desktop-specific behavior remain Phase 4/5 verification.
 
 ## Phase 4: desktop hardening
 
