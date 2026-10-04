@@ -6,6 +6,7 @@ on:
     branches: [ "main" ]
     paths:
       - "*.cs"
+      - "Shared/**"
       - "PingWatchdog.csproj"
       - "Assets/**"
       - "default.pingwatch.json"

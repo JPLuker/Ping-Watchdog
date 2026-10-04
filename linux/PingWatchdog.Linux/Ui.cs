@@ -10,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using PingWatchdog.Shared;
 
 namespace PingWatchdog.Linux;
 
@@ -27,17 +28,17 @@ internal static class BrandAssets
 
 internal static class Theme
 {
-    public static readonly IBrush Window = Brush("#0A0F16");
-    public static readonly IBrush Panel = Brush("#101923");
-    public static readonly IBrush Card = Brush("#151F2B");
-    public static readonly IBrush Border = Brush("#2A3948");
-    public static readonly IBrush Text = Brush("#EDF4FA");
-    public static readonly IBrush Muted = Brush("#8EA0B2");
-    public static readonly IBrush Cyan = Brush("#32B6E6");
-    public static readonly IBrush Green = Brush("#42D392");
-    public static readonly IBrush Yellow = Brush("#F5BF47");
-    public static readonly IBrush Red = Brush("#FF6570");
-    public static readonly IBrush Unknown = Brush("#76899D");
+    public static readonly IBrush Window = Brush(Presentation.Window);
+    public static readonly IBrush Panel = Brush(Presentation.Input);
+    public static readonly IBrush Card = Brush(Presentation.Card);
+    public static readonly IBrush Border = Brush(Presentation.Border);
+    public static readonly IBrush Text = Brush(Presentation.Text);
+    public static readonly IBrush Muted = Brush(Presentation.Muted);
+    public static readonly IBrush Cyan = Brush(Presentation.Accent);
+    public static readonly IBrush Green = Brush(Presentation.Online);
+    public static readonly IBrush Yellow = Brush(Presentation.Suspect);
+    public static readonly IBrush Red = Brush(Presentation.Offline);
+    public static readonly IBrush Unknown = Brush(Presentation.Unknown);
 
     public static IBrush Brush(string hex) => new SolidColorBrush(Color.Parse(hex));
 
@@ -54,14 +55,14 @@ internal static class Theme
         return new Button
         {
             Content = text,
-            MinHeight = 34,
-            Padding = new Thickness(14, 6),
-            Margin = new Thickness(4, 2),
-            Background = accent ? Brush("#176D8D") : Brush("#192633"),
+            MinHeight = 32,
+            Padding = new Thickness(12, 5),
+            Margin = new Thickness(0),
+            Background = accent ? Brush("#144552") : Brush("#19222D"),
             Foreground = Text,
-            BorderBrush = accent ? Brush("#35AADA") : Border,
+            BorderBrush = accent ? Brush("#2AAABD") : Border,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(0),
             HorizontalContentAlignment = HorizontalAlignment.Center
         };
     }
@@ -73,7 +74,7 @@ internal static class Theme
             Background = Card,
             BorderBrush = Border,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
+            CornerRadius = new CornerRadius(0),
             Padding = new Thickness(12),
             Margin = margin ?? new Thickness(4),
             Child = child
@@ -153,7 +154,7 @@ internal sealed class HostEditorBinding
     }
 }
 
-internal sealed class MainWindow : Window
+internal sealed partial class MainWindow : Window
 {
     private readonly WatchdogEngine _engine;
     private readonly LinuxUpdateService _updates;
@@ -170,15 +171,15 @@ internal sealed class MainWindow : Window
     {
         AcceptsReturn = true,
         Height = 94,
-        FontFamily = new FontFamily("monospace"),
+        FontFamily = new FontFamily("Cascadia Mono, DejaVu Sans Mono"),
         TextWrapping = TextWrapping.NoWrap
     };
     private readonly ListBox _hostList = new();
     private readonly CliTraceView _commandBox;
-    private readonly NumericUpDown _interval = Number(1, 300, 2, 1, 82);
-    private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250, 94);
-    private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 74);
-    private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 74);
+    private readonly NumericUpDown _interval = Number(1, 300, 2, 1, 70);
+    private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250, 90);
+    private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 70);
+    private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 70);
     private readonly CheckBox _showCli = new() { Content = "Show CLI trace" };
     private readonly Button _startStop = Theme.Button("Start Monitoring", true);
     private readonly Button _updateButton = Theme.Button("Updates");
@@ -219,9 +220,9 @@ internal sealed class MainWindow : Window
 
         Title = "Ping Watchdog";
         Icon = new WindowIcon(BrandAssets.Logo);
-        Width = 1180;
+        Width = 1320;
         Height = 790;
-        MinWidth = 960;
+        MinWidth = 900;
         MinHeight = 640;
         Background = Theme.Window;
         Foreground = Theme.Text;
@@ -320,212 +321,6 @@ internal sealed class MainWindow : Window
         };
     }
 
-    private Control BuildLayout()
-    {
-        var root = new Grid
-        {
-            RowDefinitions = new RowDefinitions("74,*,30")
-        };
-
-        var header = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            Background = Theme.Panel,
-            Margin = new Thickness(0)
-        };
-        header.Children.Add(new StackPanel
-        {
-            Margin = new Thickness(18, 11, 0, 8),
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Children =
-            {
-                new Image { Source = BrandAssets.Logo, Width = 40, Height = 50, Stretch = Stretch.Uniform },
-                new StackPanel
-                {
-                    Spacing = 1,
-                    Children =
-                    {
-                        Theme.Label("PING WATCHDOG", 21, FontWeight.Bold),
-                        Theme.Label("Linux availability monitor", 11, color: Theme.Muted)
-                    }
-                }
-            }
-        });
-
-        var headerActions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 14, 0),
-            Spacing = 4
-        };
-        var monitorChip = Theme.CardBorder(_monitorState, new Thickness(2));
-        monitorChip.Padding = new Thickness(12, 7);
-        var wallboard = Theme.Button("Wallboard", true);
-        wallboard.Click += (_, _) => OpenWallboard();
-        var organize = Theme.Button("Organize");
-        organize.Click += (_, _) => OpenOrganization();
-        var history = Theme.Button("History");
-        history.Click += (_, _) => OpenHistory();
-        var settings = Theme.Button("Settings");
-        settings.Click += (_, _) => OpenSettings();
-        headerActions.Children.Add(monitorChip);
-        headerActions.Children.Add(wallboard);
-        headerActions.Children.Add(organize);
-        headerActions.Children.Add(history);
-        headerActions.Children.Add(settings);
-        headerActions.Children.Add(_updateButton);
-        Grid.SetColumn(headerActions, 1);
-        header.Children.Add(headerActions);
-        root.Children.Add(header);
-
-        var workspace = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("225,*"),
-            Background = Theme.Window
-        };
-        Grid.SetRow(workspace, 1);
-
-        var nav = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto,Auto,Auto"),
-            Margin = new Thickness(12, 12, 8, 12)
-        };
-        nav.Children.Add(Theme.Label("Sites", 13, FontWeight.Bold));
-        _siteList.Background = Theme.Panel;
-        _siteList.BorderBrush = Theme.Border;
-        _siteList.BorderThickness = new Thickness(1);
-        _siteList.Margin = new Thickness(0, 8, 0, 8);
-        Grid.SetRow(_siteList, 1);
-        nav.Children.Add(_siteList);
-
-        var add = Theme.Button("+ Add Site", true);
-        add.Click += async (_, _) => await AddSiteAsync();
-        Grid.SetRow(add, 2);
-        nav.Children.Add(add);
-        var org = Theme.Button("Folders / Organization");
-        org.Click += (_, _) => OpenOrganization();
-        Grid.SetRow(org, 3);
-        nav.Children.Add(org);
-        var siteActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        var rename = Theme.Button("Rename");
-        rename.Click += async (_, _) => await RenameSiteAsync();
-        var delete = Theme.Button("Delete");
-        delete.Click += async (_, _) => await DeleteSiteAsync();
-        siteActions.Children.Add(rename);
-        siteActions.Children.Add(delete);
-        Grid.SetRow(siteActions, 4);
-        nav.Children.Add(siteActions);
-        var import = Theme.Button("Import Config...");
-        import.Click += async (_, _) => await ImportConfigAsync();
-        Grid.SetRow(import, 5); nav.Children.Add(import);
-        var export = Theme.Button("Export Config...");
-        export.Click += async (_, _) => await ExportConfigAsync();
-        Grid.SetRow(export, 6); nav.Children.Add(export);
-        workspace.Children.Add(nav);
-
-        var right = new Grid
-        {
-            RowDefinitions = new RowDefinitions("86,Auto,Auto,*,Auto"),
-            Margin = new Thickness(8, 12, 12, 12)
-        };
-        Grid.SetColumn(right, 1);
-
-        var stats = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
-        stats.Children.Add(StatCard("Total Hosts", _total, 0));
-        stats.Children.Add(StatCard("Online", _online, 1));
-        stats.Children.Add(StatCard("Suspect", _suspect, 2));
-        stats.Children.Add(StatCard("Offline", _offline, 3));
-        right.Children.Add(stats);
-
-        var editorCard = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,Auto"),
-            Margin = new Thickness(4)
-        };
-        editorCard.Children.Add(new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            Children =
-            {
-                Theme.Label("Selected site hosts", 12, FontWeight.Bold),
-                Right(Theme.Label("Saved automatically • Apply to reconcile live", 10, color: Theme.Muted))
-            }
-        });
-        var editorRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 8, 0, 0) };
-        _hostEditor.Background = Theme.Panel;
-        _hostEditor.Foreground = Theme.Text;
-        _hostEditor.BorderBrush = Theme.Border;
-        editorRow.Children.Add(_hostEditor);
-        var applyHosts = Theme.Button("Apply Hosts", true);
-        applyHosts.Margin = new Thickness(8, 0, 0, 0);
-        applyHosts.Click += (_, _) => ApplyHosts();
-        Grid.SetColumn(applyHosts, 1);
-        editorRow.Children.Add(applyHosts);
-        Grid.SetRow(editorRow, 1);
-        editorCard.Children.Add(editorRow);
-        var editorBorder = Theme.CardBorder(editorCard);
-        Grid.SetRow(editorBorder, 1);
-        right.Children.Add(editorBorder);
-
-        var monitorRow = new WrapPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4)
-        };
-        monitorRow.Children.Add(Setting("Interval", _interval, "sec"));
-        monitorRow.Children.Add(Setting("Timeout", _timeout, "ms"));
-        monitorRow.Children.Add(Setting("Down after", _downAfter, "fails"));
-        monitorRow.Children.Add(Setting("Recover after", _recoverAfter, "successes"));
-        monitorRow.Children.Add(_showCli);
-        monitorRow.Children.Add(_startStop);
-        foreach (var control in monitorRow.Children) control.Margin = new Thickness(4, 2);
-        var monitorBorder = Theme.CardBorder(monitorRow);
-        Grid.SetRow(monitorBorder, 2);
-        right.Children.Add(monitorBorder);
-
-        var hostAndCli = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        var hostActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
-            Children = { Theme.Label("Live hosts", 12, FontWeight.Bold), _editLabel, _clearLabel } };
-        hostAndCli.Children.Add(hostActions);
-        _hostList.Background = Theme.Panel;
-        _hostList.BorderBrush = Theme.Border;
-        _hostList.BorderThickness = new Thickness(1);
-        Grid.SetRow(_hostList, 1);
-        hostAndCli.Children.Add(_hostList);
-        _commandBox.Background = Theme.Brush("#070C12");
-        _commandBox.BorderBrush = Theme.Border;
-        _commandBox.Margin = new Thickness(0, 8, 0, 0);
-        _commandBox.Height = 160;
-        Grid.SetRow(_commandBox, 2);
-        hostAndCli.Children.Add(_commandBox);
-        Grid.SetRow(hostAndCli, 3);
-        right.Children.Add(hostAndCli);
-
-        workspace.Children.Add(right);
-        root.Children.Add(workspace);
-
-        var footer = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            Background = Theme.Panel,
-            Margin = new Thickness(0)
-        };
-        _status.Margin = new Thickness(12, 4);
-        footer.Children.Add(_status);
-        var ownership = Theme.Label("© 2026 Joseph Luker • Linux", 10, color: Theme.Muted);
-        ownership.Margin = new Thickness(0, 4, 12, 4);
-        Grid.SetColumn(ownership, 1);
-        footer.Children.Add(ownership);
-        Grid.SetRow(footer, 2);
-        root.Children.Add(footer);
-
-        return root;
-    }
-
     private static Border StatCard(string title, TextBlock value, int column)
     {
         var content = new StackPanel
@@ -567,19 +362,7 @@ internal sealed class MainWindow : Window
         return control;
     }
 
-    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal step, double width)
-    {
-        return new NumericUpDown
-        {
-            Minimum = min,
-            Maximum = max,
-            Value = value,
-            Increment = step,
-            Width = width,
-            Background = Theme.Panel,
-            Foreground = Theme.Text
-        };
-    }
+    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal step, double width) => NativeControls.Number(min, max, value, step, width);
 
     private void RefreshAll()
     {
@@ -590,7 +373,10 @@ internal sealed class MainWindow : Window
             var snapshot = _engine.Snapshot();
             _monitorState.Text = snapshot.Monitoring ? "MONITORING" : "IDLE";
             _monitorState.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Cyan;
-            _startStop.Content = snapshot.Monitoring ? "Stop" : "Start Monitoring";
+            _startStop.Content = "Start Monitoring";
+            _startStop.IsEnabled = !snapshot.Monitoring; _stop.IsEnabled = snapshot.Monitoring;
+            _siteHeader.Text = snapshot.SelectedSite is null ? "All Sites • Hosts" : $"{snapshot.SelectedSite} • Hosts";
+            _hostTable.SetScope(snapshot.SelectedSite is null);
             _startStop.Background = snapshot.Monitoring ? Theme.Brush("#7A2531") : Theme.Brush("#176D4D");
 
             var allHosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
@@ -1119,16 +905,7 @@ internal sealed class SettingsWindow : Window
         };
     }
 
-    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal step) => new()
-    {
-        Minimum = min,
-        Maximum = max,
-        Value = value,
-        Increment = step,
-        Width = 110,
-        Background = Theme.Panel,
-        Foreground = Theme.Text
-    };
+    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal step) => NativeControls.Number(min, max, value, step, 110);
 
     private void LoadValues()
     {

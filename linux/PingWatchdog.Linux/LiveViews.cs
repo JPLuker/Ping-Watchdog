@@ -15,6 +15,14 @@ internal sealed class HostRow : INotifyPropertyChanged
 {
     public HostRow(HostSnapshot host) => Host = host;
     public HostSnapshot Host { get; private set; }
+    public string Site => Host.Site;
+    public string HostAddress => Host.Address;
+    public string Label => Host.Label;
+    public string Status => Host.State.ToString().ToUpperInvariant();
+    public string Latency => Host.LatencyMs is null ? "—" : $"{Host.LatencyMs} ms";
+    public string Failures => Host.Failures.ToString();
+    public string LastReply => Host.LastReply?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
+    public string Outage => Host.OutageStarted?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
     public string Key => Host.Site + "\u001f" + Host.Address;
     public string Text => $"{Host.State,-8}  {Host.Site,-18}  {Host.Address,-24}  {Host.Label,-20}  {(Host.LatencyMs is null ? "—" : $"{Host.LatencyMs} ms"),-9}  failures {Host.Failures}";
     public string WallboardText => $"{Host.State} · {Host.Address} · {(Host.LatencyMs is null ? "—" : $"{Host.LatencyMs} ms")}\n{Host.Site}{(string.IsNullOrWhiteSpace(Host.Label) ? "" : $" · {Host.Label}")} · {Host.Failures} failure(s)";
@@ -24,7 +32,7 @@ internal sealed class HostRow : INotifyPropertyChanged
     {
         if (Host == host) return;
         Host = host;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WallboardText)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Foreground)));
     }
@@ -40,7 +48,7 @@ internal sealed class SiteRow : INotifyPropertyChanged
     {
         if (Text == text) return;
         Text = text;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
     }
 }
 

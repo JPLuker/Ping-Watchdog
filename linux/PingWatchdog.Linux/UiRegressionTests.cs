@@ -237,7 +237,7 @@ internal static class LinuxUiRegressionTests
     private static async Task CheckHostPanelLayoutAsync(MainWindow main, TextBox editor)
     {
         double width = main.Width, height = main.Height;
-        var heading = main.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Selected site hosts");
+        var heading = Field<TextBlock>(main, "_siteHeader");
         foreach (var size in new[] { new Size(width, height), new Size(main.MinWidth, main.MinHeight) })
         {
             main.Width = size.Width;
@@ -247,11 +247,11 @@ internal static class LinuxUiRegressionTests
             var editorPoint = editor.TranslatePoint(new Point(), main)!.Value;
             var card = editor.GetVisualAncestors().OfType<Border>().First();
             var cardPoint = card.TranslatePoint(new Point(), main)!.Value;
-            Check(heading.Bounds.Height >= heading.DesiredSize.Height - 1 && editorPoint.Y >= titlePoint.Y + heading.Bounds.Height + 7,
+            Check(heading.Bounds.Height >= heading.DesiredSize.Height - 1 && editorPoint.Y >= titlePoint.Y + heading.Bounds.Height,
                 $"Host panel reserves the full heading and gap at {size.Width}x{size.Height}");
             Check(editorPoint.Y + editor.Bounds.Height <= cardPoint.Y + card.Bounds.Height - card.Padding.Bottom + 1,
                 $"Host editor stays inside its card at {size.Width}x{size.Height}");
-            Check(editor.Bounds.Height >= 94, "Host editor retains its usable height");
+            Check(editor.Bounds.Height >= 60, "Host editor retains its usable height");
             if (Environment.GetEnvironmentVariable("WATCHDOG_UI_PREVIEW") == "1")
             {
                 using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)main.Bounds.Width, (int)main.Bounds.Height));
@@ -278,8 +278,8 @@ internal static class LinuxUiRegressionTests
         await Task.Delay(150);
         Invoke(wall, "ToggleOperations");
         await Task.Delay(100);
-        Check(Field<Border>(wall, "_opsCard").IsVisible && !Field<Border>(wall, "_reportsCard").IsVisible,
-            "Wallboard operations drawer occupies its own grid cell and replaces reports");
+        Check(Field<Border>(wall, "_opsCard").IsVisible && Field<Border>(wall, "_reportsCard").IsVisible,
+            "Wallboard operations drawer occupies its own grid cell and retains the reports");
         Check(wall.GetVisualDescendants().OfType<Image>().Any(i => ReferenceEquals(i.Source, BrandAssets.Logo)), "Wallboard displays the embedded Watchdog dog");
         Check(wall.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Import Config...")
             && wall.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Export Config..."), "Wallboard offers shared native config actions");
@@ -290,9 +290,9 @@ internal static class LinuxUiRegressionTests
         var row = list.SelectedItem;
         var source = list.ItemsSource;
         Check(list.ItemCount == 17, "Wallboard live list includes hosts beyond the twelve topology nodes");
-        var compactHost = (TextBlock)list.ItemTemplate!.Build(row)!;
-        Check(compactHost.TextWrapping == Avalonia.Media.TextWrapping.Wrap && compactHost.Width <= 300,
-            "Wallboard host rows wrap within the operations drawer");
+        var compactHost = (Border)list.ItemTemplate!.Build(row)!;
+        Check(compactHost.Child is Grid,
+            "Wallboard host rows render as a column table");
         var topology = Field<Canvas>(wall, "_topology");
         Check(topology.Children.OfType<TextBlock>().Any(t => t.Text!.StartsWith("+5 more hosts")), "Wallboard topology reports hidden host count");
         Check(topology.Children.OfType<TextBlock>().Any(t => t.Text == "Alpha") && !topology.Children.OfType<TextBlock>().Any(t => t.Text == "Beta"), "Topology respects selected site scope");

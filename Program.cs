@@ -6,6 +6,7 @@ using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using Velopack;
 using Velopack.Sources;
+using PingWatchdog.Shared;
 
 namespace PingWatchdog;
 
@@ -1374,80 +1375,24 @@ public sealed class MainForm : Form
 
     private void BuildGrid()
     {
-        _grid.RowTemplate.Height = 34;
-        _grid.ColumnHeadersHeight = 38;
+        _grid.RowTemplate.Height = Presentation.TableRowHeight;
+        _grid.ColumnHeadersHeight = Presentation.TableHeaderHeight;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        foreach (var spec in Presentation.HostColumns)
         {
-            Name = "SiteColumn",
-            HeaderText = "Site",
-            DataPropertyName = "Site",
-            Width = 145
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "HostColumn",
-            HeaderText = "Host",
-            DataPropertyName = "Host",
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 32,
-            MinimumWidth = 150
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "LabelColumn",
-            HeaderText = "Label",
-            DataPropertyName = "Label",
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 25,
-            MinimumWidth = 140
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "StatusColumn",
-            HeaderText = "Status",
-            DataPropertyName = "Status",
-            Width = 95
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "LatencyColumn",
-            HeaderText = "Latency",
-            DataPropertyName = "Latency",
-            Width = 85
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "FailuresColumn",
-            HeaderText = "Failures",
-            DataPropertyName = "Failures",
-            Width = 75
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "LastReplyColumn",
-            HeaderText = "Last Reply",
-            DataPropertyName = "LastReply",
-            Width = 150
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "OutageColumn",
-            HeaderText = "Outage Since",
-            DataPropertyName = "OutageSince",
-            Width = 150
-        });
+            var column = new DataGridViewTextBoxColumn {
+                Name = spec.Key + "Column", HeaderText = spec.Header,
+                DataPropertyName = spec.Key == "Outage" ? "OutageSince" : spec.Key
+            };
+            if (spec.Weight > 0) {
+                column.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                column.FillWeight = (float)spec.Weight; column.MinimumWidth = spec.Width;
+            } else column.Width = spec.Width;
+            _grid.Columns.Add(column);
+        }
     }
 
     private void BuildLayout()
@@ -4505,15 +4450,15 @@ public sealed class MainForm : Form
 
     private void ApplyDarkTheme()
     {
-        var window = Color.FromArgb(10, 14, 20);
-        var header = Color.FromArgb(12, 18, 26);
-        var nav = Color.FromArgb(14, 20, 28);
-        var card = Color.FromArgb(18, 25, 34);
-        var input = Color.FromArgb(11, 17, 24);
-        var border = Color.FromArgb(39, 49, 61);
-        var text = Color.FromArgb(234, 240, 246);
-        var muted = Color.FromArgb(139, 153, 169);
-        var accent = Color.FromArgb(57, 217, 238);
+        var window = ColorTranslator.FromHtml(Presentation.Window);
+        var header = ColorTranslator.FromHtml(Presentation.Header);
+        var nav = ColorTranslator.FromHtml(Presentation.Navigation);
+        var card = ColorTranslator.FromHtml(Presentation.Card);
+        var input = ColorTranslator.FromHtml(Presentation.Input);
+        var border = ColorTranslator.FromHtml(Presentation.Border);
+        var text = ColorTranslator.FromHtml(Presentation.Text);
+        var muted = ColorTranslator.FromHtml(Presentation.Muted);
+        var accent = ColorTranslator.FromHtml(Presentation.Accent);
 
         BackColor = window;
         ForeColor = text;

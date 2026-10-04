@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "linux/**"
+      - "Shared/**"
       - ".github/workflows/validate-linux.yml"
   push:
     branches: [ "linux/**" ]
     paths:
       - "linux/**"
+      - "Shared/**"
       - ".github/workflows/validate-linux.yml"
   workflow_dispatch:
 
@@ -16,6 +18,23 @@ permissions:
   contents: read
 
 jobs:
+  windows-shared-contract:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Validate Windows consumers of shared presentation code
+        run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
+      - name: Exercise Windows UI
+        run: dotnet run --no-build --project PingWatchdog.csproj -c Release -- --ui-smoke-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-reference-ui
+          path: ui-smoke-test/*
   correctness:
     runs-on: ubuntu-latest
     timeout-minutes: 10

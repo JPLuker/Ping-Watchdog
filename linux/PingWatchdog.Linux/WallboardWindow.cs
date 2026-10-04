@@ -9,10 +9,11 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using PingWatchdog.Shared;
 
 namespace PingWatchdog.Linux;
 
-internal sealed class WallboardWindow : Window
+internal sealed partial class WallboardWindow : Window
 {
     private readonly WatchdogEngine _engine;
     private readonly LinuxUpdateService _updates;
@@ -100,7 +101,7 @@ internal sealed class WallboardWindow : Window
         {
             if (e.Property != IsVisibleProperty) return;
             _opsCard.IsVisible = _ops.IsVisible;
-            _reportsCard.IsVisible = !_ops.IsVisible;
+            _reportsCard.IsVisible = true;
         };
         _hostList.SelectionChanged += (_, _) => UpdateLabelActions();
         _hostList.DoubleTapped += async (_, _) => await EditLabelAsync();
@@ -124,51 +125,6 @@ internal sealed class WallboardWindow : Window
         KeyDown += OnKeyDown;
     }
 
-    private Control BuildLayout()
-    {
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
-        var toolbar = new WrapPanel { Background = Theme.Panel, Margin = new Thickness(6) };
-        toolbar.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8, 0, 12, 0),
-            Children = { new Image { Source = BrandAssets.Logo, Width = 30, Height = 40, Stretch = Stretch.Uniform }, Theme.Label("PING WATCHDOG · WALLBOARD", 14, FontWeight.Bold) }
-        });
-        _startStop.Click += (_, _) => ToggleMonitoring();
-        var ops = Theme.Button("Operations", true); ops.Click += (_, _) => ToggleOperations();
-        var cli = Theme.Button("CLI"); cli.Click += (_, _) => ToggleCli();
-        var history = Theme.Button("History"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
-        var settings = Theme.Button("Settings"); settings.Click += (_, _) => new SettingsWindow(_engine, _updates, _main).Show(this);
-        var monitor = Theme.Button("Next Monitor"); monitor.Click += async (_, _) => await MoveToNextScreenAsync();
-        _updateButton.Click += async (_, _) => await _main.RunUpdateActionAsync(this);
-        var main = Theme.Button("Main Window"); main.Click += (_, _) => Close();
-        foreach (var button in new[] { _startStop, ops, cli, history, settings, monitor, _updateButton, main }) toolbar.Children.Add(button);
-        root.Children.Add(toolbar);
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(18, 4, 18, 8) };
-        _stats.TextWrapping = TextWrapping.Wrap;
-        header.Children.Add(new StackPanel { Spacing = 4, Children = { _stats, _screenStatus } });
-        var clock = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right, Children = { _clock, _date, _state } };
-        Grid.SetColumn(clock, 1); header.Children.Add(clock);
-        Grid.SetRow(header, 1); root.Children.Add(header);
-        var workspace = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
-        _topologyScroll.Content = _topology;
-        workspace.Children.Add(_topologyScroll);
-        _reportsCard = Theme.CardBorder(BuildReports(), new Thickness(8));
-        _reportsCard.Width = 285;
-        Grid.SetColumn(_reportsCard, 1); workspace.Children.Add(_reportsCard);
-        BuildOpsPanel();
-        _opsCard = Theme.CardBorder(new ScrollViewer { Content = _ops, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, new Thickness(8));
-        _opsCard.IsVisible = false;
-        Grid.SetColumn(_opsCard, 2); workspace.Children.Add(_opsCard);
-        Grid.SetRow(workspace, 2); root.Children.Add(workspace);
-        _cli.Margin = new Thickness(10, 4, 10, 4);
-        Grid.SetRow(_cli, 3); root.Children.Add(_cli);
-        var shortcuts = Theme.Label("O Operations   P Start/Stop   C CLI   H History range   S Suspect history   M Next monitor   Ctrl+H History   Ctrl+, Settings   Esc / F11 Main window", 10, color: Theme.Muted);
-        shortcuts.TextWrapping = TextWrapping.Wrap;
-        shortcuts.Margin = new Thickness(12, 5);
-        Grid.SetRow(shortcuts, 4); root.Children.Add(shortcuts);
-        return root;
-    }
-
     private void BuildOpsPanel()
     {
         _ops.Children.Add(Theme.Label("Operations", 17, FontWeight.Bold));
@@ -185,7 +141,7 @@ internal sealed class WallboardWindow : Window
         var apply = Theme.Button("Apply Hosts", true); apply.Click += (_, _) => { _editor.Commit(); Refresh(); };
         _ops.Children.Add(apply);
         _ops.Children.Add(Theme.Label("Live hosts · all hosts in the selected scope", 11, FontWeight.Bold));
-        _ops.Children.Add(_hostList);
+        _ops.Children.Add(new HostTableView(_hostList, compact: true) { Height = 190 });
         _ops.Children.Add(new WrapPanel { Children = { _editLabel, _clearLabel } });
         _ops.Children.Add(Theme.Label("Timing / thresholds · locked while monitoring", 10, FontWeight.Bold, Theme.Muted));
         var timing = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto") };
@@ -214,7 +170,7 @@ internal sealed class WallboardWindow : Window
         var reports = new StackPanel { Spacing = 10, Children =
         {
             Theme.Label("ACTIVE OUTAGES", 12, FontWeight.Bold), _outageSummary, _activeOutages,
-            Theme.Label("RECENT HISTORY", 12, FontWeight.Bold), _range, _hideSuspects, _historySummary, _recentHistory
+            Theme.Label("OUTAGE HISTORY", 12), _historyFilter, _historySummary, _recentHistory
         } };
         var history = Theme.Button("Full History / CSV"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
         reports.Children.Add(history);
@@ -234,6 +190,8 @@ internal sealed class WallboardWindow : Window
             _state.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Cyan;
             _startStop.Content = snapshot.Monitoring ? "Stop Monitoring" : "Start Monitoring";
             var hosts = snapshot.Hosts;
+            int[] counts = { hosts.Count, hosts.Count(h => h.State == HostState.Online), hosts.Count(h => h.State == HostState.Suspect), hosts.Count(h => h.State == HostState.Offline) };
+            for (int i = 0; i < counts.Length; i++) _statValues[i].Text = counts[i].ToString();
             _stats.Text = $"{snapshot.SelectedSite ?? "ALL SITES"}   TOTAL {hosts.Count}   ONLINE {hosts.Count(h => h.State == HostState.Online)}   SUSPECT {hosts.Count(h => h.State == HostState.Suspect)}   OFFLINE {hosts.Count(h => h.State == HostState.Offline)}";
             _showCli = snapshot.Settings.WallboardShowCli;
             _cli.IsVisible = _showCli;
@@ -325,6 +283,7 @@ internal sealed class WallboardWindow : Window
         _activeOutages.Text = active.Count == 0 ? "No active outages in this scope." : string.Join("\n\n", active.Take(8).Select(h =>
             $"{h.State.ToString().ToUpperInvariant()} · {h.Site}\n{(string.IsNullOrWhiteSpace(h.Label) ? h.Address : $"{h.Label} · {h.Address}")}\n{(h.OutageStarted is { } started ? $"Down for {FormatDuration(DateTime.Now - started)}" : $"{h.Failures} consecutive failure(s)")}"));
         if (active.Count > 8) _activeOutages.Text += $"\n\n+{active.Count - 8} more · see the live host list";
+        _historyFilter.Text = $"{snapshot.Settings.EventHistoryHours switch { 24 => "Last 24 hours", 168 => "Last 7 days", 720 => "Last 30 days", _ => "All time" }} • suspects {(snapshot.Settings.HideSuspectEvents ? "hidden" : "shown")}";
         var history = _engine.HistorySnapshot(snapshot.Settings.EventHistoryHours, snapshot.Settings.HideSuspectEvents, snapshot.SelectedSite);
         _historySummary.Text = $"{history.Events.Count} matching / {history.StoredCount} stored · showing {Math.Min(8, history.Events.Count)}";
         _recentHistory.Text = history.Events.Count == 0 ? "No matching events." : string.Join("\n\n", history.Events.Take(8).Select(e =>
@@ -349,50 +308,6 @@ internal sealed class WallboardWindow : Window
         Refresh();
     }
 
-    private void DrawTopology(WatchdogSnapshot snapshot)
-    {
-        // Each site gets its own bounded cell. Overflow stays explicit and all hosts remain in the table.
-        _topology.Children.Clear();
-        var sites = snapshot.Sites.Where(s => snapshot.SelectedSite is null || s.Name.Equals(snapshot.SelectedSite, StringComparison.OrdinalIgnoreCase)).ToList();
-        const double cellWidth = 440, cellHeight = 350;
-        int columns = Math.Max(1, (int)(_topologyScroll.Bounds.Width / cellWidth));
-        _topology.Width = Math.Max(cellWidth, _topologyScroll.Bounds.Width);
-        _topology.Height = Math.Max(_topologyScroll.Bounds.Height, 80 + Math.Ceiling(sites.Count / (double)columns) * cellHeight);
-        var logo = new Image { Source = BrandAssets.Logo, Width = 40, Height = 55, Stretch = Stretch.Uniform };
-        Canvas.SetLeft(logo, 20); Canvas.SetTop(logo, 8); _topology.Children.Add(logo);
-        AddText("WATCHDOG", 70, 15, 18, Theme.Cyan, FontWeight.Bold, 220);
-        AddText(snapshot.SelectedSite ?? "All sites", 70, 42, 11, Theme.Muted, FontWeight.Normal, 300);
-        for (int i = 0; i < sites.Count; i++)
-        {
-            var site = sites[i];
-            double left = i % columns * cellWidth, top = 80 + i / columns * cellHeight;
-            var sitePoint = new Point(left + 44, top + 162);
-            AddText(site.Name, left + 16, top + 5, 14, Theme.Text, FontWeight.Bold, 410);
-            AddText($"{site.Hosts.Count} hosts · {AggregateSite(site)}", left + 16, top + 28, 10, Theme.State(AggregateSite(site)), FontWeight.Normal, 410);
-            AddLine(new Point(left + 44, top + 49), sitePoint, Theme.State(AggregateSite(site)), 2);
-            AddCircle(sitePoint.X - 18, sitePoint.Y - 18, 36, Theme.State(AggregateSite(site)));
-            int visible = Math.Min(12, site.Hosts.Count);
-            for (int column = 0; column < (visible + 5) / 6; column++)
-            {
-                double trunk = left + 90 + column * 168;
-                int count = Math.Min(6, visible - column * 6);
-                AddLine(sitePoint, new Point(trunk, sitePoint.Y), Theme.State(AggregateSite(site)), 1);
-                AddLine(new Point(trunk, top + 64), new Point(trunk, top + 64 + (count - 1) * 39), Theme.State(AggregateSite(site)), 1);
-            }
-            for (int h = 0; h < visible; h++)
-            {
-                var host = site.Hosts[h];
-                var point = new Point(left + 98 + h / 6 * 168, top + 64 + h % 6 * 39);
-                AddLine(new Point(point.X - 8, point.Y), point, Theme.State(host.State), 1);
-                AddCircle(point.X - 4, point.Y - 4, 8, Theme.State(host.State));
-                AddText(string.IsNullOrWhiteSpace(host.Label) ? host.Address : host.Label, point.X + 9, point.Y - 11, 10, Theme.Text, FontWeight.Bold, 148);
-                AddText(string.IsNullOrWhiteSpace(host.Label) ? host.State.ToString() : host.Address, point.X + 9, point.Y + 3, 9, Theme.State(host.State), FontWeight.Normal, 148);
-            }
-            if (site.Hosts.Count > visible) AddText($"+{site.Hosts.Count - visible} more hosts · Operations shows all {site.Hosts.Count}", left + 16, top + 309, 11, Theme.Cyan, FontWeight.Bold, 410);
-            else if (visible == 0) AddText("Add hosts in Operations", left + 94, top + 158, 11, Theme.Muted, FontWeight.Normal, 300);
-        }
-    }
-
     private static HostState AggregateSite(SiteSnapshot site)
     {
         if (site.Hosts.Count == 0) return HostState.Unknown;
@@ -408,9 +323,9 @@ internal sealed class WallboardWindow : Window
         var circle = new Ellipse { Width = size, Height = size, Fill = Theme.Brush("#0A1119"), Stroke = brush, StrokeThickness = 2 };
         Canvas.SetLeft(circle, left); Canvas.SetTop(circle, top); _topology.Children.Add(circle);
     }
-    private void AddText(string text, double left, double top, double size, IBrush brush, FontWeight weight, double width)
+    private void AddText(string text, double left, double top, double size, IBrush brush, FontWeight weight, double width, bool centered = false)
     {
-        var label = new TextBlock { Text = text, FontSize = size, FontWeight = weight, Foreground = brush, Width = width, TextTrimming = TextTrimming.CharacterEllipsis };
+        var label = new TextBlock { Text = text, FontSize = size, FontWeight = weight, Foreground = brush, Width = width, TextTrimming = TextTrimming.CharacterEllipsis, TextAlignment = centered ? TextAlignment.Center : TextAlignment.Left };
         ToolTip.SetTip(label, text);
         Canvas.SetLeft(label, left); Canvas.SetTop(label, top); _topology.Children.Add(label);
     }
@@ -518,11 +433,7 @@ internal sealed class WallboardWindow : Window
         }
         finally { _movingScreen = false; }
     }
-    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal step) => new()
-    {
-        Minimum = min, Maximum = max, Value = value, Increment = step, Width = 115,
-        Background = Theme.Panel, Foreground = Theme.Text
-    };
+    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal step) => NativeControls.Number(min, max, value, step, 110);
     private async Task<string?> PromptAsync(string title, string label, string initial = "")
     {
         var box = new TextBox { MinWidth = 320, Text = initial };

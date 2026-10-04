@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Avalonia.Media;
 
 namespace PingWatchdog.Linux;
 
@@ -12,6 +13,10 @@ internal sealed class App : Application
     {
         Styles.Add(new FluentTheme());
         RequestedThemeVariant = ThemeVariant.Dark;
+        Styles.Add(new Style(s => s.OfType<Avalonia.Controls.Window>()) { Setters = {
+            new Setter(Avalonia.Controls.Window.FontFamilyProperty, new FontFamily("Segoe UI, Noto Sans, DejaVu Sans")),
+            new Setter(Avalonia.Controls.Window.FontSizeProperty, 12.7)
+        } });
     }
 
     public override void OnFrameworkInitializationCompleted()

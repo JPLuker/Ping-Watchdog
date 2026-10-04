@@ -1,3 +1,5 @@
+using PingWatchdog.Shared;
+
 namespace PingWatchdog;
 
 internal sealed class SettingsForm : Form
@@ -80,7 +82,7 @@ internal sealed class SettingsForm : Form
         BuildLayout();
         ApplyTheme();
 
-        _nav.Items.AddRange(new object[] { "General", "Monitoring", "History", "Updates" });
+        _nav.Items.AddRange(Presentation.SettingsPages.Cast<object>().ToArray());
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
 

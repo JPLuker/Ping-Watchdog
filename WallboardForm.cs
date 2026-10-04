@@ -1,3 +1,5 @@
+using PingWatchdog.Shared;
+
 namespace PingWatchdog;
 
 internal sealed class WallboardForm : Form
@@ -1341,19 +1343,8 @@ internal sealed class WallboardCanvas : Control
         Point center,
         int coreRadius)
     {
-        var points = new List<Point>(count);
-        double radiusX = Math.Max(coreRadius + 80, rect.Width * 0.37);
-        double radiusY = Math.Max(coreRadius + 65, rect.Height * 0.34);
-
-        for (int i = 0; i < count; i++)
-        {
-            double angle = (-Math.PI / 2) + (Math.PI * 2 * i / Math.Max(1, count));
-            points.Add(new Point(
-                center.X + (int)(Math.Cos(angle) * radiusX),
-                center.Y + (int)(Math.Sin(angle) * radiusY)));
-        }
-
-        return points;
+        return Presentation.SitePoints(count, rect.X, rect.Y, rect.Width, rect.Height, coreRadius)
+            .Select(p => new Point((int)p.X, (int)p.Y)).ToList();
     }
 
     private void DrawConnection(
@@ -1533,7 +1524,7 @@ internal sealed class WallboardCanvas : Control
         Rectangle topologyBounds,
         int baseOrbitRadius)
     {
-        int visible = Math.Min(site.Hosts.Count, 12);
+        int visible = Math.Min(site.Hosts.Count, Presentation.VisibleTopologyHosts);
 
         if (visible == 0)
             return;
