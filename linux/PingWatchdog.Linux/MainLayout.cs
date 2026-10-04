@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using PingWatchdog.Shared;
+using Avalonia.Styling;
 
 namespace PingWatchdog.Linux;
 
@@ -41,6 +42,14 @@ internal sealed partial class MainWindow
         var nav = new Grid { RowDefinitions = new RowDefinitions("38,*,38,38,38,38"), Background = Theme.Brush(Presentation.Navigation) };
         var navContent = new Grid { RowDefinitions = new RowDefinitions("38,*,38,38,38,38"), Margin = new Thickness(12, 14, 10, 14) };
         navContent.Children.Add(Theme.Label("Sites", 14, FontWeight.SemiBold));
+        _siteList.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = {
+            new Setter(ListBoxItem.BackgroundProperty, Theme.Brush("#121820")), new Setter(ListBoxItem.MinHeightProperty, 36d),
+            new Setter(ListBoxItem.BorderThicknessProperty, new Thickness(1)), new Setter(ListBoxItem.BorderBrushProperty, Avalonia.Media.Brushes.Transparent),
+            new Setter(ListBoxItem.MarginProperty, new Thickness(0, 2))
+        } });
+        _siteList.Styles.Add(new Style(s => s.OfType<ListBoxItem>().Class(":selected")) { Setters = {
+            new Setter(ListBoxItem.BackgroundProperty, Theme.Brush("#1A485B")), new Setter(ListBoxItem.BorderBrushProperty, Theme.Cyan)
+        } });
         _siteList.Background = Theme.Brush(Presentation.Navigation); _siteList.BorderThickness = new Thickness(0); _siteList.FontSize = 13.3;
         Grid.SetRow(_siteList, 1); navContent.Children.Add(_siteList);
         var add = Theme.Button("+ Add Site", true); add.Click += async (_, _) => await AddSiteAsync();
@@ -62,7 +71,7 @@ internal sealed partial class MainWindow
         _hostEditor.PlaceholderText = "One IP or hostname per line\n192.168.1.1\n8.8.8.8\nserver01";
         _hostEditor.Background = Theme.Brush(Presentation.Input); _hostEditor.BorderBrush = Theme.Border;
         Grid.SetRow(_hostEditor, 1); editor.Children.Add(_hostEditor);
-        var editorBorder = Theme.CardBorder(editor, new Thickness(0, 0, 0, 10)); editorBorder.Padding = new Thickness(14, 10, 14, 12);
+        var editorBorder = Theme.CardBorder(editor, new Thickness(0, 0, 0, 10)); editorBorder.BorderThickness = new Thickness(0); editorBorder.Padding = new Thickness(14, 10, 14, 12);
         Grid.SetRow(editorBorder, 1); right.Children.Add(editorBorder);
         var timing = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var inputs = new WrapPanel();
@@ -72,7 +81,7 @@ internal sealed partial class MainWindow
         _stop.Click += (_, _) => { if (_engine.Monitoring) _engine.StopMonitoring(); };
         var monitoring = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(8, 9, 0, 0), Children = { _startStop, _stop } };
         Grid.SetColumn(monitoring, 1); timing.Children.Add(monitoring);
-        var timingBorder = Theme.CardBorder(timing, new Thickness(0, 0, 0, 10)); timingBorder.Padding = new Thickness(14, 10, 12, 10);
+        var timingBorder = Theme.CardBorder(timing, new Thickness(0, 0, 0, 10)); timingBorder.BorderThickness = new Thickness(0); timingBorder.Padding = new Thickness(14, 10, 12, 10);
         Grid.SetRow(timingBorder, 2); right.Children.Add(timingBorder);
         var live = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
         _hostTable = new HostTableView(_hostList); live.Children.Add(_hostTable);
@@ -85,7 +94,7 @@ internal sealed partial class MainWindow
         var copyright = Theme.Label($"{_updates.Version} · © 2026 Joseph Luker · All rights reserved.", 11, color: Theme.Muted);
         copyright.Margin = new Thickness(0, 4, 12, 4); Grid.SetColumn(copyright, 1); footer.Children.Add(copyright);
         Grid.SetRow(footer, 2); root.Children.Add(footer);
-        SizeChanged += (_, _) => _navigationColumn.Width = new GridLength(Presentation.Sidebar(Bounds.Width));
+        SizeChanged += (_, _) => { _navigationColumn.Width = new GridLength(Presentation.Sidebar(Bounds.Width)); root.RowDefinitions[0].Height = new GridLength(Presentation.Header(Bounds.Width)); };
         return root;
     }
 }

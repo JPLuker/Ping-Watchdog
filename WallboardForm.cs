@@ -410,45 +410,14 @@ internal sealed class WallboardForm : Form
 
     private void BuildHostGrid()
     {
-        _hostGrid.RowTemplate.Height = 28;
-        _hostGrid.ColumnHeadersHeight = 32;
+        _hostGrid.RowTemplate.Height = Presentation.CompactTableRowHeight;
+        _hostGrid.ColumnHeadersHeight = Presentation.CompactTableHeaderHeight;
         _hostGrid.EnableHeadersVisualStyles = false;
-
-        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "SiteColumn",
-            HeaderText = "Site",
-            DataPropertyName = "Site",
-            Width = 78
-        });
-        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "HostColumn",
-            HeaderText = "Host",
-            DataPropertyName = "Address",
-            Width = 112
-        });
-        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "LabelColumn",
-            HeaderText = "Label",
-            DataPropertyName = "Label",
-            Width = 82
-        });
-        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "StatusColumn",
-            HeaderText = "Status",
-            DataPropertyName = "State",
-            Width = 67
-        });
-        _hostGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "LatencyColumn",
-            HeaderText = "ms",
-            DataPropertyName = "LatencyMs",
-            Width = 48
-        });
+        foreach (var column in Presentation.WallboardHostColumns)
+            _hostGrid.Columns.Add(new DataGridViewTextBoxColumn {
+                Name = column.Key + "Column", HeaderText = column.Header, Width = column.Width,
+                DataPropertyName = column.Key == "Host" ? "Address" : column.Key == "Status" ? "State" : column.Key == "Latency" ? "LatencyMs" : column.Key
+            });
     }
 
     private void WireActions()

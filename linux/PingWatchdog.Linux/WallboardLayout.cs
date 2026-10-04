@@ -71,7 +71,10 @@ internal sealed partial class WallboardWindow
         _opsCard = Theme.CardBorder(new ScrollViewer { Content = _ops, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, new Thickness(0));
         _opsCard.Background = Theme.Brush("#0A1017"); _opsCard.IsVisible = false;
         Grid.SetColumn(_opsCard, 1); workspace.Children.Add(_opsCard); Grid.SetRow(workspace, 1); root.Children.Add(workspace);
-        _board.SizeChanged += (_, _) => _reportsCard.Width = Math.Clamp(_board.Bounds.Width * .29, 320, 440);
+        _board.SizeChanged += (_, _) => {
+            _reportsCard.Width = Math.Clamp(_board.Bounds.Width * .29, 320, 440);
+            _cli.Height = Math.Clamp(Math.Max(240, _board.Bounds.Height - 266) * .28, 150, 240);
+        };
         SizeChanged += (_, _) => { _opsCard.Width = Math.Clamp(Bounds.Width / 3, 360, 440); _ops.Width = _opsCard.Width - 28; };
         return root;
     }

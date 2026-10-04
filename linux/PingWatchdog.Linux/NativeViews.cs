@@ -57,11 +57,11 @@ internal sealed class HostTableView : Grid
     public HostTableView(ListBox list, bool compact = false)
     {
         _list = list; _compact = compact; _list.Height = double.NaN;
-        RowDefinitions = new RowDefinitions($"{Presentation.TableHeaderHeight},*");
+        RowDefinitions = new RowDefinitions($"{(_compact ? Presentation.CompactTableHeaderHeight : Presentation.TableHeaderHeight)},*");
         Background = UiTheme.Brush(Presentation.Card);
         _list.Background = UiTheme.Brush(Presentation.Card); _list.BorderThickness = new Thickness(0); _list.Padding = new Thickness(0);
         _list.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = {
-            new Setter(ListBoxItem.PaddingProperty, new Thickness(0)), new Setter(ListBoxItem.MinHeightProperty, (double)Presentation.TableRowHeight),
+            new Setter(ListBoxItem.PaddingProperty, new Thickness(0)), new Setter(ListBoxItem.MinHeightProperty, (double)(_compact ? Presentation.CompactTableRowHeight : Presentation.TableRowHeight)),
             new Setter(ListBoxItem.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch)
         } });
         ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Auto);
@@ -80,7 +80,7 @@ internal sealed class HostTableView : Grid
         });
         SetScope(true);
     }
-    private TableColumn[] Columns => (_compact ? Presentation.HostColumns.Where(c => c.Key is "Site" or "Host" or "Label" or "Status" or "Latency") : Presentation.HostColumns.Where(c => _showSite || c.Key != "Site")).ToArray();
+    private TableColumn[] Columns => (_compact ? Presentation.WallboardHostColumns : Presentation.HostColumns.Where(c => _showSite || c.Key != "Site")).ToArray();
     public void SetScope(bool showSite)
     {
         if (_showSite == showSite && _head.Children.Count > 0) return;
@@ -98,7 +98,7 @@ internal sealed class HostTableView : Grid
     }
     private Grid BuildGrid(bool header)
     {
-        var grid = new Grid { Height = Presentation.TableRowHeight };
+        var grid = new Grid { Height = _compact ? Presentation.CompactTableRowHeight : Presentation.TableRowHeight };
         RebuildRow(grid);
         return grid;
     }
@@ -124,13 +124,13 @@ internal sealed class HostTableView : Grid
     private void ApplyWidths(Grid grid)
     {
         var columns = Columns;
-        double minimum = columns.Sum(c => _compact ? c.Key is "Status" or "Latency" ? 75 : 135 : c.Width);
+        double minimum = columns.Sum(c => c.Width);
         double width = Math.Max(minimum, Bounds.Width - 16);
         double extra = width - minimum, weight = columns.Sum(c => c.Weight);
         grid.Width = width; grid.ColumnDefinitions.Clear();
         foreach (var column in columns)
         {
-            double baseline = _compact ? column.Key is "Status" or "Latency" ? 75 : 135 : column.Width;
+            double baseline = column.Width;
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(baseline + (weight > 0 ? extra * column.Weight / weight : 0))));
         }
     }
@@ -147,11 +147,19 @@ internal sealed record HistoryRow(StateEventRecord Event)
 }
 internal sealed class HistoryTableView : Grid
 {
+    private readonly List<Grid> _rows = new();
+    private void Fit(Grid row)
+    {
+        double width = Math.Max(620, Bounds.Width - 16), fill = width - Presentation.HistoryColumns.Where(c => c.Weight == 0).Sum(c => c.Width);
+        row.Width = width; row.ColumnDefinitions.Clear();
+        foreach (var column in Presentation.HistoryColumns) row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(column.Weight > 0 ? fill * column.Weight / 100 : column.Width)));
+    }
     public HistoryTableView(ListBox list)
     {
         RowDefinitions = new RowDefinitions($"{Presentation.TableHeaderHeight},*");
         var head = new Grid();
-        foreach (var column in Presentation.HistoryColumns) head.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(column.Width)));
+        _rows.Add(head); Fit(head);
+        SizeChanged += (_, _) => { foreach (var row in _rows.ToArray()) Fit(row); };
         int index = 0;
         foreach (var column in Presentation.HistoryColumns) {
             var text = UiTheme.Label(column.Header, 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
@@ -166,12 +174,14 @@ internal sealed class HistoryTableView : Grid
             var row = new Grid { Height = Presentation.TableRowHeight };
             int i = 0;
             foreach (var column in Presentation.HistoryColumns) {
-                row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(column.Width)));
+
                 var text = new TextBlock { FontSize = 12.7, Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
                 text.Bind(TextBlock.TextProperty, new Binding(column.Key)); text.Bind(ToolTip.TipProperty, new Binding(column.Key));
                 text.Bind(TextBlock.ForegroundProperty, new Binding(nameof(HistoryRow.Foreground)));
                 Grid.SetColumn(text, i++); row.Children.Add(text);
             }
+            Fit(row); row.AttachedToVisualTree += (_, _) => { if (!_rows.Contains(row)) _rows.Add(row); Fit(row); };
+            row.DetachedFromVisualTree += (_, _) => _rows.Remove(row);
             return new Border { BorderBrush = UiTheme.Border, BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
         });
         list.AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) => { if (e.Source is ScrollViewer scroll) header.Offset = new Vector(scroll.Offset.X, 0); });

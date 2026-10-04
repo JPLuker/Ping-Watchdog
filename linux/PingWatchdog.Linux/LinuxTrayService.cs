@@ -50,6 +50,7 @@ internal sealed class LinuxTrayService : IDisposable
     private readonly Func<Task<bool>> _hostAvailable;
     private bool _disposed;
     private bool _refreshing;
+    private int _restoreGeneration;
     public bool Available { get; private set; }
     public string Status => Available ? "System tray available" : "No tray host detected • normal taskbar minimization";
 
@@ -112,16 +113,20 @@ internal sealed class LinuxTrayService : IDisposable
         finally { _refreshing = false; }
     }
 
-    public async Task MinimizeAsync()
+    public async Task MinimizeAsync(bool requested = false)
     {
+        // Wayland may report Normal again before the asynchronous tray-host check finishes.
+        bool minimizeRequested = requested || _main.WindowState == WindowState.Minimized;
+        int generation = _restoreGeneration;
         await RefreshAsync();
-        if (_disposed || !Available || !_engine.Config.MinimizeToTray || _main.WindowState != WindowState.Minimized) return;
+        if (_disposed || !minimizeRequested || generation != _restoreGeneration || !Available || !_engine.Config.MinimizeToTray) return;
         if (_main.CommitHostEdits()) _main.Hide();
     }
 
     public void Restore()
     {
         if (_disposed) return;
+        _restoreGeneration++;
         _main.WindowState = WindowState.Normal;
         _main.Show();
         _main.Activate();

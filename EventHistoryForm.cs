@@ -1,3 +1,5 @@
+using PingWatchdog.Shared;
+
 namespace PingWatchdog;
 
 internal sealed class EventHistoryForm : Form
@@ -78,13 +80,7 @@ internal sealed class EventHistoryForm : Form
         BuildLayout();
         ApplyTheme();
 
-        _windowCombo.Items.AddRange(new object[]
-        {
-            "Last 24 hours",
-            "Last 7 days",
-            "Last 30 days",
-            "All time"
-        });
+        _windowCombo.Items.AddRange(Presentation.HistoryRanges.Cast<object>().ToArray());
 
         var preferences = _preferencesProvider();
         _windowCombo.SelectedIndex = HoursToIndex(preferences.WindowHours);
@@ -134,46 +130,19 @@ internal sealed class EventHistoryForm : Form
 
     private void BuildGrid()
     {
-        _grid.RowTemplate.Height = 34;
-        _grid.ColumnHeadersHeight = 38;
+        _grid.RowTemplate.Height = Presentation.TableRowHeight;
+        _grid.ColumnHeadersHeight = Presentation.TableHeaderHeight;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        foreach (var column in Presentation.HistoryColumns)
         {
-            Name = "TimestampColumn",
-            HeaderText = "Timestamp",
-            DataPropertyName = "Timestamp",
-            Width = 160
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "KindColumn",
-            HeaderText = "Event",
-            DataPropertyName = "Kind",
-            Width = 105
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            HeaderText = "Site",
-            DataPropertyName = "Site",
-            Width = 155
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            HeaderText = "Host",
-            DataPropertyName = "Host",
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 34
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            HeaderText = "Details",
-            DataPropertyName = "Details",
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            FillWeight = 66
-        });
+            var cell = new DataGridViewTextBoxColumn { HeaderText = column.Header, DataPropertyName = column.Key };
+            if (column.Key is "Timestamp" or "Kind") cell.Name = column.Key + "Column";
+            if (column.Weight > 0) { cell.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; cell.FillWeight = (float)column.Weight; }
+            else cell.Width = column.Width;
+            _grid.Columns.Add(cell);
+        }
     }
 
     private void BuildLayout()

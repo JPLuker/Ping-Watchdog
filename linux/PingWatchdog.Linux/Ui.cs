@@ -271,8 +271,8 @@ internal sealed partial class MainWindow : Window
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         PropertyChanged += async (_, e) =>
         {
-            if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized && _tray is not null)
-                await _tray.MinimizeAsync();
+            if (e.Property == WindowStateProperty && e.NewValue is WindowState state && state == WindowState.Minimized && _tray is not null)
+                await _tray.MinimizeAsync(requested: true);
         };
 
         Opened += (_, _) =>
@@ -332,7 +332,7 @@ internal sealed partial class MainWindow : Window
                 value
             }
         };
-        var border = Theme.CardBorder(content);
+        var border = Theme.CardBorder(content); border.BorderThickness = new Thickness(0);
         Grid.SetColumn(border, column);
         return border;
     }
@@ -985,18 +985,16 @@ internal sealed class HistoryWindow : Window
         filters.Children.Add(export);
         foreach (var control in filters.Children) control.Margin = new Thickness(0, 4, 8, 4);
 
-        Content = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*"),
-            Margin = new Thickness(16),
-            Children =
-            {
-                Theme.Label("Outage History", 20, FontWeight.Bold),
-                At(filters, 1),
-                At(_summary, 2),
-                At(new HistoryTableView(_events), 3)
-            }
-        };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        header.Children.Add(new StackPanel { Spacing = 4, Children = {
+            Theme.Label("Outage History", 24, FontWeight.SemiBold),
+            Theme.Label("Persistent availability events across monitoring sessions", 12.7, color: Theme.Muted)
+        } });
+        _summary.Width = 220; _summary.FontSize = 11.3; _summary.TextWrapping = TextWrapping.Wrap; _summary.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(_summary, 1); header.Children.Add(_summary);
+        Content = new Grid { RowDefinitions = new RowDefinitions("58,Auto,*"), Margin = new Thickness(18), Children = {
+            header, At(filters, 1), At(new HistoryTableView(_events), 2)
+        } };
 
         _timer.Tick += (_, _) => Refresh();
         Opened += (_, _) =>
@@ -1139,7 +1137,7 @@ internal sealed class OrganizationWindow : Window
     {
         if (_closed) return;
         string? selectedKey = Selected is { } previous ? $"{previous.IsFolder}:{previous.Key}" : null;
-        var expanded = _items.GetVisualDescendants().OfType<TreeViewItem>()
+        var expanded = TreeNodes(_items.Items.OfType<TreeViewItem>())
             .Where(item => item.IsExpanded && item.DataContext is OrgItem).Select(item => ((OrgItem)item.DataContext!).Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool first = _rows.Count == 0;
         _rows.Clear();
@@ -1164,6 +1162,11 @@ internal sealed class OrganizationWindow : Window
         }
         _items.ItemsSource = roots;
         _items.SelectedItem = selection;
+    }
+
+    private static IEnumerable<TreeViewItem> TreeNodes(IEnumerable<TreeViewItem> items)
+    {
+        foreach (var item in items) { yield return item; foreach (var child in TreeNodes(item.Items.OfType<TreeViewItem>())) yield return child; }
     }
 
     private OrgItem? Selected => (_items.SelectedItem as TreeViewItem)?.DataContext as OrgItem;

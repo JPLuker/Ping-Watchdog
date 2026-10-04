@@ -1408,7 +1408,7 @@ public sealed class MainForm : Form
             Margin = new Padding(0),
             Tag = "window"
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, Presentation.HeaderHeight));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         _rootLayout = root;
@@ -1503,7 +1503,7 @@ public sealed class MainForm : Form
         header.Controls.Add(brand, 0, 0);
         header.Controls.Add(headerActions, 1, 0);
 
-        _workspaceSplit.SplitterDistance = 218;
+        _workspaceSplit.SplitterDistance = Presentation.SidebarWidth;
         _workspaceSplit.SplitterWidth = 1;
         _workspaceSplit.Panel1MinSize = 174;
         _workspaceSplit.Panel1.Padding = new Padding(12, 14, 10, 14);
@@ -1819,10 +1819,10 @@ public sealed class MainForm : Form
 
         try
         {
-            _rootLayout.RowStyles[0].Height = narrow ? 70 : 74;
+            _rootLayout.RowStyles[0].Height = Presentation.Header(width);
 
             _workspaceSplit.Panel1MinSize = veryNarrow ? 165 : 174;
-            int requestedSidebar = veryNarrow ? 176 : narrow ? 196 : 218;
+            int requestedSidebar = Presentation.Sidebar(width);
             int maxSidebar = Math.Max(_workspaceSplit.Panel1MinSize, width / 3);
 
             try

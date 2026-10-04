@@ -9,7 +9,8 @@ internal static class Presentation
         Offline = "#FF6870", Unknown = "#8B99A9", WallboardBackground = "#05090E",
         WallboardPanel = "#090F16", WallboardCard = "#0E151D";
     public const int HeaderHeight = 74, FooterHeight = 28, SidebarWidth = 218,
-        TableHeaderHeight = 38, TableRowHeight = 34, VisibleTopologyHosts = 12;
+        TableHeaderHeight = 38, TableRowHeight = 34, VisibleTopologyHosts = 12,
+        CompactTableHeaderHeight = 32, CompactTableRowHeight = 28;
     public static readonly string[] SettingsPages = { "General", "Monitoring", "History", "Updates" };
     public static readonly string[] HistoryRanges = { "Last 24 hours", "Last 7 days", "Last 30 days", "All time" };
     public static readonly TableColumn[] HostColumns = {
@@ -19,8 +20,13 @@ internal static class Presentation
     };
     public static readonly TableColumn[] HistoryColumns = {
         new("Timestamp", "Timestamp", 160), new("Kind", "Event", 105), new("Site", "Site", 155),
-        new("Host", "Host", 180, 34), new("Details", "Details", 300, 66)
+        new("Host", "Host", 0, 34), new("Details", "Details", 0, 66)
     };
+    public static readonly TableColumn[] WallboardHostColumns = {
+        new("Site", "Site", 78), new("Host", "Host", 112), new("Label", "Label", 82),
+        new("Status", "Status", 67), new("Latency", "ms", 48)
+    };
+    public static int Header(double width) => width < 1080 ? 70 : HeaderHeight;
     public static int Sidebar(double width) => width < 960 ? 176 : width < 1080 ? 196 : SidebarWidth;
     public static UiPoint[] SitePoints(int count, double x, double y, double width, double height, int coreRadius)
     {
