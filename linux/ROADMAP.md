@@ -16,7 +16,7 @@ Completed and validated on October 3, 2026. Core and real desktop regression sui
 
 ## Phase 2: main application parity
 
-Implemented: host label edit/clear, native configuration import/export, Linux tray menu and minimize preference with a safe taskbar fallback, individually colored CLI entries in Main and Wallboard, and persistent site/host/trace collections with keyed selection. Invalid imports leave the current setup intact; timing edits survive refreshes. Core and desktop regressions pass under Xvfb/Openbox with a Linux session bus. The desktop-specific tray rendering and AppImage updater round trip remain Phase 5 verification.
+Completed and validated on October 3, 2026: host label edit/clear, native configuration import/export, Linux tray menu and minimize preference with a safe taskbar fallback, individually colored CLI entries in Main and Wallboard, and persistent site/host/trace collections with keyed selection. Invalid imports leave the current setup intact; timing edits survive refreshes. Core and desktop regressions pass under Xvfb/Openbox with a Linux session bus. The desktop-specific tray rendering and AppImage updater round trip remain Phase 5 verification.
 
 ## Phase 3: Wallboard parity
 
