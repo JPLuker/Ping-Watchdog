@@ -38,6 +38,30 @@ The Linux build includes:
 - Background GitHub update checks and self-updating AppImage packages on the Linux beta channel.
 - Desktop outage/recovery notifications through `notify-send` when it is available.
 
+## Windows layout alignment
+
+The Windows application is the visual reference. Linux now follows its compact header and More menu, site sidebar, host-column table, separate Start/Stop controls, Settings page navigation, history table, folder tree, and radial Wallboard layout. Both builds embed the same dog artwork.
+
+`Shared/Presentation.cs` is compiled by both applications. It owns the main palette, table headers and dimensions, responsive header/sidebar widths, Settings/history navigation, Wallboard colors and bands, and site/host orbit geometry. Shared changes trigger both release workflows. Keep future visual changes in this file when they apply to both frontends, then adapt any platform-specific widgets in WinForms and Avalonia.
+
+The native frontends remain separate. Window decorations, file pickers, system fonts, and some control rendering vary between desktops; pixel-identical rendering is not guaranteed. Monitoring implementations also remain separate, with compatible configuration files.
+
+## Desktop verification
+
+The validation workflow runs the full Linux core and desktop suites on X11 at 100%, 150%, and 200% rendering scale, plus native Wayland under headless Weston. It verifies the actual render scale, normal/minimum window layouts, every Settings page, numeric typing/spinning, stable host rows and selection, folder hierarchy, history, Wallboard operations/shortcuts, and tray fallback. Rendered screenshots are uploaded as workflow artifacts. Windows self-tests and UI smoke tests validate the shared definitions too.
+
+Injected probes exercise UNKNOWN/ONLINE/SUSPECT/OFFLINE/recovery transitions, consecutive recovery thresholds, event deduplication, and pending results after Stop/restart or host removal. Stale probes cannot change a new monitoring session.
+
+X11/XWayland remains the default backend. To try the optional native Wayland backend inside a Wayland session:
+
+```bash
+WATCHDOG_BACKEND=wayland ./PingWatchdog.AppImage
+```
+
+Native Wayland is experimental. Headless Weston does not implement desktop minimization, so that job exercises an explicit tray-service request; the title-bar minimize path needs a real desktop check.
+
+Headless compositor tests do not certify physical monitor moves or every GNOME/KDE desktop integration. Notification delivery, real tray hosts, mixed-DPI monitor moves, and AppImage/updater round trips remain runtime acceptance checks.
+
 ## Configuration and history locations
 
 Ping Watchdog follows the XDG directory conventions when the matching environment variables are present.

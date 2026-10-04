@@ -84,7 +84,7 @@ Linux respects `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. Fresh installations use t
 
 ## Development
 
-The Windows application uses C# and Windows Forms. The Linux application uses C# and Avalonia. Both target .NET 8 and use Velopack for release packaging and updates.
+The Windows application uses C# and Windows Forms. The Linux application uses C# and Avalonia. Both target .NET 8 and use Velopack for release packaging and updates. They compile `Shared/Presentation.cs` for common visual definitions; Windows is the layout reference. See [Linux layout and desktop verification](README-LINUX.md#windows-layout-alignment) for the shared maintenance contract and platform limits.
 
 Build the Windows application on Windows with the **.NET 8 SDK**:
 

@@ -47,7 +47,6 @@ internal static class Presentation
     public static UiPoint HostPoint(int index, int visible, UiPoint center, double baseOrbit = 68)
     {
         bool outer = visible > 7 && index >= 6;
-        int ringIndex = outer ? index - 6 : index, ringCount = outer ? visible - 6 : Math.Min(visible, 6);
         double angle = HostAngle(index, visible);
         double radius = baseOrbit + (outer ? 44 : 0);
         return new UiPoint(center.X + (int)(Math.Cos(angle) * radius), center.Y + (int)(Math.Sin(angle) * radius));

@@ -219,10 +219,14 @@ internal static class LinuxUiRegressionTests
             engine.ApplySettings(prefs);
             engine.StartMonitoring();
             main.WindowState = WindowState.Minimized;
-            await tray.MinimizeAsync();
+            // Headless Weston does not implement desktop minimization or report Minimized.
+            // Exercise the same explicit request consumed by the tray service; X11 also
+            // verifies the actual WindowState notification path.
+            bool headlessWayland = Environment.GetEnvironmentVariable("WATCHDOG_BACKEND") == "wayland";
+            await tray.MinimizeAsync(requested: headlessWayland);
             await Task.Delay(150);
             Console.WriteLine($"Tray minimize state: available={tray.Available}, preference={engine.Config.MinimizeToTray}, visible={main.IsVisible}, state={main.WindowState}, monitoring={engine.Monitoring}");
-            Check(!main.IsVisible && engine.Monitoring, "Minimize to tray hides the window while monitoring continues");
+            Check(!main.IsVisible && engine.Monitoring, "Tray minimize request hides the window while monitoring continues");
             hostAvailable = false;
             await tray.RefreshAsync();
             Check(main.IsVisible && main.WindowState == WindowState.Normal && engine.Monitoring, "Loss of tray host restores a reachable monitoring window");

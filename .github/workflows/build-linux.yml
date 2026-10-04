@@ -112,6 +112,10 @@ jobs:
 
           Native Linux x64 AppImage powered by Avalonia.
 
+          - Windows-aligned main window, tables, Settings navigation, Organization tree, and radial Wallboard.
+          - Common presentation code compiled by Windows and Linux to keep visual updates aligned.
+          - Desktop regressions across X11 rendering scales and the optional native Wayland backend.
+          - Injected outage/recovery tests and safe handling of late probes after Stop or host removal.
           - Same Ping Watchdog site/config schema as Windows.
           - Multi-site ICMP monitoring with DOWN / SUSPECT / RECOVERED state logic.
           - Live site/host edits while monitoring.

@@ -1,6 +1,6 @@
 # Ping Watchdog Linux roadmap
 
-Windows is the feature reference. Work in this roadmap is confined to the Linux application and Linux workflows. Linux uses native desktop conventions and a CLI trace of equivalent Linux commands; it does not emulate CMD or PowerShell.
+Windows is the feature reference. Linux remains the implementation focus; framework-independent presentation definitions are now shared with the Windows application so visual updates can ship together. Linux uses native desktop conventions and a CLI trace of equivalent Linux commands; it does not emulate CMD or PowerShell.
 
 ## Phase 1: correctness
 
@@ -26,7 +26,11 @@ Completed and validated on October 4, 2026 (UTC): core regressions and real Aval
 
 ## Phase 4: desktop hardening
 
-Expand the Phase 1 regression runner into full smoke/layout tests across sizes and scaling levels. Cover every window, branding, topology, monitoring transitions with injected probes, and all operations. Verify X11 and Wayland behavior on supported desktops.
+Implemented: Windows-aligned main/Wallboard/Settings/History/Organization layouts, shared presentation definitions consumed by both native frontends, full-window smoke/layout captures at default and minimum sizes, numeric input/spinner checks, folder hierarchy and selection checks, and injected monitoring transition/stale-result tests. The validation workflow covers actual X11 render scales of 1, 1.5, and 2 and the opt-in native Wayland backend under headless Weston. Windows self-tests and UI smoke tests protect the shared definitions.
+
+The core and X11 suites pass at all three scales. Native Wayland windows and operations render under Weston; the tray service receives an explicit minimize request because headless Weston does not implement desktop minimization. The real desktop title-bar minimize path is still an acceptance check.
+
+Automated checks are release gates. Physical GNOME/KDE tray/notification rendering and mixed-DPI multi-monitor moves still need real desktop acceptance testing. Those checks continue with Phase 5; headless CI does not certify them. Native window chrome and system-font rendering can differ from Windows.
 
 ## Phase 5: packaging/runtime verification
 
