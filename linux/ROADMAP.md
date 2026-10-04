@@ -12,7 +12,7 @@ Windows is the feature reference. Work in this roadmap is confined to the Linux 
 - Detach Settings, Organization, and Main event subscriptions on close.
 - Gate releases on core regressions and real Avalonia desktop regressions under Xvfb.
 
-Implementation is complete; the Linux CI runs must pass before this phase is shipped. The real AppImage updater round trip remains part of Phase 5.
+Completed and validated on October 3, 2026. Core and real desktop regression suites pass in Linux CI. The real AppImage updater round trip remains part of Phase 5.
 
 ## Phase 2: main application parity
 
