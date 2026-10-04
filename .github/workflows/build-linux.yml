@@ -114,7 +114,12 @@ jobs:
           - Same Ping Watchdog site/config schema as Windows.
           - Multi-site ICMP monitoring with DOWN / SUSPECT / RECOVERED state logic.
           - Live site/host edits while monitoring.
-          - Labels/nicknames, nested site folders, organization view, persistent outage history, filters, CSV history export, and command trace.
+          - Edit/clear host labels from the live host list and context menu.
+          - Native configuration import/export, preserving folders, labels, preferences, and outage history.
+          - Linux system tray menu and minimize preference with a safe taskbar fallback.
+          - Incremental CLI trace rows: successful replies green, failures red, optional live following.
+          - Stable host/site rows preserve selection and scroll during live updates.
+          - Nested site folders, organization view, full persistent outage history, filters, and filtered CSV export.
           - Fullscreen Wallboard with site hubs plus labeled/IP host nodes.
           - Settings and background GitHub update checks on the Linux beta channel.
           - Linux desktop notifications through notify-send when available.

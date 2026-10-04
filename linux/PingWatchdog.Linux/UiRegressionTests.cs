@@ -145,6 +145,20 @@ internal static class LinuxUiRegressionTests
         Check(ReferenceEquals(hostList.ItemsSource, itemSource) && ReferenceEquals(hostList.SelectedItem, selectedRow), "Timer refresh preserves host collection and selection");
         Check(ReferenceEquals(Field<ListBox>(main, "_siteList").ItemsSource, sites), "Timer refresh preserves site collection");
         Check(Field<NumericUpDown>(main, "_interval").Value == 30, "Timer refresh preserves unsaved timing controls");
+        string originalHosts = string.Join(Environment.NewLine, engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts);
+        engine.SaveHosts("Alpha", originalHosts + Environment.NewLine + string.Join(Environment.NewLine, Enumerable.Range(10, 150).Select(i => $"127.0.0.{i}")));
+        await Task.Delay(150);
+        hostList.ScrollIntoView(Field<System.Collections.ObjectModel.ObservableCollection<HostRow>>(main, "_hostRows")[80]);
+        await Task.Delay(150);
+        var hostScroll = hostList.GetVisualDescendants().OfType<ScrollViewer>().First();
+        double scrollY = hostScroll.Offset.Y;
+        Check(scrollY > 0, "Large host list scroll fixture is realized");
+        engine.SetLabel("Alpha", "127.0.0.6", "Scroll test");
+        await Task.Delay(850);
+        Check(Math.Abs(hostScroll.Offset.Y - scrollY) < 1 && ReferenceEquals(hostList.SelectedItem, selectedRow), "Live row updates preserve scroll position and keyed selection");
+        engine.SetLabel("Alpha", "127.0.0.6", "");
+        engine.SaveHosts("Alpha", originalHosts);
+        await Task.Delay(150);
         Check(hostList.ContextMenu is not null && Field<Button>(main, "_editLabel").IsEnabled, "Host label actions are available from selection and context menu");
         var editTask = (Task)Invoke(main, "EditLabelAsync")!;
         await Task.Delay(100);
@@ -184,6 +198,7 @@ internal static class LinuxUiRegressionTests
         Check(settings.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Import Config...")
             && settings.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Export Config..."), "Settings exposes native config import/export actions");
         settings.Close();
+        Check(!await LinuxTrayHost.AvailableAsync(), "Real session-bus check detects the missing tray host in CI");
         bool hostAvailable = true;
         using (var tray = new LinuxTrayService(Application.Current!, main, engine, updates, () => Task.FromResult(hostAvailable)))
         {
