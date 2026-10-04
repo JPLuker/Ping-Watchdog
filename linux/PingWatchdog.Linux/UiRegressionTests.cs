@@ -414,11 +414,11 @@ internal static class LinuxUiRegressionTests
         await Task.Delay(50);
         var text = timeout.GetVisualDescendants().OfType<TextBox>().Single();
         Check(text.Text == "10000" && text.Bounds.Width >= 55, "Numeric field shows its full maximum value");
-        timeout.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.RepeatButton>().Single(b => b.Name == "PART_DecreaseButton")
+        timeout.GetVisualDescendants().OfType<Avalonia.Controls.RepeatButton>().Single(b => b.Name == "PART_DecreaseButton")
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Check(timeout.Value == 9750, "Numeric down button changes the value");
         text.Text = "2000";
-        timeout.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.RepeatButton>().Single(b => b.Name == "PART_IncreaseButton")
+        timeout.GetVisualDescendants().OfType<Avalonia.Controls.RepeatButton>().Single(b => b.Name == "PART_IncreaseButton")
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Check(timeout.Value == 2250, "Numeric field accepts a typed value before spinning");
         timeout.Value = original;
