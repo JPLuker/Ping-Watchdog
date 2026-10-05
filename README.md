@@ -73,6 +73,14 @@ ICMP filtering can make a reachable device appear offline. Ping Watchdog reports
 
 ## Configuration and data
 
+### Windows startup recovery
+
+If the Windows app fails during startup, a separate recovery window shows the error details and offers **Check for updates**, **Open downloads**, and **Retry startup**. If a newer release is available, recovery can download it and offer **Install update and restart** without opening the dashboard. If no fix has been published yet, it reports that instead of repeating the failed startup automatically.
+
+Reports are saved under `%LOCALAPPDATA%\PingWatchdog\Startup`. Recovery does not reset your saved configuration. The startup observer detects early process exits after it starts; failures that prevent the executable or .NET runtime from launching still require an installer download.
+
+### Saved settings
+
 Settings, sites, host labels, and history persist locally between launches. Export configuration from the app menu to move a setup between computers. Windows and Linux use compatible `.pingwatch.json` configuration formats.
 
 | Platform | Working configuration | Event history |
@@ -106,6 +114,7 @@ Run the platform's built-in checks:
 # Windows
 dotnet run --project PingWatchdog.csproj -c Release -- --self-test
 dotnet run --project PingWatchdog.csproj -c Release -- --ui-smoke-test
+dotnet run --project PingWatchdog.csproj -c Release -- --recovery-smoke-test
 ```
 
 ```bash

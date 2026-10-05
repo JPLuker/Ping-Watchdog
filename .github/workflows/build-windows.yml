@@ -91,6 +91,28 @@ jobs:
           path: ui-smoke-test/*
           if-no-files-found: warn
 
+      - name: Test startup crash recovery and isolated updater
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "publish\PingWatchdog.exe").Path
+          $process = Start-Process -FilePath $exe -ArgumentList "--recovery-smoke-test" -PassThru
+          if (-not $process.WaitForExit(120000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "Startup recovery tests timed out."
+          }
+          if ($process.ExitCode -ne 0 -or -not (Test-Path "ui-smoke-test\recovery\passed.txt")) {
+            if (Test-Path "ui-smoke-test\recovery\failed.txt") { Get-Content "ui-smoke-test\recovery\failed.txt" }
+            throw "Startup recovery tests failed (exit $($process.ExitCode))."
+          }
+
+      - name: Upload recovery screenshots and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingWatchdog-Recovery-${{ env.WATCHDOG_VERSION }}
+          path: ui-smoke-test/recovery/**
+          if-no-files-found: warn
+
       - name: Write release notes
         shell: pwsh
         run: |
@@ -99,6 +121,9 @@ jobs:
 
           Self-updating Windows release.
 
+          - Adds a separate startup recovery window with saved error details, manual update checks, download/restart, retry, and installer access.
+          - Observes startup in a separate process to detect early exits, while suppressing recovery for normal exits and intentional update restarts.
+          - Tests constructor, first-frame, background, and abrupt startup failures plus recovery updater success and failure paths before release.
           - Adds the exact supplied dog artwork beside the Wallboard title.
           - Sizes the main window's Wallboard button to fit its text, including larger UI fonts.
           - Verifies rendered Wallboard dog pixels and button text fit before publishing.

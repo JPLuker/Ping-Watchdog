@@ -15,27 +15,59 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        VelopackApp.Build().Run();
+        // Keep the entry point free of dashboard and notification initialization so
+        // a fresh recovery process can start even when those components fail.
+        if (StartupRecovery.HandleMode(args))
+            return;
 
-        if (args.Contains("--self-test") || args.Contains("--ui-smoke-test"))
+        if (args.Any(arg => arg is "--veloapp-install" or "--veloapp-obsolete" or "--veloapp-updated" or "--veloapp-uninstall"))
         {
-            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
-            ApplicationConfiguration.Initialize();
-            try
-            {
-                if (args.Contains("--ui-smoke-test"))
-                    MainForm.RunUiSmokeTest();
-                else
-                    MainForm.RunSelfTests();
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine(ex);
-                Environment.ExitCode = 1;
-            }
+            InitializeUpdater(args);
             return;
         }
 
+        if (args.Contains("--self-test") || args.Contains("--ui-smoke-test"))
+        {
+            RunTests(args);
+            return;
+        }
+
+        StartupRecovery.RunGuarded(() => RunApplication(args));
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    internal static void InitializeUpdater(string[] args)
+    {
+        // Applying a staged package is an explicit action, including in recovery.
+        VelopackApp.Build().SetArgs(args).SetAutoApplyOnStartup(false).Run();
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void RunTests(string[] args)
+    {
+        InitializeUpdater(args);
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        ApplicationConfiguration.Initialize();
+        try
+        {
+            if (args.Contains("--ui-smoke-test"))
+                MainForm.RunUiSmokeTest();
+            else
+                MainForm.RunSelfTests();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            Environment.ExitCode = 1;
+        }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void RunApplication(string[] args)
+    {
+        InitializeUpdater(args);
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        ApplicationConfiguration.Initialize();
         var notificationsRegistered = false;
 
         try
@@ -50,14 +82,30 @@ internal static class Program
             AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
         }
 
-        ApplicationConfiguration.Initialize();
-        WindowsBranding.Refresh();
-        Application.Run(new MainForm(notificationsRegistered));
-
-        if (notificationsRegistered)
+        try
         {
-            AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
-            AppNotificationManager.Default.Unregister();
+            WindowsBranding.Refresh();
+            using var form = new MainForm(notificationsRegistered);
+            using var readyTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            form.Shown += (_, _) => readyTimer.Start();
+            readyTimer.Tick += (_, _) =>
+            {
+                readyTimer.Stop();
+                StartupRecovery.MarkReady();
+            };
+            Application.Run(form);
+        }
+        finally
+        {
+            if (notificationsRegistered)
+            {
+                try
+                {
+                    AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
+                    AppNotificationManager.Default.Unregister();
+                }
+                catch { /* Notification cleanup must not hide the original failure. */ }
+            }
         }
     }
 
@@ -4196,10 +4244,12 @@ public sealed class MainForm : Form
             _trayUpdateItem.Enabled = false;
             _statusLabel.Text = $"Applying update {version}...";
 
+            StartupRecovery.ExpectUpdateExit();
             _pendingUpdateManager.ApplyUpdatesAndRestart(_pendingUpdateInfo);
         }
         catch (Exception ex)
         {
+            StartupRecovery.CancelExpectedExit();
             _checkUpdateButton.Enabled = true;
             _checkUpdateButton.Text = "Restart to Update";
             _trayUpdateItem.Enabled = true;
