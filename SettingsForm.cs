@@ -23,6 +23,7 @@ internal sealed class SettingsForm : Form
     private readonly Button _closeButton = new() { Text = "Close", AutoSize = true };
 
     private readonly CheckBox _minimizeToTray = new() { Text = "Minimize to notification area", AutoSize = true };
+    private readonly CheckBox _use12HourTime = new() { Text = "Use 12-hour time (AM / PM)", AutoSize = true };
     private readonly CheckBox _notifications = new() { Text = "Windows outage and recovery notifications", AutoSize = true };
     private readonly CheckBox _showMainCli = new() { Text = "Show CLI trace in the main window", AutoSize = true };
     private readonly CheckBox _wallboardCli = new() { Text = "Show CLI trace when Wallboard opens", AutoSize = true };
@@ -237,6 +238,7 @@ internal sealed class SettingsForm : Form
             "Window behavior",
             _minimizeToTray,
             "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues."));
+        stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
         stack.Controls.Add(Section(
             "Notifications",
             _notifications,
@@ -475,7 +477,7 @@ internal sealed class SettingsForm : Form
         _historyRange.ForeColor = text;
         _historyRange.FlatStyle = FlatStyle.Flat;
 
-        foreach (var check in new[] { _minimizeToTray, _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
+        foreach (var check in new[] { _use12HourTime, _minimizeToTray, _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
             check.ForeColor = text;
     }
 
@@ -502,6 +504,7 @@ internal sealed class SettingsForm : Form
             _wallboardCli.Checked = s.WallboardShowCli;
             _minimizeToTray.Checked = s.MinimizeToTray;
             _notifications.Checked = s.NotificationsEnabled;
+            _use12HourTime.Checked = s.Use12HourTime;
             _autoUpdates.Checked = s.AutoCheckUpdates;
             _showHomeUpdateControl.Checked = s.ShowUpdateControlOnHome;
             _historyRange.SelectedIndex = HistoryHoursToIndex(s.EventHistoryHours);
@@ -529,6 +532,7 @@ internal sealed class SettingsForm : Form
             AutoCheckUpdates = _autoUpdates.Checked,
             ShowUpdateControlOnHome = _showHomeUpdateControl.Checked,
             EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
+            Use12HourTime = _use12HourTime.Checked,
             HideSuspectEvents = _hideSuspects.Checked
         };
         _apply(settings);

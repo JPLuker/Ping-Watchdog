@@ -154,6 +154,7 @@ internal sealed class WatchdogConfig
     public string? SelectedSite { get; set; }
     public int EventHistoryHours { get; set; } = 24;
     public bool HideSuspectEvents { get; set; } = true;
+    public bool Use12HourTime { get; set; }
     public bool AutoCheckUpdates { get; set; } = true;
     public bool MinimizeToTray { get; set; } = true;
     public bool NotificationsEnabled { get; set; } = true;
@@ -405,6 +406,7 @@ internal sealed record AppSettingsSnapshot(
     bool ShowUpdateControlOnHome,
     int EventHistoryHours,
     bool HideSuspectEvents,
+    bool Use12HourTime,
     bool MonitoringActive,
     string Version,
     string UpdateStatus,
@@ -977,6 +979,7 @@ public sealed partial class MainForm : Form
             suppressNotifications: true,
             persistSites: false);
 
+        DisplayTime.RunTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
         var host = new HostMonitor("Test Site", "127.0.0.1");
@@ -2922,6 +2925,7 @@ public sealed partial class MainForm : Form
             SelectedSite = _selectedSiteName,
             EventHistoryHours = _eventHistoryHours,
             HideSuspectEvents = _hideSuspectEvents,
+            Use12HourTime = DisplayTime.Use12HourTime,
             AutoCheckUpdates = _autoCheckUpdates,
             MinimizeToTray = _minimizeToTray,
             NotificationsEnabled = _notificationsEnabled,
@@ -3063,6 +3067,7 @@ public sealed partial class MainForm : Form
         _showCommandView.Checked = config.ShowCommandView;
         _eventHistoryHours = NormalizeEventHistoryHours(config.EventHistoryHours);
         _hideSuspectEvents = config.HideSuspectEvents;
+        DisplayTime.Use12HourTime = config.Use12HourTime;
         _autoCheckUpdates = config.AutoCheckUpdates;
         _minimizeToTray = config.MinimizeToTray;
         _notificationsEnabled = config.NotificationsEnabled;
@@ -4161,6 +4166,7 @@ public sealed partial class MainForm : Form
             _showUpdateControlOnHome,
             _eventHistoryHours,
             _hideSuspectEvents,
+            DisplayTime.Use12HourTime,
             _cts is not null,
             GetDisplayVersion(),
             GetUpdateStatusText(),
@@ -4217,6 +4223,7 @@ public sealed partial class MainForm : Form
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
+        DisplayTime.Use12HourTime = settings.Use12HourTime;
 
         if (_cts is null)
         {
@@ -4257,6 +4264,8 @@ public sealed partial class MainForm : Form
         SaveSites();
         _eventHistoryForm?.RefreshNow();
         _settingsForm?.RefreshRuntimeState();
+        RefreshGrid();
+        RebuildCommandView();
         _statusLabel.Text = "Settings saved.";
     }
 
@@ -4636,7 +4645,7 @@ public sealed partial class MainForm : Form
             : $" [{nickname}]";
 
         return
-            $"{entry.Host}: [{entry.Site}]{labelPart} [{entry.Timestamp:HH:mm:ss}] ping {entry.Host} -n 1 -w {entry.TimeoutMs}  ->  {entry.ResultText}";
+            $"{entry.Host}: [{entry.Site}]{labelPart} [{DisplayTime.Clock(entry.Timestamp)}] ping {entry.Host} -n 1 -w {entry.TimeoutMs}  ->  {entry.ResultText}";
     }
 
     private void AppendCommandEntryToView(
@@ -4922,8 +4931,8 @@ public sealed partial class MainForm : Form
                             ? $"{h.LastRoundTripMs} ms"
                             : "—",
                         Failures = h.ConsecutiveFailures,
-                        LastReply = h.LastReply?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—",
-                        OutageSince = h.OutageStarted?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—"
+                        LastReply = (h.LastReply is DateTime reply ? DisplayTime.Timestamp(reply) : null) ?? "—",
+                        OutageSince = (h.OutageStarted is DateTime outage ? DisplayTime.Timestamp(outage) : null) ?? "—"
                     };
                 }
             })

@@ -1121,7 +1121,7 @@ internal sealed class WallboardCanvas : Control
             textLeft + 3,
             57);
 
-        string clock = snapshot.CapturedAt.ToString("h:mm:ss tt");
+        string clock = DisplayTime.Clock(snapshot.CapturedAt);
         string date = snapshot.CapturedAt.ToString("dddd, MMMM d, yyyy");
 
         var clockSize = g.MeasureString(clock, _clockFont);
@@ -1728,7 +1728,7 @@ internal sealed class WallboardCanvas : Control
             using var kindBrush = new SolidBrush(kindColor);
 
             g.DrawString(
-                item.Timestamp.ToString("MM/dd HH:mm"),
+                DisplayTime.ShortTimestamp(item.Timestamp),
                 _tinyFont,
                 mutedBrush,
                 x,

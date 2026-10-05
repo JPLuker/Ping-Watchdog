@@ -319,7 +319,7 @@ internal sealed class EventHistoryForm : Form
 
         _grid.DataSource = filtered
             .Select(e => new EventHistoryRow(
-                e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"),
+                DisplayTime.Timestamp(e.Timestamp),
                 e.Kind,
                 e.Site,
                 e.DisplayHost,
@@ -421,7 +421,7 @@ internal sealed class EventHistoryForm : Form
             foreach (var item in filtered)
             {
                 writer.WriteLine(string.Join(",",
-                    Csv(item.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")),
+                    Csv(DisplayTime.Timestamp(item.Timestamp)),
                     Csv(item.Kind),
                     Csv(item.Site),
                     Csv(item.DisplayHost),
