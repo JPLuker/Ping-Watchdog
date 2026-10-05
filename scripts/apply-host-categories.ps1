@@ -1,0 +1,415 @@
+$ErrorActionPreference = 'Stop'
+
+function Replace-OrFail {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Old,
+        [Parameter(Mandatory=$true)][string]$New,
+        [Parameter(Mandatory=$true)][string]$Name
+    )
+
+    $text = Get-Content $Path -Raw
+    if (-not $text.Contains($Old)) {
+        throw "Patch marker not found: $Name in $Path"
+    }
+    $text = $text.Replace($Old, $New)
+    Set-Content $Path $text -NoNewline
+}
+
+# --- Windows model ---------------------------------------------------------
+Replace-OrFail 'Program.cs' @'
+    public Dictionary<string, string> Labels { get; set; } = new();
+}
+'@ @'
+    public Dictionary<string, string> Labels { get; set; } = new();
+    public Dictionary<string, string> Categories { get; set; } = new();
+}
+'@ 'SiteDefinition.Categories'
+
+# Add category column without changing the cross-platform shared table spec yet.
+Replace-OrFail 'Program.cs' @'
+            } else column.Width = spec.Width;
+            _grid.Columns.Add(column);
+        }
+    }
+'@ @'
+            } else column.Width = spec.Width;
+            _grid.Columns.Add(column);
+        }
+
+        var categoryColumn = new DataGridViewTextBoxColumn
+        {
+            Name = "CategoryColumn",
+            HeaderText = "Category",
+            DataPropertyName = "Category",
+            Width = 120,
+            MinimumWidth = 90
+        };
+        int labelIndex = _grid.Columns["LabelColumn"]?.Index ?? 1;
+        _grid.Columns.Insert(Math.Min(labelIndex + 1, _grid.Columns.Count), categoryColumn);
+    }
+'@ 'Windows Category column'
+
+# Self-test metadata round trip.
+Replace-OrFail 'Program.cs' @'
+        form.SetNicknameValue("Test Site", "127.0.0.1", "Loopback");
+        Check(form.GetNickname("Test Site", "127.0.0.1") == "Loopback");
+
+        form.AppendCommandLog'@ @'
+        form.SetNicknameValue("Test Site", "127.0.0.1", "Loopback");
+        Check(form.GetNickname("Test Site", "127.0.0.1") == "Loopback");
+        form.SetCategoryValue("Test Site", "127.0.0.1", "Infrastructure");
+        Check(form.GetCategory("Test Site", "127.0.0.1") == "Infrastructure");
+
+        form.AppendCommandLog'@ 'Windows category self-test setup'
+
+Replace-OrFail 'Program.cs' @'
+        Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
+        Check(configRoundTrip?.PingIntervalSeconds == 2);'@ @'
+        Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
+        Check(configRoundTrip?.Sites[0].Categories.Values.Contains("Infrastructure") == true);
+        Check(configRoundTrip?.PingIntervalSeconds == 2);'@ 'Windows category config self-test'
+
+# Legacy/full-load preservation.
+Replace-OrFail 'Program.cs' @'
+                            Hosts = hosts,
+                            Labels = NormalizeLabels(site.Labels, hosts)
+                        });'@ @'
+                            Hosts = hosts,
+                            Labels = NormalizeLabels(site.Labels, hosts),
+                            Categories = NormalizeCategories(site.Categories, hosts)
+                        });'@ 'Legacy categories load'
+
+# Host editor cleanup preserves only metadata for configured hosts.
+Replace-OrFail 'Program.cs' @'
+        site.Hosts = ParseHosts(_ipBox.Text);
+        site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+    }
+
+    private static Dictionary<string, string> NormalizeLabels'@ @'
+        site.Hosts = ParseHosts(_ipBox.Text);
+        site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+        site.Categories = NormalizeCategories(site.Categories, site.Hosts);
+    }
+
+    private static Dictionary<string, string> NormalizeLabels'@ 'Category cleanup on host edit'
+
+# Category normalization helper.
+Replace-OrFail 'Program.cs' @'
+        return result;
+    }
+
+    internal static string NormalizeFolderPath'@ @'
+        return result;
+    }
+
+    private static Dictionary<string, string> NormalizeCategories(
+        Dictionary<string, string>? categories,
+        IEnumerable<string> hosts)
+    {
+        var hostList = hosts.ToList();
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (categories is null)
+            return result;
+
+        foreach (var pair in categories)
+        {
+            string? host = hostList.FirstOrDefault(h =>
+                h.Equals(pair.Key, StringComparison.OrdinalIgnoreCase));
+            string category = pair.Value?.Trim() ?? string.Empty;
+
+            if (host is not null && !string.IsNullOrWhiteSpace(category))
+                result[host] = category;
+        }
+
+        return result;
+    }
+
+    internal static string NormalizeFolderPath'@ 'NormalizeCategories helper'
+
+# Category accessors next to nickname metadata.
+Replace-OrFail 'Program.cs' @'
+        if (_hosts.TryGetValue(key, out var activeHost))
+            activeHost.Label = nickname;
+    }
+
+    private string DescribeHost'@ @'
+        if (_hosts.TryGetValue(key, out var activeHost))
+            activeHost.Label = nickname;
+    }
+
+    private string GetCategory(string siteName, string address)
+    {
+        var site = FindSite(siteName);
+        if (site?.Categories is null)
+            return string.Empty;
+
+        var pair = site.Categories.FirstOrDefault(p =>
+            p.Key.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+        return pair.Key is null ? string.Empty : pair.Value;
+    }
+
+    private void SetCategoryValue(string siteName, string address, string category)
+    {
+        var site = FindSite(siteName);
+        if (site is null)
+            return;
+
+        site.Categories ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var existingKey = site.Categories.Keys.FirstOrDefault(k =>
+            k.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+        if (existingKey is not null)
+            site.Categories.Remove(existingKey);
+
+        category = category.Trim();
+        if (!string.IsNullOrWhiteSpace(category))
+            site.Categories[address] = category;
+    }
+
+    private string DescribeHost'@ 'Category accessors'
+
+# Context menu category actions.
+Replace-OrFail 'Program.cs' @'
+        var setLabel = new ToolStripMenuItem("Set label / nickname");
+        var clearLabel = new ToolStripMenuItem("Clear label");
+
+        setLabel.Click += (_, _) => SetLabelForSelectedHost();
+        clearLabel.Click += (_, _) => ClearLabelForSelectedHost();
+
+        _gridMenu.Items.Add(setLabel);
+        _gridMenu.Items.Add(clearLabel);
+        _grid.ContextMenuStrip = _gridMenu;'@ @'
+        var setLabel = new ToolStripMenuItem("Set label / nickname");
+        var clearLabel = new ToolStripMenuItem("Clear label");
+        var setCategory = new ToolStripMenuItem("Set category...");
+        var clearCategory = new ToolStripMenuItem("Clear category");
+
+        setLabel.Click += (_, _) => SetLabelForSelectedHost();
+        clearLabel.Click += (_, _) => ClearLabelForSelectedHost();
+        setCategory.Click += (_, _) => SetCategoryForSelectedHost();
+        clearCategory.Click += (_, _) => ClearCategoryForSelectedHost();
+
+        _gridMenu.Items.Add(setLabel);
+        _gridMenu.Items.Add(clearLabel);
+        _gridMenu.Items.Add(new ToolStripSeparator());
+        _gridMenu.Items.Add(setCategory);
+        _gridMenu.Items.Add(clearCategory);
+        _grid.ContextMenuStrip = _gridMenu;'@ 'Category context menu'
+
+# Category editor actions.
+Replace-OrFail 'Program.cs' @'
+        SaveSites();
+        RefreshGrid();
+        RebuildCommandView();
+    }
+
+    private WatchdogConfig BuildConfig'@ @'
+        SaveSites();
+        RefreshGrid();
+        RebuildCommandView();
+    }
+
+    private void SetCategoryForSelectedHost()
+    {
+        var identity = GetSelectedHostIdentity();
+        if (identity is null)
+            return;
+
+        string current = GetCategory(identity.Value.Site, identity.Value.Host);
+
+        using var dialog = new CategoryDialog(identity.Value.Host, current);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        SetCategoryValue(identity.Value.Site, identity.Value.Host, dialog.Category);
+        SaveSites();
+        RefreshGrid();
+    }
+
+    private void ClearCategoryForSelectedHost()
+    {
+        var identity = GetSelectedHostIdentity();
+        if (identity is null)
+            return;
+
+        SetCategoryValue(identity.Value.Site, identity.Value.Host, string.Empty);
+        SaveSites();
+        RefreshGrid();
+    }
+
+    private WatchdogConfig BuildConfig'@ 'Category editor actions'
+
+# Config copies include categories.
+Replace-OrFail 'Program.cs' @'
+                Hosts = site.Hosts.ToList(),
+                Labels = new Dictionary<string, string>(site.Labels ?? new())
+            }).ToList(),'@ @'
+                Hosts = site.Hosts.ToList(),
+                Labels = new Dictionary<string, string>(site.Labels ?? new()),
+                Categories = new Dictionary<string, string>(site.Categories ?? new(), StringComparer.OrdinalIgnoreCase)
+            }).ToList(),'@ 'BuildConfig categories'
+
+Replace-OrFail 'Program.cs' @'
+                Hosts = hosts,
+                Labels = NormalizeLabels(source.Labels, hosts)
+            });'@ @'
+                Hosts = hosts,
+                Labels = NormalizeLabels(source.Labels, hosts),
+                Categories = NormalizeCategories(source.Categories, hosts)
+            });'@ 'ApplyConfig categories'
+
+# Wallboard host-list edits do not leave stale category entries.
+Replace-OrFail 'Program.cs' @'
+        site.Hosts = ParseHosts(hostText);
+        site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+
+        if (_selectedSiteName'@ @'
+        site.Hosts = ParseHosts(hostText);
+        site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+        site.Categories = NormalizeCategories(site.Categories, site.Hosts);
+
+        if (_selectedSiteName'@ 'Wallboard host category cleanup'
+
+# Main live grid category value.
+Replace-OrFail 'Program.cs' @'
+                        Host = h.Address,
+                        Label = GetNickname(h.Site, h.Address),
+                        Status = h.State switch'@ @'
+                        Host = h.Address,
+                        Label = GetNickname(h.Site, h.Address),
+                        Category = GetCategory(h.Site, h.Address),
+                        Status = h.State switch'@ 'RefreshGrid category value'
+
+# Exercise category display while preserving the user's selected host/column/scroll.
+Replace-OrFail 'Program.cs' @'
+                var selected = form.GetSelectedHostIdentity();
+                for (int i = 0; i < 6; i++)'@ @'
+                var selected = form.GetSelectedHostIdentity();
+                form.SetCategoryValue(selected!.Value.Site, selected.Value.Host, "AP");
+                form.RefreshGrid();
+                Check(form._grid.CurrentRow?.Cells["CategoryColumn"].Value?.ToString() == "AP",
+                    "Category did not render for the selected host.");
+                Check(form.GetSelectedHostIdentity() == selected, "Category edit changed the selected host.");
+                for (int i = 0; i < 6; i++)'@ 'UI category regression test'
+
+# --- Linux compatibility ---------------------------------------------------
+Replace-OrFail 'linux/PingWatchdog.Linux/Core.cs' @'
+    public Dictionary<string, string> Labels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}'@ @'
+    public Dictionary<string, string> Labels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> Categories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}'@ 'Linux SiteDefinition.Categories'
+
+Replace-OrFail 'linux/PingWatchdog.Linux/Core.cs' @'
+            var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var host in hosts)
+            {
+                if (raw.Labels is not null && raw.Labels.TryGetValue(host, out var label) && !string.IsNullOrWhiteSpace(label))
+                    labels[host] = label.Trim();
+            }
+
+            config.Sites.Add(new SiteDefinition
+            {
+                Name = name,
+                FolderPath = NormalizeFolderPath(raw.FolderPath),
+                Hosts = hosts,
+                Labels = labels
+            });'@ @'
+            var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var host in hosts)
+            {
+                if (raw.Labels is not null && raw.Labels.TryGetValue(host, out var label) && !string.IsNullOrWhiteSpace(label))
+                    labels[host] = label.Trim();
+                if (raw.Categories is not null && raw.Categories.TryGetValue(host, out var category) && !string.IsNullOrWhiteSpace(category))
+                    categories[host] = category.Trim();
+            }
+
+            config.Sites.Add(new SiteDefinition
+            {
+                Name = name,
+                FolderPath = NormalizeFolderPath(raw.FolderPath),
+                Hosts = hosts,
+                Labels = labels,
+                Categories = categories
+            });'@ 'Linux sanitize categories'
+
+Replace-OrFail 'linux/PingWatchdog.Linux/Core.cs' @'
+            site.Labels = site.Labels
+                .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            SaveUnsafe();'@ @'
+            site.Labels = site.Labels
+                .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            site.Categories = site.Categories
+                .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            SaveUnsafe();'@ 'Linux category cleanup'
+
+Replace-OrFail 'linux/PingWatchdog.Linux/Core.cs' @'
+    public string? AddFolder(string parent, string name)'@ @'
+    public string? SetCategory(string siteName, string host, string category)
+    {
+        lock (_gate)
+        {
+            var site = FindSiteUnsafe(siteName);
+            if (site is null) return "That site no longer exists.";
+            if (!site.Hosts.Contains(host, StringComparer.OrdinalIgnoreCase)) return "That host no longer exists.";
+
+            if (string.IsNullOrWhiteSpace(category))
+                site.Categories.Remove(host);
+            else
+                site.Categories[host] = category.Trim();
+
+            SaveUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? AddFolder(string parent, string name)'@ 'Linux SetCategory API'
+
+Replace-OrFail 'linux/PingWatchdog.Linux/Core.cs' @'
+        Hosts = site.Hosts.ToList(),
+        Labels = new Dictionary<string, string>(site.Labels, StringComparer.OrdinalIgnoreCase)
+    };'@ @'
+        Hosts = site.Hosts.ToList(),
+        Labels = new Dictionary<string, string>(site.Labels, StringComparer.OrdinalIgnoreCase),
+        Categories = new Dictionary<string, string>(site.Categories, StringComparer.OrdinalIgnoreCase)
+    };'@ 'Linux clone categories'
+
+# Documentation.
+$readme = Get-Content 'README.md' -Raw
+if (-not $readme.Contains('## Host categories')) {
+    $readme += @'
+
+## Host categories
+
+Hosts can have both a **Label** and a separate **Category**. Use labels for a human-friendly identity such as `Front Lobby` and categories for device type or role such as `AP`, `Firewall`, `Switch`, `Router`, `Server`, `Printer`, `Camera`, `UPS`, `Workstation`, or any custom value. On Windows, right-click a monitored host and choose **Set category...**. Category metadata is saved with the site configuration and is cleaned up automatically when an address is removed. Linux preserves the same category metadata in the shared config schema.
+'@
+    Set-Content 'README.md' $readme -NoNewline
+}
+
+$quick = Get-Content 'README-FIRST.txt' -Raw
+if (-not $quick.Contains('HOST CATEGORIES')) {
+    $quick += @'
+
+HOST CATEGORIES
+Right-click a monitored host and choose Set category... to classify it separately from its nickname/label.
+Examples: AP, Firewall, Switch, Router, Server, Printer, Camera, UPS, Workstation, IoT, or any custom category.
+Categories are saved with the site configuration.
+'@
+    Set-Content 'README-FIRST.txt' $quick -NoNewline
+}
+
+# Keep project metadata ahead of the last source baseline. CI still stamps release versions.
+$project = Get-Content 'PingWatchdog.csproj' -Raw
+$project = $project.Replace('<Version>1.14.55</Version>', '<Version>1.14.56</Version>')
+Set-Content 'PingWatchdog.csproj' $project -NoNewline
+
+Write-Host 'Host category patch applied successfully.'
