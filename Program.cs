@@ -1055,6 +1055,21 @@ public sealed partial class MainForm : Form
         Check(FilterStateEvents(historySample, 0, hideSuspects: false, historyNow).Count == 4);
         Check(GetEventHistoryWindowLabel(168) == "Last 7 days");
 
+        using (var captionBitmap = new Bitmap(800, 300))
+        using (var captionGraphics = Graphics.FromImage(captionBitmap))
+        using (var labelFont = new Font("Segoe UI", 8))
+        using (var addressFont = new Font("Cascadia Mono", 6.8f))
+        {
+            foreach (string address in new[] { "10.235.80.60", "173.161.54.241", "255.255.255.255", "2001:db8:abcd:1234:5678:90ab:cdef:1234" })
+            {
+                var size = WallboardCanvas.MeasureHostNodeCaption(captionGraphics, "Printer", address, labelFont, addressFont);
+                var required = TextRenderer.MeasureText(captionGraphics, address, addressFont, Size.Empty,
+                    TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                Check(size.Width - 10 >= required.Width);
+                Check(size.Height >= required.Height + 6);
+            }
+        }
+
         var labeledNode = WallboardCanvas.FormatHostNodeLines(
             new WallboardHostSnapshot(
                 "Test Site",

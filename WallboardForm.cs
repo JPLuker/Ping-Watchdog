@@ -1555,16 +1555,11 @@ internal sealed class WallboardCanvas : Control
         string primary = lines.Primary;
         string? secondary = lines.Secondary;
 
-        var primarySize = g.MeasureString(primary, _hostLabelFont);
-        var secondarySize = secondary is null
-            ? SizeF.Empty
-            : g.MeasureString(secondary, _hostIpFont);
-
-        int width = Math.Clamp(
-            (int)Math.Ceiling(Math.Max(primarySize.Width, secondarySize.Width)) + 12,
-            62,
-            124);
-        int height = secondary is null ? 22 : 34;
+        var captionSize = MeasureHostNodeCaption(g, primary, secondary, _hostLabelFont, _hostIpFont);
+        int width = captionSize.Width;
+        int height = captionSize.Height;
+        int primaryHeight = TextRenderer.MeasureText(g, primary, _hostLabelFont, Size.Empty,
+            TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Height;
 
         bool rightSide = Math.Cos(angle) >= 0;
         int x = rightSide
@@ -1588,9 +1583,9 @@ internal sealed class WallboardCanvas : Control
             g,
             primary,
             _hostLabelFont,
-            new Rectangle(rect.X + 5, rect.Y + 3, rect.Width - 10, 14),
+            new Rectangle(rect.X + 5, rect.Y + 3, rect.Width - 10, primaryHeight),
             primaryBrush.Color,
-            TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            (secondary is null ? TextFormatFlags.Default : TextFormatFlags.EndEllipsis) | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
 
         if (secondary is not null)
         {
@@ -1598,10 +1593,23 @@ internal sealed class WallboardCanvas : Control
                 g,
                 secondary,
                 _hostIpFont,
-                new Rectangle(rect.X + 5, rect.Y + 17, rect.Width - 10, 13),
+                new Rectangle(rect.X + 5, rect.Y + 3 + primaryHeight, rect.Width - 10, rect.Height - primaryHeight - 6),
                 secondaryBrush.Color,
-                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
+    }
+
+    // Measure with the same GDI renderer and flags used for drawing. Addresses never
+    // inherit the nickname width cap, including IPv6 and larger display scaling.
+    internal static Size MeasureHostNodeCaption(Graphics g, string primary, string? secondary,
+        Font primaryFont, Font addressFont)
+    {
+        const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+        var primarySize = TextRenderer.MeasureText(g, primary, primaryFont, Size.Empty, flags);
+        var addressSize = secondary is null ? Size.Empty : TextRenderer.MeasureText(g, secondary, addressFont, Size.Empty, flags);
+        int primaryWidth = secondary is null ? primarySize.Width : Math.Min(primarySize.Width, 180);
+        return new Size(Math.Max(62, Math.Max(primaryWidth, addressSize.Width) + 12),
+            Math.Max(22, primarySize.Height + addressSize.Height + 6));
     }
 
     internal static (string Primary, string? Secondary) FormatHostNodeLines(
