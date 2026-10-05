@@ -957,6 +957,8 @@ internal sealed class WallboardForm : Form
 
 internal sealed class WallboardCanvas : Control
 {
+    private readonly List<Rectangle> _captionObstacles = new();
+    private int _hiddenCaptions;
     private readonly Bitmap _brandBitmap = BrandAssets.LoadLogo();
     private readonly Font _brandFont = new("Segoe UI Semibold", 24, FontStyle.Bold);
     private readonly Font _subtitleFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
@@ -1266,6 +1268,23 @@ internal sealed class WallboardCanvas : Control
             center,
             coreRadius);
 
+        _captionObstacles.Clear();
+        _hiddenCaptions = 0;
+        _captionObstacles.Add(new Rectangle(center.X - coreRadius - 10, center.Y - coreRadius - 10,
+            (coreRadius + 10) * 2, (coreRadius + 10) * 2));
+        _captionObstacles.Add(new Rectangle(content.Left, content.Bottom - 22, content.Width, 22));
+        for (int i = 0; i < snapshot.Sites.Count; i++)
+        {
+            var sitePoint = sitePoints[i];
+            _captionObstacles.Add(new Rectangle(sitePoint.X - 55, sitePoint.Y - 55, 110, 110));
+            int count = Math.Min(snapshot.Sites[i].Hosts.Count, Presentation.VisibleTopologyHosts);
+            for (int h = 0; h < count; h++)
+            {
+                var node = Presentation.HostPoint(h, count, new UiPoint(sitePoint.X, sitePoint.Y), 68);
+                _captionObstacles.Add(new Rectangle((int)node.X - 8, (int)node.Y - 8, 16, 16));
+            }
+        }
+
         for (int i = 0; i < snapshot.Sites.Count; i++)
         {
             var site = snapshot.Sites[i];
@@ -1286,6 +1305,10 @@ internal sealed class WallboardCanvas : Control
                 content,
                 i);
         }
+        if (_hiddenCaptions > 0)
+            TextRenderer.DrawText(g, $"{_hiddenCaptions} captions need more space — enlarge Wallboard or view Hosts",
+                _tinyFont, new Rectangle(content.Left, content.Bottom - 21, content.Width, 20),
+                Color.FromArgb(180, 195, 209), TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
     }
 
     private void DrawRadar(Graphics g, Rectangle rect, Point center)
@@ -1567,9 +1590,16 @@ internal sealed class WallboardCanvas : Control
             : point.X - width - 9;
         int y = point.Y - height / 2;
 
-        var rect = ClampToBounds(
-            new Rectangle(x, y, width, height),
-            topologyBounds);
+        if (!TopologyLayout.TryPlaceCaption(new Rectangle(x, y, width, height), topologyBounds,
+            _captionObstacles, out var rect))
+        {
+            _hiddenCaptions++;
+            return;
+        }
+        _captionObstacles.Add(rect);
+        using (var leader = new Pen(StateColor(host.State, 120), 1))
+            g.DrawLine(leader, point, new Point(Math.Clamp(point.X, rect.Left, rect.Right),
+                Math.Clamp(point.Y, rect.Top, rect.Bottom)));
 
         using var fill = new SolidBrush(Color.FromArgb(220, 7, 13, 19));
         using var border = new Pen(StateColor(host.State, 115), 1);

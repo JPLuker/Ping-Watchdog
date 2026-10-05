@@ -979,6 +979,7 @@ public sealed partial class MainForm : Form
             suppressNotifications: true,
             persistSites: false);
 
+        TopologyLayout.RunTests();
         DisplayTime.RunTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
