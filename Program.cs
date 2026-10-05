@@ -1311,6 +1311,13 @@ public sealed partial class MainForm : Form
                 form.RefreshGrid();
                 Check(form.GetSelectedHostIdentity() is null, "Removed host left a stale selection.");
 
+                form._inventoryHeight = 260;
+                form.ApplyResponsiveLayout();
+                float resizedInventory = form._rightLayout!.RowStyles[1].Height;
+                form.ApplyResponsiveLayout();
+                Check(resizedInventory >= 200 && form._rightLayout.RowStyles[1].Height == resizedInventory,
+                    "Host inventory resize was lost during responsive layout.");
+                Capture(form, "resized-host-inventory");
                 form.OpenHostManager();
                 await Task.Delay(100);
                 Check(form._hostManager?.Visible == true, "Host Manager did not open.");
@@ -1662,7 +1669,7 @@ public sealed partial class MainForm : Form
             Tag = "window"
         };
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _rightLayout = right;
@@ -1880,7 +1887,7 @@ public sealed partial class MainForm : Form
         _mainSplit.Panel2.Controls.Add(commandPanel);
 
         right.Controls.Add(stats, 0, 0);
-        right.Controls.Add(inputCard, 0, 1);
+        right.Controls.Add(BuildResizableInventory(inputCard), 0, 1);
         right.Controls.Add(settingsCard, 0, 2);
         right.Controls.Add(_mainSplit, 0, 3);
 
@@ -1936,7 +1943,7 @@ public sealed partial class MainForm : Form
             }
 
             _rightLayout.RowStyles[0].Height = shortWindow ? 66 : 76;
-            _rightLayout.RowStyles[1].Height = shortWindow ? 104 : 122;
+
             _rightLayout.RowStyles[2].Height = narrow ? 106 : 84;
 
             _headerActionsPanel.WrapContents = false;
@@ -1958,6 +1965,7 @@ public sealed partial class MainForm : Form
             _rightLayout.RowStyles[2].Height = Math.Max(
                 84,
                 settingsHeight + settingsCard.Padding.Vertical + settingsCard.Margin.Vertical);
+            ApplyInventoryHeight();
 
             if (_pendingUpdateManager is null)
             {

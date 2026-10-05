@@ -2,6 +2,41 @@ namespace PingWatchdog;
 
 public sealed partial class MainForm
 {
+    private float _inventoryHeight = 210;
+    private Control BuildResizableInventory(Control inventory)
+    {
+        var panel = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Tag = "window" };
+        var grip = new Label { Dock = DockStyle.Bottom, Height = 18, Cursor = Cursors.HSplit,
+            Text = "⋯  Drag to resize hosts  ⋯", TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(96, 210, 220), BackColor = Color.FromArgb(25, 34, 45),
+            AccessibleName = "Resize host inventory" };
+        int startY = 0; float startHeight = 0;
+        grip.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left || _rightLayout == null) return;
+            startY = Cursor.Position.Y; startHeight = _rightLayout.RowStyles[1].Height;
+            grip.Capture = true;
+        };
+        grip.MouseMove += (_, _) =>
+        {
+            if (!grip.Capture || _rightLayout == null) return;
+            _inventoryHeight = (startHeight + Cursor.Position.Y - startY) * 96f / DeviceDpi;
+            ApplyInventoryHeight();
+        };
+        grip.MouseUp += (_, _) => grip.Capture = false;
+        grip.DoubleClick += (_, _) => { _inventoryHeight = 210; ApplyInventoryHeight(); };
+        panel.Controls.Add(inventory); panel.Controls.Add(grip);
+        return panel;
+    }
+    private void ApplyInventoryHeight()
+    {
+        if (_rightLayout == null) return;
+        float scale = DeviceDpi / 96f;
+        float remaining = _rightLayout.ClientSize.Height - _rightLayout.RowStyles[0].Height -
+            _rightLayout.RowStyles[2].Height - 150 * scale;
+        float minimum = 130 * scale;
+        _rightLayout.RowStyles[1].Height = Math.Clamp(_inventoryHeight * scale, minimum, Math.Max(minimum, remaining));
+    }
     private DataGridView? _hostInventory;
     private HostManagerForm? _hostManager;
     private static HostOptions GetHostOptions(SiteDefinition? site, string address)
