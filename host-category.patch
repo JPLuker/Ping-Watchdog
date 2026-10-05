@@ -1,1 +1,1 @@
-apply host categories
+apply host categories retry 2
