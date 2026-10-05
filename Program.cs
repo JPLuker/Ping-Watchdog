@@ -135,6 +135,7 @@ internal sealed class SiteDefinition
     public string FolderPath { get; set; } = string.Empty;
     public List<string> Hosts { get; set; } = new();
     public Dictionary<string, string> Labels { get; set; } = new();
+    public Dictionary<string, string> Categories { get; set; } = new();
 }
 
 internal sealed class WatchdogConfig
@@ -1003,6 +1004,8 @@ public sealed class MainForm : Form
         form.PersistCurrentEditor();
         form.SetNicknameValue("Test Site", "127.0.0.1", "Loopback");
         Check(form.GetNickname("Test Site", "127.0.0.1") == "Loopback");
+        form.SetCategoryValue("Test Site", "127.0.0.1", "Infrastructure");
+        Check(form.GetCategory("Test Site", "127.0.0.1") == "Infrastructure");
 
         form.AppendCommandLog("Test Site", "127.0.0.1", true, "Reply from 127.0.0.1: time=1ms TTL=128");
         form.AppendCommandLog("Test Site", "127.0.0.1", false, "FAILED (TimedOut)");
@@ -1012,6 +1015,7 @@ public sealed class MainForm : Form
         var configRoundTrip = JsonSerializer.Deserialize<WatchdogConfig>(configJson);
         Check(configRoundTrip?.Sites.Count == 1);
         Check(configRoundTrip?.Sites[0].Labels.Values.Contains("Loopback") == true);
+        Check(configRoundTrip?.Sites[0].Categories.Values.Contains("Infrastructure") == true);
         Check(configRoundTrip?.PingIntervalSeconds == 2);
         Check(configRoundTrip?.FailureThreshold == 3);
         Check(configRoundTrip?.EventHistoryHours == 24);
@@ -1282,6 +1286,11 @@ public sealed class MainForm : Form
                 row.Selected = true;
                 form._grid.FirstDisplayedScrollingRowIndex = 20;
                 var selected = form.GetSelectedHostIdentity();
+                form.SetCategoryValue(selected!.Value.Site, selected.Value.Host, "AP");
+                form.RefreshGrid();
+                Check(form._grid.CurrentRow?.Cells["CategoryColumn"].Value?.ToString() == "AP",
+                    "Category did not render for the selected host.");
+                Check(form.GetSelectedHostIdentity() == selected, "Category edit changed the selected host.");
                 for (int i = 0; i < 6; i++)
                 {
                     await Task.Delay(100);
@@ -1441,6 +1450,17 @@ public sealed class MainForm : Form
             } else column.Width = spec.Width;
             _grid.Columns.Add(column);
         }
+
+        var categoryColumn = new DataGridViewTextBoxColumn
+        {
+            Name = "CategoryColumn",
+            HeaderText = "Category",
+            DataPropertyName = "Category",
+            Width = 120,
+            MinimumWidth = 90
+        };
+        int labelIndex = _grid.Columns["LabelColumn"]?.Index ?? 1;
+        _grid.Columns.Insert(Math.Min(labelIndex + 1, _grid.Columns.Count), categoryColumn);
     }
 
     private void BuildLayout()
@@ -2043,7 +2063,8 @@ public sealed class MainForm : Form
                             Name = name,
                             FolderPath = folderPath,
                             Hosts = hosts,
-                            Labels = NormalizeLabels(site.Labels, hosts)
+                            Labels = NormalizeLabels(site.Labels, hosts),
+                            Categories = NormalizeCategories(site.Categories, hosts)
                         });
 
                         EnsureFolderHierarchy(folderPath);
@@ -2206,6 +2227,7 @@ public sealed class MainForm : Form
 
         site.Hosts = ParseHosts(_ipBox.Text);
         site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+        site.Categories = NormalizeCategories(site.Categories, site.Hosts);
     }
 
     private static Dictionary<string, string> NormalizeLabels(
@@ -2226,6 +2248,29 @@ public sealed class MainForm : Form
 
             if (host is not null && !string.IsNullOrWhiteSpace(label))
                 result[host] = label;
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, string> NormalizeCategories(
+        Dictionary<string, string>? categories,
+        IEnumerable<string> hosts)
+    {
+        var hostList = hosts.ToList();
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (categories is null)
+            return result;
+
+        foreach (var pair in categories)
+        {
+            string? host = hostList.FirstOrDefault(h =>
+                h.Equals(pair.Key, StringComparison.OrdinalIgnoreCase));
+            string category = pair.Value?.Trim() ?? string.Empty;
+
+            if (host is not null && !string.IsNullOrWhiteSpace(category))
+                result[host] = category;
         }
 
         return result;
@@ -2659,6 +2704,37 @@ public sealed class MainForm : Form
             activeHost.Label = nickname;
     }
 
+    private string GetCategory(string siteName, string address)
+    {
+        var site = FindSite(siteName);
+        if (site?.Categories is null)
+            return string.Empty;
+
+        var pair = site.Categories.FirstOrDefault(p =>
+            p.Key.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+        return pair.Key is null ? string.Empty : pair.Value;
+    }
+
+    private void SetCategoryValue(string siteName, string address, string category)
+    {
+        var site = FindSite(siteName);
+        if (site is null)
+            return;
+
+        site.Categories ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var existingKey = site.Categories.Keys.FirstOrDefault(k =>
+            k.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+        if (existingKey is not null)
+            site.Categories.Remove(existingKey);
+
+        category = category.Trim();
+        if (!string.IsNullOrWhiteSpace(category))
+            site.Categories[address] = category;
+    }
+
     private string DescribeHost(string siteName, string address)
     {
         string nickname = GetNickname(siteName, address);
@@ -2674,12 +2750,19 @@ public sealed class MainForm : Form
 
         var setLabel = new ToolStripMenuItem("Set label / nickname");
         var clearLabel = new ToolStripMenuItem("Clear label");
+        var setCategory = new ToolStripMenuItem("Set category...");
+        var clearCategory = new ToolStripMenuItem("Clear category");
 
         setLabel.Click += (_, _) => SetLabelForSelectedHost();
         clearLabel.Click += (_, _) => ClearLabelForSelectedHost();
+        setCategory.Click += (_, _) => SetCategoryForSelectedHost();
+        clearCategory.Click += (_, _) => ClearCategoryForSelectedHost();
 
         _gridMenu.Items.Add(setLabel);
         _gridMenu.Items.Add(clearLabel);
+        _gridMenu.Items.Add(new ToolStripSeparator());
+        _gridMenu.Items.Add(setCategory);
+        _gridMenu.Items.Add(clearCategory);
         _grid.ContextMenuStrip = _gridMenu;
     }
 
@@ -2740,6 +2823,34 @@ public sealed class MainForm : Form
         RebuildCommandView();
     }
 
+    private void SetCategoryForSelectedHost()
+    {
+        var identity = GetSelectedHostIdentity();
+        if (identity is null)
+            return;
+
+        string current = GetCategory(identity.Value.Site, identity.Value.Host);
+
+        using var dialog = new CategoryDialog(identity.Value.Host, current);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        SetCategoryValue(identity.Value.Site, identity.Value.Host, dialog.Category);
+        SaveSites();
+        RefreshGrid();
+    }
+
+    private void ClearCategoryForSelectedHost()
+    {
+        var identity = GetSelectedHostIdentity();
+        if (identity is null)
+            return;
+
+        SetCategoryValue(identity.Value.Site, identity.Value.Host, string.Empty);
+        SaveSites();
+        RefreshGrid();
+    }
+
     private WatchdogConfig BuildConfig(bool captureEditor = true)
     {
         if (captureEditor)
@@ -2752,7 +2863,8 @@ public sealed class MainForm : Form
                 Name = site.Name,
                 FolderPath = NormalizeFolderPath(site.FolderPath),
                 Hosts = site.Hosts.ToList(),
-                Labels = new Dictionary<string, string>(site.Labels ?? new())
+                Labels = new Dictionary<string, string>(site.Labels ?? new()),
+                Categories = new Dictionary<string, string>(site.Categories ?? new(), StringComparer.OrdinalIgnoreCase)
             }).ToList(),
             SiteFolders = _siteFolders
                 .Select(NormalizeFolderPath)
@@ -2882,7 +2994,8 @@ public sealed class MainForm : Form
                 Name = name,
                 FolderPath = NormalizeFolderPath(source.FolderPath),
                 Hosts = hosts,
-                Labels = NormalizeLabels(source.Labels, hosts)
+                Labels = NormalizeLabels(source.Labels, hosts),
+                Categories = NormalizeCategories(source.Categories, hosts)
             });
         }
 
@@ -3874,6 +3987,7 @@ public sealed class MainForm : Form
 
         site.Hosts = ParseHosts(hostText);
         site.Labels = NormalizeLabels(site.Labels, site.Hosts);
+        site.Categories = NormalizeCategories(site.Categories, site.Hosts);
 
         if (_selectedSiteName?.Equals(siteName, StringComparison.OrdinalIgnoreCase) == true)
             _ipBox.Text = string.Join(Environment.NewLine, site.Hosts);
@@ -4747,6 +4861,7 @@ public sealed class MainForm : Form
                         Site = h.Site,
                         Host = h.Address,
                         Label = GetNickname(h.Site, h.Address),
+                        Category = GetCategory(h.Site, h.Address),
                         Status = h.State switch
                         {
                             HostState.Online => "ONLINE",

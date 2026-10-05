@@ -99,3 +99,9 @@ WALLBOARD HOST NODES
 The topology now shows individual endpoint nodes around each site.
 Labeled endpoints show the nickname first and the IP/hostname underneath.
 Endpoint node colors reflect the host's real ONLINE / SUSPECT / OFFLINE state.
+
+
+HOST CATEGORIES
+Right-click a monitored host and choose Set category... to classify it separately from its nickname/label.
+Examples: AP, Firewall, Switch, Router, Server, Printer, Camera, UPS, Workstation, IoT, or any custom category.
+Categories are saved with the site configuration.

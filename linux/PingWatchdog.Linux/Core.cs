@@ -22,6 +22,7 @@ internal sealed class SiteDefinition
     public string FolderPath { get; set; } = string.Empty;
     public List<string> Hosts { get; set; } = new();
     public Dictionary<string, string> Labels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> Categories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class WatchdogConfig
@@ -276,10 +277,13 @@ internal sealed class WatchdogEngine : IDisposable
 
             var hosts = NormalizeHosts(raw.Hosts ?? new List<string>());
             var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var host in hosts)
             {
                 if (raw.Labels is not null && raw.Labels.TryGetValue(host, out var label) && !string.IsNullOrWhiteSpace(label))
                     labels[host] = label.Trim();
+                if (raw.Categories is not null && raw.Categories.TryGetValue(host, out var category) && !string.IsNullOrWhiteSpace(category))
+                    categories[host] = category.Trim();
             }
 
             config.Sites.Add(new SiteDefinition
@@ -287,7 +291,8 @@ internal sealed class WatchdogEngine : IDisposable
                 Name = name,
                 FolderPath = NormalizeFolderPath(raw.FolderPath),
                 Hosts = hosts,
-                Labels = labels
+                Labels = labels,
+                Categories = categories
             });
         }
 
@@ -771,6 +776,9 @@ internal sealed class WatchdogEngine : IDisposable
             site.Labels = site.Labels
                 .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            site.Categories = site.Categories
+                .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
             SaveUnsafe();
             ReconcileUnsafe();
         }
@@ -797,6 +805,25 @@ internal sealed class WatchdogEngine : IDisposable
                 lock (runtime)
                     runtime.Label = label.Trim();
             }
+            SaveUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? SetCategory(string siteName, string host, string category)
+    {
+        lock (_gate)
+        {
+            var site = FindSiteUnsafe(siteName);
+            if (site is null) return "That site no longer exists.";
+            if (!site.Hosts.Contains(host, StringComparer.OrdinalIgnoreCase)) return "That host no longer exists.";
+
+            if (string.IsNullOrWhiteSpace(category))
+                site.Categories.Remove(host);
+            else
+                site.Categories[host] = category.Trim();
+
             SaveUnsafe();
         }
         RaiseChanged();
@@ -1090,7 +1117,8 @@ internal sealed class WatchdogEngine : IDisposable
         Name = site.Name,
         FolderPath = site.FolderPath,
         Hosts = site.Hosts.ToList(),
-        Labels = new Dictionary<string, string>(site.Labels, StringComparer.OrdinalIgnoreCase)
+        Labels = new Dictionary<string, string>(site.Labels, StringComparer.OrdinalIgnoreCase),
+        Categories = new Dictionary<string, string>(site.Categories, StringComparer.OrdinalIgnoreCase)
     };
 
     private SiteDefinition? FindSiteUnsafe(string name) =>

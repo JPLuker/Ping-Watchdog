@@ -133,3 +133,8 @@ Report bugs through [GitHub Issues](https://github.com/JPLuker/Ping-Watchdog/iss
 Copyright © 2026 Joseph Luker. All rights reserved.
 
 Ping Watchdog is proprietary software with publicly viewable source code. The [LICENSE](LICENSE) permits personal or internal business use of official compiled releases. Other uses, including modification and redistribution, require written permission from Joseph Luker.
+
+
+## Host categories
+
+Hosts can have both a **Label** and a separate **Category**. Use labels for a human-friendly identity such as `Front Lobby` and categories for device type or role such as `AP`, `Firewall`, `Switch`, `Router`, `Server`, `Printer`, `Camera`, `UPS`, `Workstation`, or any custom value. On Windows, right-click a monitored host and choose **Set category...**. Category metadata is saved with the site configuration and is cleaned up automatically when an address is removed. Linux preserves the same category metadata in the shared config schema.
