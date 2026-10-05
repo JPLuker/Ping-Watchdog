@@ -1,0 +1,33 @@
+name: Apply Host Category Feature
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "host-category.patch"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply category source migration
+        shell: pwsh
+        run: ./scripts/apply-host-categories.ps1
+
+      - name: Commit category feature
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Program.cs CategoryDialog.cs linux/PingWatchdog.Linux/Core.cs README.md README-FIRST.txt PingWatchdog.csproj
+          if (git diff --cached --quiet) { throw "Category migration produced no source changes." }
+          git commit -m "Add persistent host categories"
+          git push origin HEAD:main
