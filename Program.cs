@@ -136,6 +136,9 @@ internal sealed class SiteDefinition
     public List<string> Hosts { get; set; } = new();
     public Dictionary<string, string> Labels { get; set; } = new();
     public Dictionary<string, string> Categories { get; set; } = new();
+    public Dictionary<string, HostOptions> HostDetails { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool Temporary { get; set; }
 }
 
 internal sealed class WatchdogConfig
@@ -326,6 +329,7 @@ internal sealed class HostMonitor
     public string Address { get; }
     public string Label { get; set; }
     public HostState State { get; set; } = HostState.Unknown;
+    public HostOptions Options { get; set; } = new();
     public int ConsecutiveFailures { get; set; }
     public int ConsecutiveSuccesses { get; set; }
     public long? LastRoundTripMs { get; set; }
@@ -481,7 +485,7 @@ internal sealed record WallboardSnapshot(
     string EventWindowLabel,
     bool HideSuspectEvents);
 
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private const string AllSitesLabel = "All Sites";
     private const string UpdateRepoUrl = "https://github.com/JPLuker/Ping-Watchdog";
@@ -915,6 +919,7 @@ public sealed class MainForm : Form
             _eventHistoryForm?.Close();
             _settingsForm?.Close();
             _organizationForm?.Close();
+            _hostManager?.Close();
             PersistCurrentEditor();
             SaveSites();
             StopMonitoring();
@@ -972,6 +977,8 @@ public sealed class MainForm : Form
             suppressNotifications: true,
             persistSites: false);
 
+        HostManagerTests.Run();
+        RunHostManagementIntegrationTests();
         var host = new HostMonitor("Test Site", "127.0.0.1");
 
         void Check(bool condition)
@@ -1304,6 +1311,21 @@ public sealed class MainForm : Form
                 form.RefreshGrid();
                 Check(form.GetSelectedHostIdentity() is null, "Removed host left a stale selection.");
 
+                form.OpenHostManager();
+                await Task.Delay(100);
+                Check(form._hostManager?.Visible == true, "Host Manager did not open.");
+                Capture(form._hostManager!, "hosts");
+                form._hostManager!.Close();
+                using (var quickAdd = new QuickAddForm(form._sites.Select(s => s.Name), form._selectedSiteName,
+                    form.HostSnapshot, form.ImportManagedHosts))
+                {
+                    quickAdd.PreviewForTest("192.0.2.1,Printer,Printers\n192.0.2.10-12\n192.0.2.999");
+                    quickAdd.Show(form);
+                    await Task.Delay(100);
+                    Check(quickAdd.PreviewRowCount == 5, "Quick Add preview lost input rows.");
+                    Capture(quickAdd, "quick-add");
+                    quickAdd.Close();
+                }
                 form.OpenSettings();
                 await Task.Delay(100);
                 Check(form._settingsForm?.Visible == true, "Settings did not open.");
@@ -1400,6 +1422,9 @@ public sealed class MainForm : Form
         importItem.Click += (_, _) => LoadConfigFile();
         aboutItem.Click += (_, _) => ShowAboutDialog();
 
+        var hostsItem = new ToolStripMenuItem("Hosts...") { ShortcutKeys = Keys.Control | Keys.Shift | Keys.H };
+        hostsItem.Click += (_, _) => OpenHostManager();
+        _appMenu.Items.Add(hostsItem);
         _appMenu.Items.Add(settingsItem);
         _appMenu.Items.Add(historyItem);
         _appMenu.Items.Add(new ToolStripSeparator());
@@ -1590,7 +1615,7 @@ public sealed class MainForm : Form
         };
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
@@ -1605,6 +1630,9 @@ public sealed class MainForm : Form
             Tag = "primaryText"
         }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
+        var hostsNav = HostUi.Button("Hosts", OpenHostManager);
+        hostsNav.Dock = DockStyle.Fill;
+        sitePanel.Controls.Add(hostsNav, 0, 2);
 
         _addSiteButton.Text = "+ Add Site";
         _organizeButton.Text = "Organize";
@@ -1693,7 +1721,7 @@ public sealed class MainForm : Form
             Margin = new Padding(0, 0, 0, 10),
             Tag = "card"
         };
-        inputCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        inputCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         inputCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var hostHeader = new TableLayoutPanel
@@ -1717,9 +1745,11 @@ public sealed class MainForm : Form
         _autoSaveLabel.Tag = "muted";
 
         hostHeader.Controls.Add(_siteHeaderLabel, 0, 0);
-        hostHeader.Controls.Add(_autoSaveLabel, 1, 0);
+        hostHeader.Controls.Add(BuildHostActions(), 1, 0);
         inputCard.Controls.Add(hostHeader, 0, 0);
-        inputCard.Controls.Add(_ipBox, 0, 1);
+        _ipBox.Visible = false;
+        Controls.Add(_ipBox);
+        inputCard.Controls.Add(BuildHostInventory(), 0, 1);
 
         var settingsCard = new TableLayoutPanel
         {
@@ -2064,7 +2094,8 @@ public sealed class MainForm : Form
                             FolderPath = folderPath,
                             Hosts = hosts,
                             Labels = NormalizeLabels(site.Labels, hosts),
-                            Categories = NormalizeCategories(site.Categories, hosts)
+                            Categories = NormalizeCategories(site.Categories, hosts),
+                            HostDetails = NormalizeHostDetails(site.HostDetails, hosts)
                         });
 
                         EnsureFolderHierarchy(folderPath);
@@ -2114,7 +2145,7 @@ public sealed class MainForm : Form
             File.WriteAllText(
                 _settingsPath,
                 JsonSerializer.Serialize(
-                    _sites,
+                    _sites.Where(site => !site.Temporary).ToList(),
                     new JsonSerializerOptions { WriteIndented = true }));
 
             File.WriteAllText(
@@ -2196,6 +2227,7 @@ public sealed class MainForm : Form
 
     private void LoadHostEditor()
     {
+        RefreshHostInventory();
         if (_selectedSiteName is null)
         {
             _siteHeaderLabel.Text = "All sites • Read-only inventory";
@@ -2228,6 +2260,7 @@ public sealed class MainForm : Form
         site.Hosts = ParseHosts(_ipBox.Text);
         site.Labels = NormalizeLabels(site.Labels, site.Hosts);
         site.Categories = NormalizeCategories(site.Categories, site.Hosts);
+        site.HostDetails = NormalizeHostDetails(site.HostDetails, site.Hosts);
     }
 
     private static Dictionary<string, string> NormalizeLabels(
@@ -2858,13 +2891,14 @@ public sealed class MainForm : Form
 
         return new WatchdogConfig
         {
-            Sites = _sites.Select(site => new SiteDefinition
+            Sites = _sites.Where(site => !site.Temporary).Select(site => new SiteDefinition
             {
                 Name = site.Name,
                 FolderPath = NormalizeFolderPath(site.FolderPath),
                 Hosts = site.Hosts.ToList(),
                 Labels = new Dictionary<string, string>(site.Labels ?? new()),
-                Categories = new Dictionary<string, string>(site.Categories ?? new(), StringComparer.OrdinalIgnoreCase)
+                Categories = new Dictionary<string, string>(site.Categories ?? new(), StringComparer.OrdinalIgnoreCase),
+                HostDetails = NormalizeHostDetails(site.HostDetails, site.Hosts)
             }).ToList(),
             SiteFolders = _siteFolders
                 .Select(NormalizeFolderPath)
@@ -2995,7 +3029,8 @@ public sealed class MainForm : Form
                 FolderPath = NormalizeFolderPath(source.FolderPath),
                 Hosts = hosts,
                 Labels = NormalizeLabels(source.Labels, hosts),
-                Categories = NormalizeCategories(source.Categories, hosts)
+                Categories = NormalizeCategories(source.Categories, hosts),
+                HostDetails = NormalizeHostDetails(source.HostDetails, hosts)
             });
         }
 
@@ -3305,7 +3340,7 @@ public sealed class MainForm : Form
     {
         return _sites
             .SelectMany(site =>
-                site.Hosts.Select(host => (Site: site.Name, Address: host)))
+                site.Hosts.Where(host => GetHostOptions(site, host).Enabled).Select(host => (Site: site.Name, Address: host)))
             .ToList();
     }
 
@@ -3331,8 +3366,11 @@ public sealed class MainForm : Form
 
         foreach (var pair in desired)
         {
-            if (_hosts.ContainsKey(pair.Key))
+            if (_hosts.TryGetValue(pair.Key, out var existing))
+            {
+                existing.Options = GetHostOptions(FindSite(existing.Site), existing.Address).Copy();
                 continue;
+            }
 
             var host = new HostMonitor(
                 pair.Value.Site,
@@ -3358,6 +3396,7 @@ public sealed class MainForm : Form
             return;
         }
 
+        host.Options = GetHostOptions(FindSite(host.Site), host.Address).Copy();
         _ = MonitorHostAsync(host, workerToken.Token);
     }
 
@@ -3387,7 +3426,7 @@ public sealed class MainForm : Form
 
             try
             {
-                var reply = await ping.SendPingAsync(host.Address, _pingTimeoutMs);
+                var reply = await ping.SendPingAsync(host.Address, host.Options.TimeoutMs > 0 ? host.Options.TimeoutMs : _pingTimeoutMs);
                 success = reply.Status == IPStatus.Success;
 
                 if (success)
@@ -3420,7 +3459,7 @@ public sealed class MainForm : Form
             try
             {
                 await Task.Delay(
-                    TimeSpan.FromSeconds(_monitorIntervalSeconds),
+                    TimeSpan.FromSeconds(host.Options.IntervalSeconds > 0 ? host.Options.IntervalSeconds : _monitorIntervalSeconds),
                     token);
             }
             catch (OperationCanceledException)
@@ -3490,7 +3529,7 @@ public sealed class MainForm : Form
                 host.ConsecutiveSuccesses = 0;
                 host.ConsecutiveFailures++;
 
-                if (host.ConsecutiveFailures >= _failureThresholdValue)
+                if (host.ConsecutiveFailures >= (host.Options.FailureThreshold > 0 ? host.Options.FailureThreshold : _failureThresholdValue))
                 {
                     if (host.State != HostState.Offline)
                     {
@@ -3988,6 +4027,7 @@ public sealed class MainForm : Form
         site.Hosts = ParseHosts(hostText);
         site.Labels = NormalizeLabels(site.Labels, site.Hosts);
         site.Categories = NormalizeCategories(site.Categories, site.Hosts);
+        site.HostDetails = NormalizeHostDetails(site.HostDetails, site.Hosts);
 
         if (_selectedSiteName?.Equals(siteName, StringComparison.OrdinalIgnoreCase) == true)
             _ipBox.Text = string.Join(Environment.NewLine, site.Hosts);
@@ -4535,7 +4575,8 @@ public sealed class MainForm : Form
             DateTime.Now,
             success,
             resultText,
-            _pingTimeoutMs);
+            _hosts.TryGetValue(BuildHostKey(site, host), out var monitored) && monitored.Options.TimeoutMs > 0
+                ? monitored.Options.TimeoutMs : _pingTimeoutMs);
 
         _commandEntries.Add(entry);
 

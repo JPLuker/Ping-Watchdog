@@ -1,0 +1,25 @@
+name: Validate Windows changes
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Host imports, configuration, monitoring and existing regressions
+        run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
+      - name: UI regression checks
+        run: dotnet run --project PingWatchdog.csproj -c Release -- --ui-smoke-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-validation-ui
+          path: ui-smoke-test/**
+          if-no-files-found: warn
