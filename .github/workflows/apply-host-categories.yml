@@ -20,7 +20,7 @@ jobs:
 
       - name: Apply category source migration
         shell: pwsh
-        run: ./scripts/apply-host-categories.ps1
+        run: python scripts/apply-host-categories.py
 
       - name: Commit category feature
         shell: pwsh
