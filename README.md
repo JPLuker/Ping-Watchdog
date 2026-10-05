@@ -138,3 +138,31 @@ Ping Watchdog is proprietary software with publicly viewable source code. The [L
 ## Host categories
 
 Hosts can have both a **Label** and a separate **Category**. Use labels for a human-friendly identity such as `Front Lobby` and categories for device type or role such as `AP`, `Firewall`, `Switch`, `Router`, `Server`, `Printer`, `Camera`, `UPS`, `Workstation`, or any custom value. On Windows, right-click a monitored host and choose **Set category...**. Category metadata is saved with the site configuration and is cleaned up automatically when an address is removed. Linux preserves the same category metadata in the shared config schema.
+
+### Hosts and Quick Add (Windows)
+
+Open **Hosts** beside the inventory or with Ctrl+Shift+H. Search names, addresses,
+sites, groups, and tags; select multiple rows to move sites, assign groups/tags,
+enable or disable monitoring, or apply monitoring policies. Edit names and policies
+in the table, then choose **Save Edits**. Zero for interval, timeout, or failure
+threshold inherits the application's monitoring defaults. Changes apply to active
+monitoring and autosave. Refresh reloads the inventory and current state.
+
+**Quick Add** accepts one address per line, comma-separated address lists,
+`Address,Label,Group` CSV (including quoted labels), tab-separated spreadsheet rows,
+IPv4 CIDR, and short ranges such as `192.168.1.10-25`. Paste from the clipboard,
+import/drop a text file, or enter a row manually. The editable preview retains
+invalid entries and flags existing addresses and label conflicts across sites.
+Only checked, valid, new rows are added; edit conflicting labels through Hosts.
+IPv6 individual addresses and DNS hostnames are supported. CIDR expansion is
+limited to 4,096 hosts, excluding network/broadcast addresses except /31 and /32.
+
+**Quick Monitor** creates a temporary troubleshooting site and starts monitoring.
+Temporary hosts are excluded from autosave and configuration export. In Hosts,
+select temporary rows and choose **Save Temporary Hosts** to move them into a new
+permanent site. Quick Monitor shares the existing monitoring engine; if monitoring
+is already running, its targets are added without restarting other workers.
+Existing configuration files remain compatible; per-host stable IDs and optional
+policies are populated as configurations are edited. Site/address identity remains
+the existing history key, so moving a host between sites starts a new live worker;
+prior events retain their original site and display label.
