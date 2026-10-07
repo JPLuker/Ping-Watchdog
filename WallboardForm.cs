@@ -1391,7 +1391,7 @@ internal sealed class WallboardCanvas : Control
         _hiddenCaptions = 0;
         _captionObstacles.Add(new Rectangle(center.X - coreRadius - 10, center.Y - coreRadius - 10,
             (coreRadius + 10) * 2, (coreRadius + 10) * 2));
-        _captionObstacles.Add(new Rectangle(content.Left, content.Bottom - 22, content.Width, 22));
+
         for (int i = 0; i < snapshot.Sites.Count; i++)
         {
             var sitePoint = sitePoints[i];
@@ -1703,19 +1703,8 @@ internal sealed class WallboardCanvas : Control
         int primaryHeight = TextRenderer.MeasureText(g, primary, _hostLabelFont, Size.Empty,
             TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Height;
 
-        bool rightSide = Math.Cos(angle) >= 0;
-        int x = rightSide
-            ? point.X + 9
-            : point.X - width - 9;
-        int y = point.Y - height / 2;
-
-        // The other side is still attached to the same node, even when the
-        // caption width is larger than the local displacement limit.
-        int alternateX = rightSide ? point.X - width - 9 : point.X + 9;
-        if (!TopologyLayout.TryPlaceCaption(new Rectangle(x, y, width, height), topologyBounds,
-            _captionObstacles, out var rect) &&
-            !TopologyLayout.TryPlaceCaption(new Rectangle(alternateX, y, width, height), topologyBounds,
-                _captionObstacles, out rect))
+        if (!TopologyLayout.TryPlaceHostCaption(point, captionSize, topologyBounds,
+            _captionObstacles, Math.Cos(angle) >= 0, out var rect))
         {
             _hiddenCaptions++;
             return;

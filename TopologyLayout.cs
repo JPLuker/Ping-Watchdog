@@ -104,9 +104,49 @@ internal static class TopologyLayout
         return false;
     }
 
+    internal static bool TryPlaceHostCaption(Point node, Size size, Rectangle bounds,
+        IReadOnlyList<Rectangle> occupied, bool preferRight, out Rectangle placed)
+    {
+        var anchors = new[]
+        {
+            new Rectangle(preferRight ? node.X + 9 : node.X - size.Width - 9, node.Y - size.Height / 2, size.Width, size.Height),
+            new Rectangle(preferRight ? node.X - size.Width - 9 : node.X + 9, node.Y - size.Height / 2, size.Width, size.Height),
+            new Rectangle(node.X - size.Width / 2, node.Y + 9, size.Width, size.Height),
+            new Rectangle(node.X - size.Width / 2, node.Y - size.Height - 9, size.Width, size.Height)
+        };
+        long Distance(Rectangle r)
+        {
+            long dx = node.X - Math.Clamp(node.X, r.Left, r.Right);
+            long dy = node.Y - Math.Clamp(node.Y, r.Top, r.Bottom);
+            return dx * dx + dy * dy;
+        }
+        var candidates = new List<Rectangle>();
+        // Evaluate both sides before allowing a displaced caption. A clear
+        // alternate side is preferable to a long leader beside another host.
+        foreach (var anchor in anchors)
+        {
+            var exact = new Rectangle(Math.Clamp(anchor.X, bounds.Left, Math.Max(bounds.Left, bounds.Right - size.Width)),
+                Math.Clamp(anchor.Y, bounds.Top, Math.Max(bounds.Top, bounds.Bottom - size.Height)), size.Width, size.Height);
+            if (bounds.Contains(exact) && !occupied.Any(o => Rectangle.Inflate(exact, 3, 3).IntersectsWith(o)))
+                candidates.Add(exact);
+        }
+        if (candidates.Count == 0)
+            foreach (var anchor in anchors)
+                if (TryPlaceCaption(anchor, bounds, occupied, out var nearby)) candidates.Add(nearby);
+        placed = candidates.OrderBy(Distance).FirstOrDefault();
+        if (placed.IsEmpty || Distance(placed) > 32L * 32L)
+        { placed = Rectangle.Empty; return false; }
+        return true;
+    }
+
     internal static void RunTests()
     {
         var bounds = new Rectangle(0, 0, 1000, 700);
+        var node = new Point(500, 670);
+        var crowdedRight = new[] { new Rectangle(505, 620, 160, 60), new Rectangle(492, 662, 16, 16) };
+        if (!TryPlaceHostCaption(node, new Size(140, 36), bounds, crowdedRight, true, out var attached) ||
+            attached.Right >= node.X || crowdedRight.Any(o => Rectangle.Inflate(attached, 3, 3).IntersectsWith(o)))
+            throw new InvalidOperationException("Bottom host caption must use the free nearby side instead of a distant gap.");
 
         var preferred = new Rectangle(400, 300, 140, 36);
         if (!TryPlaceCaption(preferred, bounds, Array.Empty<Rectangle>(), out var exact) || exact != preferred)
