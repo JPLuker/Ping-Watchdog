@@ -990,12 +990,15 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _cliFont = new("Cascadia Mono", 8.5f);
 
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostHitRegions = new();
+    private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _sidebarHitRegions = new();
     private Rectangle _topologyViewport;
     private Size _topologyVirtualSize;
     internal event Action<WallboardHostSnapshot, Point>? HostRightClicked;
 
     internal WallboardHostSnapshot? HitTestHost(Point location)
     {
+        var sidebar = _sidebarHitRegions.LastOrDefault(hit => hit.Bounds.Contains(location)).Host;
+        if (sidebar != null) return sidebar;
         if (!_topologyViewport.Contains(location) || _topologyVirtualSize.Width <= 0) return null;
         var point = new Point(
             (int)((location.X - _topologyViewport.X) * (double)_topologyVirtualSize.Width / _topologyViewport.Width),
@@ -1072,6 +1075,7 @@ internal sealed class WallboardCanvas : Control
             true);
 
         _hostHitRegions.Clear();
+        _sidebarHitRegions.Clear();
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
@@ -1826,6 +1830,7 @@ internal sealed class WallboardCanvas : Control
         {
             foreach (var outage in outages)
             {
+                _sidebarHitRegions.Add((Rectangle.Intersect(rect, new Rectangle(x, y, width, 44)), outage));
                 using var redBrush = new SolidBrush(Color.FromArgb(255, 110, 119));
                 string display = string.IsNullOrWhiteSpace(outage.Label)
                     ? outage.Address
@@ -1875,6 +1880,11 @@ internal sealed class WallboardCanvas : Control
             .OrderByDescending(e => e.Timestamp)
             .Take(10))
         {
+            var target = snapshot.Sites.SelectMany(site => site.Hosts).FirstOrDefault(host =>
+                host.Site.Equals(item.Site, StringComparison.OrdinalIgnoreCase) &&
+                host.Address.Equals(item.Address, StringComparison.OrdinalIgnoreCase));
+            if (target != null)
+                _sidebarHitRegions.Add((Rectangle.Intersect(rect, new Rectangle(x, y, width, 57)), target));
             Color kindColor = item.Kind switch
             {
                 "DOWN" => Color.FromArgb(255, 101, 111),

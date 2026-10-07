@@ -477,7 +477,8 @@ internal sealed record WallboardEventSnapshot(
     string Site,
     string Host,
     string Kind,
-    string Message);
+    string Message,
+    string Address = "");
 
 internal sealed record WallboardCommandSnapshot(
     DateTime Timestamp,
@@ -1112,6 +1113,23 @@ public sealed partial class MainForm : Form
             Check(canvas.HitTestHost(Point.Empty) == null);
         }
 
+        using (var outageCanvas = new WallboardCanvas { Size = new Size(1600, 1000), ShowCli = false })
+        using (var outageBitmap = new Bitmap(1600, 1000))
+        {
+            var active = new WallboardHostSnapshot("Outage site", "192.0.2.1", "Router", HostState.Offline, null, DateTime.Now.AddMinutes(-5));
+            var recovered = new WallboardHostSnapshot("Outage site", "192.0.2.2", "Printer", HostState.Online, 1, null);
+            outageCanvas.Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                new[] { new WallboardSiteSnapshot("Outage site", new[] { active, recovered }) },
+                new[] { new WallboardEventSnapshot(DateTime.Now, recovered.Site, "Printer (192.0.2.2)", "RECOVERED", "", recovered.Address) },
+                Array.Empty<WallboardCommandSnapshot>(), "24 hours", true);
+            outageCanvas.DrawToBitmap(outageBitmap, new Rectangle(0, 0, 1600, 1000));
+            var sidebarHosts = new HashSet<string>();
+            for (int y = 0; y < 1000; y += 2)
+                for (int x = 1160; x < 1600; x += 2)
+                    if (outageCanvas.HitTestHost(new Point(x, y)) is { } hit) sidebarHosts.Add(hit.Address);
+            Check(sidebarHosts.SetEquals(new[] { active.Address, recovered.Address }));
+        }
+
         var labeledNode = WallboardCanvas.FormatHostNodeLines(
             new WallboardHostSnapshot(
                 "Test Site",
@@ -1293,6 +1311,7 @@ public sealed partial class MainForm : Form
             {
                 form.ShowHostQuickActions(surface, new Point(20, 20), host.Site, host.Address);
                 Check(form._hostQuickMenu.Visible, "Host menu did not open.");
+                Check(!form._hostQuickMenu.ShowImageMargin && !form._hostQuickMenu.ShowCheckMargin, "Empty menu icon gutter returned.");
                 form._hostQuickMenu.Close(ToolStripDropDownCloseReason.AppClicked);
                 Check(!form._hostQuickMenu.IsDisposed && form._hostQuickMenu.IsHandleCreated,
                     "Closing the host menu disposed it during WinForms close processing.");
@@ -3948,7 +3967,8 @@ public sealed partial class MainForm : Form
                     e.Site,
                     e.DisplayHost,
                     e.Kind,
-                    e.Message))
+                    e.Message,
+                    e.Host))
                 .ToList();
         }
 

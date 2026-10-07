@@ -96,6 +96,9 @@ public sealed partial class MainForm
         menu.Close();
         foreach (var item in menu.Items.Cast<ToolStripItem>().ToArray()) item.Dispose();
         menu.Items.Clear();
+        menu.ShowImageMargin = false;
+        menu.ShowCheckMargin = false;
+        menu.Renderer = new ToolStripProfessionalRenderer(new HostMenuColors());
         menu.BackColor = Color.FromArgb(22, 27, 34);
         menu.ForeColor = Color.White;
         void Add(string title, Action action) => menu.Items.Add(title, null, (_, _) =>
@@ -319,4 +322,15 @@ public sealed partial class MainForm
         Check(!form.HostSnapshot().Any(h => h.Address == imported.Address), "deletion");
     }
 
+}
+
+internal sealed class HostMenuColors : ProfessionalColorTable
+{
+    public HostMenuColors() { UseSystemColors = false; }
+    public override Color ToolStripDropDownBackground => Color.FromArgb(22, 27, 34);
+    public override Color MenuBorder => Color.FromArgb(60, 76, 90);
+    public override Color MenuItemSelected => Color.FromArgb(32, 65, 80);
+    public override Color MenuItemBorder => Color.FromArgb(60, 110, 130);
+    public override Color SeparatorDark => Color.FromArgb(60, 76, 90);
+    public override Color SeparatorLight => Color.FromArgb(22, 27, 34);
 }
