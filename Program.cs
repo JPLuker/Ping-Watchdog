@@ -923,6 +923,7 @@ public sealed partial class MainForm : Form
         FormClosing += (_, _) =>
         {
             _closingApplication = true;
+            _hostQuickMenu.Close();
             _wallboardForm?.Close();
             _eventHistoryForm?.Close();
             _settingsForm?.Close();
@@ -944,6 +945,8 @@ public sealed partial class MainForm : Form
             _appIcon.Dispose();
             _brandBitmap.Dispose();
         };
+
+        Disposed += (_, _) => _hostQuickMenu.Dispose();
 
         LoadSites();
         LoadUserPreferences();
@@ -1283,6 +1286,30 @@ public sealed partial class MainForm : Form
             bitmap.Save(Path.Combine(output, name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
         }
 
+        async Task CheckHostMenu(Control surface)
+        {
+            var host = form.HostSnapshot().First();
+            for (int i = 0; i < 3; i++)
+            {
+                form.ShowHostQuickActions(surface, new Point(20, 20), host.Site, host.Address);
+                Check(form._hostQuickMenu.Visible, "Host menu did not open.");
+                form._hostQuickMenu.Close(ToolStripDropDownCloseReason.AppClicked);
+                Check(!form._hostQuickMenu.IsDisposed && form._hostQuickMenu.IsHandleCreated,
+                    "Closing the host menu disposed it during WinForms close processing.");
+                await Task.Delay(50);
+            }
+            foreach (string action in new[] { "Snooze alerts for 1 hour", "Resume alerts now" })
+            {
+                form.ShowHostQuickActions(surface, new Point(20, 20), host.Site, host.Address);
+                form._hostQuickMenu.Items.Cast<ToolStripItem>().Single(item => item.Text == action).PerformClick();
+                form._hostQuickMenu.Close(ToolStripDropDownCloseReason.ItemClicked);
+                await Task.Delay(50);
+                Check(!form._hostQuickMenu.IsDisposed, "A quick action destroyed the host menu.");
+                Check(form.HostSnapshot().Single(h => h.Options.Id == host.Options.Id).Options.IsSnoozed(DateTimeOffset.UtcNow)
+                    == (action == "Snooze alerts for 1 hour"), "Host snooze action did not apply.");
+            }
+        }
+
         form.Shown += async (_, _) =>
         {
             try
@@ -1339,6 +1366,8 @@ public sealed partial class MainForm : Form
                 }
 
                 WindowsBranding.RunShortcutSmokeTest(output);
+                await CheckHostMenu(form._hostInventory!);
+                await CheckHostMenu(form._grid);
 
                 // Keep a non-first host, its selected column, and both scroll positions through repeated refreshes.
                 for (int i = 1; i <= 40; i++)
@@ -1402,6 +1431,7 @@ public sealed partial class MainForm : Form
                 await Task.Delay(200);
                 Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
                 var canvas = (WallboardCanvas)form._wallboardForm!.Controls.Find("WallboardCanvas", true).Single();
+                await CheckHostMenu(canvas);
                 Check(canvas.ClientRectangle.Contains(canvas.BrandLogoBounds), "Wallboard dog is outside the canvas.");
                 using (var rendered = new Bitmap(canvas.Width, canvas.Height))
                 using (var expected = new Bitmap(canvas.BrandLogoBounds.Width, canvas.BrandLogoBounds.Height))

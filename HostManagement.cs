@@ -39,6 +39,7 @@ public sealed partial class MainForm
     }
     private DataGridView? _hostInventory;
     private HostManagerForm? _hostManager;
+    private readonly ContextMenuStrip _hostQuickMenu = new();
     private static HostOptions GetHostOptions(SiteDefinition? site, string address)
     {
         if (site == null) return new HostOptions();
@@ -89,7 +90,14 @@ public sealed partial class MainForm
             h.Site.Equals(site, StringComparison.OrdinalIgnoreCase) &&
             h.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
         if (host == null) return;
-        var menu = new ContextMenuStrip { BackColor = Color.FromArgb(22, 27, 34), ForeColor = Color.White };
+        // WinForms still uses the drop-down after raising Closed. Keep one menu
+        // alive for the owning form instead of disposing it inside that event.
+        var menu = _hostQuickMenu;
+        menu.Close();
+        foreach (var item in menu.Items.Cast<ToolStripItem>().ToArray()) item.Dispose();
+        menu.Items.Clear();
+        menu.BackColor = Color.FromArgb(22, 27, 34);
+        menu.ForeColor = Color.White;
         void Add(string title, Action action) => menu.Items.Add(title, null, (_, _) =>
         {
             try { action(); }
@@ -138,7 +146,6 @@ public sealed partial class MainForm
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 DeleteManagedHosts(new() { host });
         });
-        menu.Closed += (_, _) => menu.Dispose();
         menu.Show(surface, location);
     }
 
