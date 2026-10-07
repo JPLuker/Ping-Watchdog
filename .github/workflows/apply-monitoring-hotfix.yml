@@ -39,13 +39,15 @@ jobs:
         shell: pwsh
         run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
 
-      - name: Commit tested hotfix and remove one-time patch machinery
+      - name: Commit tested source hotfix
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/apply-monitoring-hotfix.yml .github/scripts/apply-monitoring-hotfix.py
-          git add -A
+          # The patch script updates release-note text locally, but GitHub App tokens
+          # cannot push workflow-file changes. Keep the existing release workflow intact.
+          git checkout -- .github/workflows/build-windows.yml
+          git add Program.cs WallboardForm.cs HostManagement.cs TopologyLayout.cs UserPreferences.cs PingWatchdog.csproj
           git commit -m "Keep topology local and make Enabled authoritative (1.14.63)"
           git push origin HEAD:main
 
