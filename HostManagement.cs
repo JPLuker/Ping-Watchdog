@@ -192,6 +192,18 @@ public sealed partial class MainForm
         form.SaveManagedHosts(new() { imported with { Label = "Accounting", Options = options } });
         Check(form.GetNickname(siteName, imported.Address) == "Accounting", "rename canonical source");
         Check(!form.GetConfiguredTargets().Any(h => h.Address == imported.Address), "disabled hosts excluded");
+        var wallboard = form.BuildWallboardSnapshot();
+        Check(!wallboard.Sites.SelectMany(site => site.Hosts).Any(h => h.Address == imported.Address),
+            "disabled hosts excluded from Wallboard topology");
+        var controls = form.BuildWallboardControlSnapshot();
+        Check(!controls.Hosts.Any(h => h.Address == imported.Address),
+            "disabled hosts excluded from Wallboard live hosts");
+        Check(controls.ConfiguredHosts.Any(h => h.Address == imported.Address),
+            "disabled hosts remain available to configuration editors");
+        form.AppendCommandLog(siteName, imported.Address, true, "Reply from test: time=1ms");
+        form.RebuildCommandView();
+        Check(!form._commandBox.Text.Contains(imported.Address, StringComparison.OrdinalIgnoreCase),
+            "disabled hosts excluded from CLI monitoring trace");
         var config = form.BuildConfig();
         var saved = config.Sites.First(s => s.Name == siteName).HostDetails[imported.Address];
         Check(saved.TimeoutMs == 2345 && saved.Id == imported.Options.Id, "policy and identity export");

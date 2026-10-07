@@ -835,10 +835,10 @@ internal sealed class WallboardForm : Form
             if ((force || !_hostEditorDirty) && !_hostEditor.Focused)
             {
                 _hostEditor.Text = specificSite
-                    ? string.Join(Environment.NewLine, state.Hosts.Select(host => host.Address))
+                    ? string.Join(Environment.NewLine, state.ConfiguredHosts.Select(host => host.Address))
                     : string.Join(
                         Environment.NewLine,
-                        state.Hosts.Select(host => $"[{host.Site}] {host.Address}"));
+                        state.ConfiguredHosts.Select(host => $"[{host.Site}] {host.Address}"));
                 _hostEditorDirty = false;
             }
 

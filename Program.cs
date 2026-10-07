@@ -422,11 +422,16 @@ internal sealed record WallboardControlHost(
     DateTime? LastReply,
     DateTime? OutageStarted);
 
+internal sealed record WallboardConfiguredHost(
+    string Site,
+    string Address);
+
 internal sealed record WallboardControlSnapshot(
     bool Monitoring,
     string? SelectedSite,
     IReadOnlyList<string> Sites,
     IReadOnlyList<WallboardControlHost> Hosts,
+    IReadOnlyList<WallboardConfiguredHost> ConfiguredHosts,
     int PingIntervalSeconds,
     int PingTimeoutMs,
     int FailureThreshold,
@@ -940,6 +945,7 @@ public sealed partial class MainForm : Form
         };
 
         LoadSites();
+        LoadUserPreferences();
         LoadEventHistory();
 
         if (_sites.Count == 0)
@@ -980,6 +986,7 @@ public sealed partial class MainForm : Form
             persistSites: false);
 
         TopologyLayout.RunTests();
+        UserPreferenceStore.RunTests();
         DisplayTime.RunTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
@@ -2195,7 +2202,8 @@ public sealed partial class MainForm : Form
         {
             _siteList.Items.Clear();
 
-            int totalHosts = _sites.Sum(s => s.Hosts.Count);
+            int totalHosts = _sites.Sum(site =>
+                site.Hosts.Count(address => GetHostOptions(site, address).Enabled));
             _siteList.Items.Add(new SiteListItem(
                 null,
                 $"{AllSitesLabel} ({totalHosts})"));
@@ -2206,7 +2214,7 @@ public sealed partial class MainForm : Form
             {
                 _siteList.Items.Add(new SiteListItem(
                     site.Name,
-                    $"{FormatSiteDisplayPath(site)} ({site.Hosts.Count})"));
+                    $"{FormatSiteDisplayPath(site)} ({site.Hosts.Count(address => GetHostOptions(site, address).Enabled)})"));
             }
 
             int selectedIndex = 0;
@@ -3089,6 +3097,9 @@ public sealed partial class MainForm : Form
         _notificationsEnabled = config.NotificationsEnabled;
         _wallboardShowCli = config.WallboardShowCli;
         _showUpdateControlOnHome = config.ShowUpdateControlOnHome;
+        // UI/developer preferences are machine-user preferences, not scan-definition settings.
+        // Re-apply the durable preference after any autosave/default/imported config is loaded.
+        LoadUserPreferences();
 
         _selectedSiteName = config.SelectedSite is not null &&
             _sites.Any(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase))
@@ -3329,7 +3340,10 @@ public sealed partial class MainForm : Form
 
         _uiTimer.Start();
         _monitorStateLabel.Text = "MONITORING";
-        _statusLabel.Text = $"Monitoring {targets.Count} host(s) across {_sites.Count} site(s)";
+        int monitoredSiteCount = targets.Select(target => target.Site)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        _statusLabel.Text = $"Monitoring {targets.Count} host(s) across {monitoredSiteCount} site(s)";
     }
 
     private void StopMonitoring()
@@ -3409,7 +3423,11 @@ public sealed partial class MainForm : Form
             StartHostWorker(pair.Key, host);
         }
 
-        _statusLabel.Text = $"Monitoring {_hosts.Count} host(s) across {_sites.Count} site(s)...";
+        int monitoredSiteCount = _hosts.Values
+            .Select(host => host.Site)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        _statusLabel.Text = $"Monitoring {_hosts.Count} host(s) across {monitoredSiteCount} site(s)...";
     }
 
     private void StartHostWorker(string key, HostMonitor host)
@@ -3785,6 +3803,14 @@ public sealed partial class MainForm : Form
         _eventHistoryForm.Show(owner ?? this);
     }
 
+    private bool IsHostEnabled(string siteName, string address)
+    {
+        var site = FindSite(siteName);
+        return site is not null &&
+            site.Hosts.Any(host => host.Equals(address, StringComparison.OrdinalIgnoreCase)) &&
+            GetHostOptions(site, address).Enabled;
+    }
+
     private WallboardSnapshot BuildWallboardSnapshot()
     {
         bool monitoring = _cts is not null && !_cts.IsCancellationRequested;
@@ -3811,9 +3837,12 @@ public sealed partial class MainForm : Form
         }
 
         var sites = _sites
+            .Where(site => site.Hosts.Any(address => GetHostOptions(site, address).Enabled))
             .Select(site =>
             {
-                var hosts = site.Hosts.Select(address =>
+                var hosts = site.Hosts
+                    .Where(address => GetHostOptions(site, address).Enabled)
+                    .Select(address =>
                 {
                     string key = BuildHostKey(site.Name, address);
 
@@ -3844,6 +3873,7 @@ public sealed partial class MainForm : Form
                     _eventHistoryHours,
                     _hideSuspectEvents,
                     DateTime.Now)
+                .Where(e => IsHostEnabled(e.Site, e.Host))
                 .TakeLast(80)
                 .Select(e => new WallboardEventSnapshot(
                     e.Timestamp,
@@ -3855,6 +3885,7 @@ public sealed partial class MainForm : Form
         }
 
         var commands = _commandEntries
+            .Where(entry => IsHostEnabled(entry.Site, entry.Host))
             .TakeLast(120)
             .Select(entry => new WallboardCommandSnapshot(
                 entry.Timestamp,
@@ -3881,11 +3912,18 @@ public sealed partial class MainForm : Form
                 .ToList();
 
         var hosts = new List<WallboardControlHost>();
+        var configuredHosts = selectedSites
+            .SelectMany(site => site.Hosts.Select(address =>
+                new WallboardConfiguredHost(site.Name, address)))
+            .ToList();
 
         foreach (var site in selectedSites)
         {
             foreach (var address in site.Hosts)
             {
+                if (!GetHostOptions(site, address).Enabled)
+                    continue;
+
                 string key = BuildHostKey(site.Name, address);
 
                 if (_hosts.TryGetValue(key, out var active))
@@ -3923,6 +3961,7 @@ public sealed partial class MainForm : Form
             _selectedSiteName,
             _sites.Select(site => site.Name).ToList(),
             hosts,
+            configuredHosts,
             (int)_intervalSeconds.Value,
             (int)_timeoutMs.Value,
             (int)_failureThreshold.Value,
@@ -4237,6 +4276,7 @@ public sealed partial class MainForm : Form
         _notificationsEnabled = settings.NotificationsEnabled;
         _wallboardShowCli = settings.WallboardShowCli;
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
+        SaveUserPreferences();
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
         DisplayTime.Use12HourTime = settings.Use12HourTime;
@@ -4633,6 +4673,9 @@ public sealed partial class MainForm : Form
 
     private bool CommandEntryMatchesFilter(CommandLogEntry entry)
     {
+        if (!IsHostEnabled(entry.Site, entry.Host))
+            return false;
+
         return _selectedSiteName is null ||
                entry.Site.Equals(
                    _selectedSiteName,
@@ -5008,8 +5051,10 @@ public sealed partial class MainForm : Form
         int offline = rows.Count(h => h.Status == "OFFLINE");
 
         int configured = _selectedSiteName is null
-            ? _sites.Sum(s => s.Hosts.Count)
-            : FindSite(_selectedSiteName)?.Hosts.Count ?? 0;
+            ? _sites.Sum(site => site.Hosts.Count(address => GetHostOptions(site, address).Enabled))
+            : (FindSite(_selectedSiteName) is SiteDefinition selectedSite
+                ? selectedSite.Hosts.Count(address => GetHostOptions(selectedSite, address).Enabled)
+                : 0);
 
         _totalValueLabel.Text = (_cts is null ? configured : rows.Count).ToString();
         _onlineValueLabel.Text = online.ToString();
