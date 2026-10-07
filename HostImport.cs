@@ -9,6 +9,8 @@ internal sealed class HostOptions
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Tags { get; set; } = "";
     public bool Enabled { get; set; } = true;
+    public DateTimeOffset? SnoozedUntilUtc { get; set; }
+    public bool IsSnoozed(DateTimeOffset now) => SnoozedUntilUtc is { } until && until > now;
     public int IntervalSeconds { get; set; }
     public int TimeoutMs { get; set; }
     public int FailureThreshold { get; set; }

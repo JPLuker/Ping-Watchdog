@@ -465,7 +465,8 @@ internal sealed record WallboardHostSnapshot(
     string Label,
     HostState State,
     long? LatencyMs,
-    DateTime? OutageStarted);
+    DateTime? OutageStarted,
+    DateTimeOffset? SnoozedUntilUtc = null);
 
 internal sealed record WallboardSiteSnapshot(
     string Name,
@@ -1078,6 +1079,17 @@ public sealed partial class MainForm : Form
                 Check(size.Height >= required.Height + 6);
             }
         }
+
+        var snoozeNow = DateTimeOffset.UtcNow;
+        var snoozeOptions = new HostOptions { SnoozedUntilUtc = snoozeNow.AddHours(1) };
+        Check(snoozeOptions.IsSnoozed(snoozeNow));
+        Check(!snoozeOptions.IsSnoozed(snoozeNow.AddHours(1)));
+        Check(!snoozeOptions.IsSnoozed(snoozeNow.AddHours(2)));
+        var snoozeRoundTrip = JsonSerializer.Deserialize<HostOptions>(JsonSerializer.Serialize(snoozeOptions))!;
+        Check(snoozeRoundTrip.SnoozedUntilUtc == snoozeOptions.SnoozedUntilUtc);
+        Check(snoozeOptions.Copy().IsSnoozed(snoozeNow));
+        snoozeOptions.SnoozedUntilUtc = null;
+        Check(!snoozeOptions.IsSnoozed(snoozeNow));
 
         foreach (var viewport in new[] { new Size(1600, 1000), new Size(900, 650) })
         {
@@ -3638,6 +3650,7 @@ public sealed partial class MainForm : Form
 
         if (!_suppressNotifications &&
             _notificationsEnabled &&
+            !host.Options.IsSnoozed(DateTimeOffset.UtcNow) &&
             notificationTitle is not null &&
             notificationBody is not null)
         {
@@ -3853,7 +3866,8 @@ public sealed partial class MainForm : Form
                         host.Label,
                         host.State,
                         host.LastRoundTripMs,
-                        host.OutageStarted);
+                        host.OutageStarted,
+                        host.Options.SnoozedUntilUtc);
                 }
             }
         }
@@ -3877,7 +3891,8 @@ public sealed partial class MainForm : Form
                         GetNickname(site.Name, address),
                         HostState.Unknown,
                         null,
-                        null);
+                        null,
+                        GetHostOptions(site, address).SnoozedUntilUtc);
                 }).ToList();
 
                 return new WallboardSiteSnapshot(

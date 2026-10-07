@@ -110,6 +110,12 @@ public sealed partial class MainForm
             System.Diagnostics.Process.Start(start);
         });
         menu.Items.Add(new ToolStripSeparator());
+        if (host.Options.IsSnoozed(DateTimeOffset.UtcNow))
+            menu.Items.Add(new ToolStripMenuItem("Alerts snoozed until " +
+                DisplayTime.Clock(host.Options.SnoozedUntilUtc!.Value.LocalDateTime)) { Enabled = false });
+        Add("Snooze alerts for 1 hour", () => SetHostSnooze(host.Options.Id, DateTimeOffset.UtcNow.AddHours(1)));
+        if (host.Options.IsSnoozed(DateTimeOffset.UtcNow))
+            Add("Resume alerts now", () => SetHostSnooze(host.Options.Id, null));
         Add(host.Options.Enabled ? "Disable monitoring" : "Enable monitoring", () =>
         {
             var current = HostSnapshot().FirstOrDefault(h => h.Options.Id == host.Options.Id);
@@ -128,6 +134,14 @@ public sealed partial class MainForm
         menu.Show(surface, location);
     }
 
+    private void SetHostSnooze(string id, DateTimeOffset? until)
+    {
+        var current = HostSnapshot().FirstOrDefault(h => h.Options.Id == id);
+        if (current == null) return;
+        var options = current.Options.Copy(); options.SnoozedUntilUtc = until;
+        SaveManagedHosts(new() { current with { Options = options } });
+    }
+
     private List<ManagedHost> HostSnapshot() => _sites.SelectMany(site => site.Hosts.Select(address =>
         new ManagedHost(site.Name, address, GetNickname(site.Name, address), GetCategory(site.Name, address),
             GetHostOptions(site, address).Copy(), _hosts.TryGetValue(BuildHostKey(site.Name, address), out var host) ? host.State.ToString() : "Unknown"))).ToList();
@@ -136,7 +150,7 @@ public sealed partial class MainForm
         if (_hostInventory == null || _hostInventory.IsDisposed) return;
         _hostInventory.Rows.Clear();
         foreach (var h in HostSnapshot().Where(h => _selectedSiteName == null || h.Site == _selectedSiteName))
-            _hostInventory.Rows.Add(h.Label, h.Address, h.Site, h.Group, h.Options.Enabled ? "Enabled" : "Disabled");
+            _hostInventory.Rows.Add(h.Label, h.Address, h.Site, h.Group, h.Options.IsSnoozed(DateTimeOffset.UtcNow) ? "Alerts snoozed" : h.Options.Enabled ? "Enabled" : "Disabled");
     }
     private void OpenHostManager()
     {

@@ -1765,6 +1765,9 @@ internal sealed class WallboardCanvas : Control
         string address = host.Address.Trim();
         string label = host.Label.Trim();
 
+        if (host.SnoozedUntilUtc is { } until && until > DateTimeOffset.UtcNow)
+            return (string.IsNullOrWhiteSpace(label) ? "Alerts snoozed" : label + " [snoozed]", address);
+
         return string.IsNullOrWhiteSpace(label)
             ? (address, null)
             : (label, address);
