@@ -51,6 +51,10 @@ internal sealed class SettingsForm : Form
 
     private readonly Dictionary<string, Control> _pages = new(StringComparer.OrdinalIgnoreCase);
     private bool _loading;
+    private AppSettingsSnapshot? _baseline;
+    private readonly Label _saveStatus = new() { AutoSize = true, Padding = new Padding(0, 8, 12, 0) };
+    private readonly CheckBox _autoStart = new() { Text = "Start monitoring automatically when the app opens", AutoSize = true };
+    private readonly Button _resetButton = new() { Text = "Restore default settings…", AutoSize = true };
 
     public SettingsForm(
         Func<AppSettingsSnapshot> provider,
@@ -84,10 +88,27 @@ internal sealed class SettingsForm : Form
         BuildLayout();
         ApplyTheme();
 
-        _nav.Items.AddRange(Presentation.SettingsPages.Cast<object>().ToArray());
+        _nav.Items.AddRange(new object[] { "General", "Display", "Monitoring", "Notifications", "History", "Updates", "Advanced" });
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
 
+        foreach (var check in new[] { _autoStart, _restoreLastSite, _use12HourTime, _minimizeToTray,
+            _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
+            check.CheckedChanged += (_, _) => UpdateDirtyState();
+        foreach (var number in new[] { _interval, _timeout, _downAfter, _recoverAfter })
+            number.ValueChanged += (_, _) => UpdateDirtyState();
+        _historyRange.SelectedIndexChanged += (_, _) => UpdateDirtyState();
+        KeyPreview = true;
+        KeyDown += (_, e) => { if (e.Control && e.KeyCode == Keys.S) { SaveSettings(); e.SuppressKeyPress = true; } };
+        FormClosing += (_, e) =>
+        {
+            if (!HasChanges()) return;
+            var answer = MessageBox.Show(this, "Save your settings before closing?", "Unsaved settings",
+                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (answer == DialogResult.Cancel) e.Cancel = true;
+            else if (answer == DialogResult.Yes) { SaveSettings(); e.Cancel = HasChanges(); }
+        };
+        _resetButton.Click += (_, _) => RestoreDefaults();
         _saveButton.Click += (_, _) => SaveSettings();
         _closeButton.Click += (_, _) => Close();
         _openHistoryButton.Click += (_, _) => _openHistory();
@@ -203,6 +224,9 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(_content, 1, 1);
 
         _pages["General"] = BuildGeneralPage();
+        _pages["Display"] = BuildDisplayPage();
+        _pages["Notifications"] = BuildNotificationsPage();
+        _pages["Advanced"] = BuildAdvancedPage();
         _pages["Monitoring"] = BuildMonitoringPage();
         _pages["History"] = BuildHistoryPage();
         _pages["Updates"] = BuildUpdatesPage();
@@ -224,6 +248,7 @@ internal sealed class SettingsForm : Form
         };
         footer.Controls.Add(_closeButton);
         footer.Controls.Add(_saveButton);
+        footer.Controls.Add(_saveStatus);
         root.Controls.Add(footer, 0, 2);
         root.SetColumnSpan(footer, 2);
 
@@ -240,16 +265,40 @@ internal sealed class SettingsForm : Form
             _minimizeToTray,
             "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues."));
         stack.Controls.Add(Section("Startup view", _restoreLastSite, "All Hosts opens by default. Enable this to reopen the site you last selected."));
-        stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
-        stack.Controls.Add(Section(
-            "Notifications",
-            _notifications,
-            "Controls outage and recovery notifications. Monitoring and history recording continue either way."));
-        stack.Controls.Add(Section(
-            "CLI displays",
-            new Control[] { _showMainCli, _wallboardCli },
-            "Choose which command-trace views are visible by default."));
+        stack.Controls.Add(Section("Monitoring startup", _autoStart, "When enabled, saved hosts start monitoring on launch. Disabled hosts remain excluded."));
 
+        return page;
+    }
+
+    private Control BuildDisplayPage()
+    {
+        var page = Page("Display", "Clock format and command-trace visibility.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
+        stack.Controls.Add(Section("CLI displays", new Control[] { _showMainCli, _wallboardCli },
+            "Choose which command-trace views are visible by default."));
+        return page;
+    }
+
+    private Control BuildNotificationsPage()
+    {
+        var page = Page("Notifications", "Outage alerts and temporary quiet periods.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(Section("Windows notifications", _notifications,
+            "Receive notifications when a host goes down or recovers. Monitoring and history continue when alerts are off."));
+        stack.Controls.Add(new Label { Text = "To mute one host for an hour, right-click it and choose Snooze alerts. Resume alerts cancels the snooze early. Snooze survives a restart and expires automatically.",
+            AutoSize = true, MaximumSize = new Size(540, 0), Margin = new Padding(0, 8, 0, 8) });
+        return page;
+    }
+
+    private Control BuildAdvancedPage()
+    {
+        var page = Page("Advanced", "Developer controls and preference recovery.");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(Section("Developer controls", _showHomeUpdateControl,
+            "Expose the update button in the main window and Wallboard. Manual checks are always available in Updates."));
+        stack.Controls.Add(Section("Restore preferences", _resetButton,
+            "Stages the default settings for review. Save Settings applies them. Hosts, site organization, and outage history are preserved. Active-session timing stays unchanged."));
         return page;
     }
 
@@ -295,7 +344,7 @@ internal sealed class SettingsForm : Form
         stack.Controls.Add(_autoUpdates);
 
         _showHomeUpdateControl.Margin = new Padding(0, 4, 0, 14);
-        stack.Controls.Add(_showHomeUpdateControl);
+
 
         stack.Controls.Add(_updateButton);
         stack.Controls.Add(new Label
@@ -348,6 +397,23 @@ internal sealed class SettingsForm : Form
             AutoScroll = true,
             Margin = new Padding(0)
         };
+        void FitPage()
+        {
+            int width = Math.Max(100, stack.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 6);
+            foreach (Control child in stack.Controls)
+            {
+                child.MinimumSize = new Size(width, child.MinimumSize.Height);
+                child.MaximumSize = new Size(width, 0);
+                foreach (var label in child.Controls.OfType<Label>())
+                {
+                    label.MaximumSize = new Size(Math.Max(80, width - child.Padding.Horizontal - 10), 0);
+                    if (label == _updateStatus) label.AutoSize = true;
+                }
+            }
+            foreach (var label in head.Controls.OfType<Label>()) label.MaximumSize = new Size(Math.Max(80, head.ClientSize.Width), 0);
+        }
+        stack.SizeChanged += (_, _) => FitPage();
+        page.VisibleChanged += (_, _) => FitPage();
         page.Controls.Add(head, 0, 0);
         page.Controls.Add(stack, 0, 1);
         return page;
@@ -361,8 +427,7 @@ internal sealed class SettingsForm : Form
         var panel = new FlowLayoutPanel
         {
             AutoSize = true,
-            MinimumSize = new Size(560, 0),
-            MaximumSize = new Size(620, 0),
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             Padding = new Padding(14),
@@ -397,7 +462,7 @@ internal sealed class SettingsForm : Form
         var row = new FlowLayoutPanel
         {
             AutoSize = true,
-            MinimumSize = new Size(560, 48),
+            MinimumSize = new Size(0, 48),
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             Padding = new Padding(0, 7, 0, 7),
@@ -431,7 +496,7 @@ internal sealed class SettingsForm : Form
         var panel = new FlowLayoutPanel
         {
             AutoSize = true,
-            MinimumSize = new Size(560, 58),
+            MinimumSize = new Size(0, 58),
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             Margin = new Padding(0, 0, 0, 10)
@@ -456,7 +521,7 @@ internal sealed class SettingsForm : Form
         _nav.BackColor = nav;
         _nav.ForeColor = text;
 
-        foreach (var button in new[] { _saveButton, _closeButton, _openHistoryButton, _updateButton })
+        foreach (var button in new[] { _saveButton, _closeButton, _openHistoryButton, _updateButton, _resetButton })
         {
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderColor = border;
@@ -498,6 +563,7 @@ internal sealed class SettingsForm : Form
         try
         {
             var s = _provider();
+            _baseline = s;
             _interval.Value = Clamp(_interval, s.PingIntervalSeconds);
             _timeout.Value = Clamp(_timeout, s.PingTimeoutMs);
             _downAfter.Value = Clamp(_downAfter, s.FailureThreshold);
@@ -508,39 +574,75 @@ internal sealed class SettingsForm : Form
             _notifications.Checked = s.NotificationsEnabled;
             _use12HourTime.Checked = s.Use12HourTime;
             _restoreLastSite.Checked = s.RestoreLastSiteOnStartup;
+            _autoStart.Checked = s.StartMonitoringOnLaunch;
             _autoUpdates.Checked = s.AutoCheckUpdates;
             _showHomeUpdateControl.Checked = s.ShowUpdateControlOnHome;
             _historyRange.SelectedIndex = HistoryHoursToIndex(s.EventHistoryHours);
             _hideSuspects.Checked = s.HideSuspectEvents;
             RefreshRuntimeState();
         }
-        finally { _loading = false; }
+        finally { _loading = false; UpdateDirtyState(); }
     }
 
-    private void SaveSettings()
+    private AppSettingsSnapshot ReadSettings(AppSettingsSnapshot current) => current with
+    {
+        PingIntervalSeconds = (int)_interval.Value, PingTimeoutMs = (int)_timeout.Value,
+        FailureThreshold = (int)_downAfter.Value, RecoveryThreshold = (int)_recoverAfter.Value,
+        ShowCommandView = _showMainCli.Checked, WallboardShowCli = _wallboardCli.Checked,
+        MinimizeToTray = _minimizeToTray.Checked, NotificationsEnabled = _notifications.Checked,
+        AutoCheckUpdates = _autoUpdates.Checked, ShowUpdateControlOnHome = _showHomeUpdateControl.Checked,
+        EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
+        Use12HourTime = _use12HourTime.Checked, RestoreLastSiteOnStartup = _restoreLastSite.Checked,
+        StartMonitoringOnLaunch = _autoStart.Checked, HideSuspectEvents = _hideSuspects.Checked
+    };
+    private bool HasChanges() => !_loading && _baseline != null && ReadSettings(_baseline) != _baseline;
+    private void UpdateDirtyState()
     {
         if (_loading) return;
-
-        var current = _provider();
-        var settings = current with
+        bool dirty = HasChanges();
+        _saveButton.Enabled = dirty;
+        _saveStatus.Text = dirty ? "Unsaved changes" : "All changes saved";
+    }
+    private void SaveSettings()
+    {
+        if (_loading || !HasChanges()) return;
+        try { _apply(ReadSettings(_provider())); LoadSettings(); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Settings could not be saved"); }
+    }
+    private void RestoreDefaults()
+    {
+        if (MessageBox.Show(this, "Stage the default settings? Review them, then click Save Settings to apply.",
+            "Restore defaults", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (!_provider().MonitoringActive)
+        { _interval.Value = 2; _timeout.Value = 1000; _downAfter.Value = 3; _recoverAfter.Value = 2; }
+        _minimizeToTray.Checked = true; _restoreLastSite.Checked = false; _autoStart.Checked = false;
+        _use12HourTime.Checked = false; _notifications.Checked = true;
+        _showMainCli.Checked = true; _wallboardCli.Checked = true;
+        _autoUpdates.Checked = true; _showHomeUpdateControl.Checked = false;
+        _historyRange.SelectedIndex = 0; _hideSuspects.Checked = true;
+        UpdateDirtyState();
+    }
+    internal void RunLayoutChecks()
+    {
+        bool original = _autoStart.Checked;
+        _autoStart.Checked = !original;
+        if (!HasChanges() || !_saveButton.Enabled) throw new InvalidOperationException("Settings edits are not marked unsaved.");
+        _autoStart.Checked = original;
+        if (HasChanges()) throw new InvalidOperationException("Reverting settings left a dirty state.");
+        foreach (int width in new[] { 760, 1100 })
         {
-            PingIntervalSeconds = (int)_interval.Value,
-            PingTimeoutMs = (int)_timeout.Value,
-            FailureThreshold = (int)_downAfter.Value,
-            RecoveryThreshold = (int)_recoverAfter.Value,
-            ShowCommandView = _showMainCli.Checked,
-            WallboardShowCli = _wallboardCli.Checked,
-            MinimizeToTray = _minimizeToTray.Checked,
-            NotificationsEnabled = _notifications.Checked,
-            AutoCheckUpdates = _autoUpdates.Checked,
-            ShowUpdateControlOnHome = _showHomeUpdateControl.Checked,
-            EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
-            Use12HourTime = _use12HourTime.Checked,
-            RestoreLastSiteOnStartup = _restoreLastSite.Checked,
-            HideSuspectEvents = _hideSuspects.Checked
-        };
-        _apply(settings);
-        LoadSettings();
+            Width = width;
+            for (int i = 0; i < _nav.Items.Count; i++)
+            {
+                _nav.SelectedIndex = i; PerformLayout();
+                var page = (TableLayoutPanel)_pages[_nav.Items[i].ToString()!];
+                var stack = (FlowLayoutPanel)page.Controls[1]; stack.PerformLayout();
+                foreach (Control child in stack.Controls)
+                    if (child.Width > stack.ClientSize.Width)
+                        throw new InvalidOperationException("Settings section exceeds page width.");
+            }
+        }
+        _nav.SelectedIndex = 0;
     }
 
     private static decimal Clamp(NumericUpDown control, int value) =>

@@ -6,6 +6,7 @@ internal sealed class UserPreferences
 {
     public bool ShowUpdateControlOnHome { get; set; }
     public bool RestoreLastSiteOnStartup { get; set; }
+    public bool StartMonitoringOnLaunch { get; set; }
 }
 
 internal static class UserPreferenceStore
@@ -61,9 +62,9 @@ internal static class UserPreferenceStore
         string path = Path.Combine(directory, "preferences.json");
         try
         {
-            Save(path, new UserPreferences { ShowUpdateControlOnHome = true, RestoreLastSiteOnStartup = true });
+            Save(path, new UserPreferences { ShowUpdateControlOnHome = true, RestoreLastSiteOnStartup = true, StartMonitoringOnLaunch = true });
             var loaded = Load(path, fallbackShowUpdateControl: false);
-            if (!loaded.ShowUpdateControlOnHome || !loaded.RestoreLastSiteOnStartup)
+            if (!loaded.ShowUpdateControlOnHome || !loaded.RestoreLastSiteOnStartup || !loaded.StartMonitoringOnLaunch)
                 throw new InvalidOperationException("User preference persistence regression.");
         }
         finally
@@ -76,6 +77,7 @@ internal static class UserPreferenceStore
 public sealed partial class MainForm
 {
     private bool _restoreLastSiteOnStartup;
+    private bool _startMonitoringOnLaunch;
     private void ApplyStartupView()
     {
         if (!_restoreLastSiteOnStartup) _selectedSiteName = null;
@@ -96,6 +98,7 @@ public sealed partial class MainForm
             _showUpdateControlOnHome);
         _showUpdateControlOnHome = preferences.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = preferences.RestoreLastSiteOnStartup;
+        _startMonitoringOnLaunch = preferences.StartMonitoringOnLaunch;
     }
 
     private void SaveUserPreferences()
@@ -108,7 +111,8 @@ public sealed partial class MainForm
             new UserPreferences
             {
                 ShowUpdateControlOnHome = _showUpdateControlOnHome,
-                RestoreLastSiteOnStartup = _restoreLastSiteOnStartup
+                RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
+                StartMonitoringOnLaunch = _startMonitoringOnLaunch
             });
     }
 }

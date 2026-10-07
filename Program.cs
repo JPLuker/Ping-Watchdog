@@ -411,7 +411,8 @@ internal sealed record AppSettingsSnapshot(
     string Version,
     string UpdateStatus,
     string UpdateActionText,
-    bool RestoreLastSiteOnStartup = false);
+    bool RestoreLastSiteOnStartup = false,
+    bool StartMonitoringOnLaunch = false);
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -895,6 +896,8 @@ public sealed partial class MainForm : Form
                 WindowState = FormWindowState.Maximized;
 
             ApplyResponsiveLayout();
+
+            if (_startMonitoringOnLaunch) StartMonitoring();
 
             if (_autoCheckUpdates)
             {
@@ -1454,6 +1457,7 @@ public sealed partial class MainForm : Form
                 form.OpenSettings();
                 await Task.Delay(100);
                 Check(form._settingsForm?.Visible == true, "Settings did not open.");
+                form._settingsForm!.RunLayoutChecks();
                 Capture(form._settingsForm!, "settings");
                 form._settingsForm!.Close();
 
@@ -1465,6 +1469,11 @@ public sealed partial class MainForm : Form
                 {
                     form._wallboardForm.ClientSize = new Size(width, 900);
                     await Task.Delay(100);
+                    var actionBar = form._wallboardForm.Controls.Find("WallboardActions", true).Single();
+                    Check(actionBar.Parent!.Height <= actionBar.Bottom + 8,
+                        "Wallboard toolbar reserves empty vertical space.");
+                    Check(actionBar.Parent.Height < 180 * form._wallboardForm.DeviceDpi / 96,
+                        "Wallboard toolbar consumed excessive height.");
                     foreach (var button in form._wallboardForm.Controls.Find("WallboardActions", true).Single().Controls.OfType<Button>())
                     {
                         Check(button.Width >= button.PreferredSize.Width && button.Height >= button.PreferredSize.Height,
@@ -4336,7 +4345,8 @@ public sealed partial class MainForm : Form
             GetDisplayVersion(),
             GetUpdateStatusText(),
             GetUpdateActionText(),
-            _restoreLastSiteOnStartup);
+            _restoreLastSiteOnStartup,
+            _startMonitoringOnLaunch);
     }
 
     private string GetUpdateActionText()
@@ -4388,6 +4398,7 @@ public sealed partial class MainForm : Form
         _wallboardShowCli = settings.WallboardShowCli;
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
+        _startMonitoringOnLaunch = settings.StartMonitoringOnLaunch;
         SaveUserPreferences();
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;

@@ -228,59 +228,57 @@ internal sealed class WallboardForm : Form
             Padding = new Padding(0),
             BackColor = Color.FromArgb(5, 9, 14)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var toolbar = new TableLayoutPanel
+        var toolbar = new Panel
         {
+            Name = "WallboardToolbar",
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            AutoSize = true,
-            Padding = new Padding(14, 0, 10, 0),
-            Margin = new Padding(0),
+            Margin = Padding.Empty,
             BackColor = Color.FromArgb(9, 15, 22)
         };
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        toolbar.Controls.Add(new Label
+        var title = new Label
         {
             Text = "PING WATCHDOG • WALLBOARD",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold),
             ForeColor = Color.FromArgb(191, 211, 231),
-            Margin = new Padding(4, 12, 0, 0)
-        }, 0, 0);
-
+            Location = new Point(18, 8)
+        };
         var actions = new FlowLayoutPanel
         {
             Name = "WallboardActions",
-            AutoSize = true,
+            AutoSize = false,
             WrapContents = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0),
+            Margin = Padding.Empty,
             BackColor = Color.Transparent
         };
-
-        foreach (var button in new[]
-        {
-            _monitorButton,
-            _operationsButton,
-            _cliButton,
-            _historyButton,
-            _settingsButton,
-            _updateButton,
-            _screenButton,
-            _mainButton
-        })
-        {
+        foreach (var button in new[] { _monitorButton, _operationsButton, _cliButton,
+            _historyButton, _settingsButton, _updateButton, _screenButton, _mainButton })
             actions.Controls.Add(button);
+        toolbar.Controls.Add(title);
+        toolbar.Controls.Add(actions);
+        bool sizingToolbar = false;
+        void SizeToolbar()
+        {
+            if (sizingToolbar) return;
+            sizingToolbar = true;
+            try
+            {
+                actions.Location = new Point(14, title.Bottom + 3);
+                actions.Width = Math.Max(1, root.ClientSize.Width - 24);
+                actions.PerformLayout();
+                actions.Height = actions.Controls.Cast<Control>().Where(c => c.Visible)
+                    .Select(c => c.Bottom + c.Margin.Bottom).DefaultIfEmpty(0).Max();
+                root.RowStyles[0].Height = actions.Bottom + 4;
+            }
+            finally { sizingToolbar = false; }
         }
-
-        toolbar.Controls.Add(actions, 0, 1);
-        toolbar.SizeChanged += (_, _) => actions.MaximumSize = new Size(Math.Max(1, toolbar.ClientSize.Width - toolbar.Padding.Horizontal), 0);
+        actions.Layout += (_, _) => SizeToolbar();
+        root.SizeChanged += (_, _) => SizeToolbar();
+        Shown += (_, _) => SizeToolbar();
 
         var content = new Panel
         {
