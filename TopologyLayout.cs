@@ -61,6 +61,19 @@ internal static class TopologyLayout
             candidates.Add(new Rectangle(x, y, width, height));
         }
 
+        // Check exact obstacle edges as well as the coarse search grid. Narrow
+        // free gaps near the canvas edge otherwise go undetected.
+        foreach (var obstacle in occupied)
+        {
+            AddCandidate(0, obstacle.Top - height - 4 - origin.Y);
+            AddCandidate(0, obstacle.Bottom + 4 - origin.Y);
+            AddCandidate(obstacle.Left - width - 4 - origin.X, 0);
+            AddCandidate(obstacle.Right + 4 - origin.X, 0);
+            foreach (int edgeX in new[] { obstacle.Left - width - 4, obstacle.Right + 4 })
+            foreach (int edgeY in new[] { obstacle.Top - height - 4, obstacle.Bottom + 4 })
+                AddCandidate(edgeX - origin.X, edgeY - origin.Y);
+        }
+
         for (int radius = PlacementStep; radius <= MaxCaptionDisplacement; radius += PlacementStep)
         {
             for (int offset = -radius; offset <= radius; offset += PlacementStep)
@@ -106,6 +119,13 @@ internal static class TopologyLayout
         {
             throw new InvalidOperationException("Topology caption escaped its local node area.");
         }
+
+        // A 40px caption fits a 46px gap with 3px clearance on each side;
+        // the 16px search grid alone cannot discover the only valid position.
+        var narrowGap = new List<Rectangle> { new(0, 0, 1000, 301), new(0, 348, 1000, 352) };
+        if (!TryPlaceCaption(new Rectangle(400, 300, 140, 40), bounds, narrowGap, out var gapCaption) ||
+            narrowGap.Any(r => r.IntersectsWith(Rectangle.Inflate(gapCaption, 3, 3))))
+            throw new InvalidOperationException("Topology caption missed an exact nearby gap.");
 
         var blockedLocalArea = new List<Rectangle>
         {

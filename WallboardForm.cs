@@ -1658,8 +1658,13 @@ internal sealed class WallboardCanvas : Control
             : point.X - width - 9;
         int y = point.Y - height / 2;
 
+        // The other side is still attached to the same node, even when the
+        // caption width is larger than the local displacement limit.
+        int alternateX = rightSide ? point.X - width - 9 : point.X + 9;
         if (!TopologyLayout.TryPlaceCaption(new Rectangle(x, y, width, height), topologyBounds,
-            _captionObstacles, out var rect))
+            _captionObstacles, out var rect) &&
+            !TopologyLayout.TryPlaceCaption(new Rectangle(alternateX, y, width, height), topologyBounds,
+                _captionObstacles, out rect))
         {
             _hiddenCaptions++;
             return;
