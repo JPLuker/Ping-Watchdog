@@ -73,9 +73,61 @@ public sealed partial class MainForm
     {
         _hostInventory = HostUi.Grid(); _hostInventory.ReadOnly = true;
         foreach (var name in new[] { "Name", "Address", "Site", "Group", "Monitoring" }) _hostInventory.Columns.Add(name, name);
+        _hostInventory.CellMouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0) return;
+            var row = _hostInventory.Rows[e.RowIndex];
+            ShowHostQuickActions(_hostInventory, _hostInventory.PointToClient(Cursor.Position),
+                row.Cells["Site"].Value?.ToString() ?? "", row.Cells["Address"].Value?.ToString() ?? "");
+        };
         _hostInventory.CellDoubleClick += (_, _) => OpenHostManager();
         return _hostInventory;
     }
+    private void ShowHostQuickActions(Control surface, Point location, string site, string address)
+    {
+        var host = HostSnapshot().FirstOrDefault(h =>
+            h.Site.Equals(site, StringComparison.OrdinalIgnoreCase) &&
+            h.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
+        if (host == null) return;
+        var menu = new ContextMenuStrip { BackColor = Color.FromArgb(22, 27, 34), ForeColor = Color.White };
+        void Add(string title, Action action) => menu.Items.Add(title, null, (_, _) =>
+        {
+            try { action(); }
+            catch (Exception ex) { MessageBox.Show(surface.FindForm(), ex.Message, "Host action failed"); }
+        });
+        menu.Items.Add(new ToolStripMenuItem(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address) { Enabled = false });
+        Add("Copy address", () => Clipboard.SetText(address));
+        Add("Set label / nickname…", () =>
+        {
+            using var dialog = new NicknameDialog(address, host.Label);
+            if (dialog.ShowDialog(surface.FindForm()) == DialogResult.OK)
+                SaveManagedHosts(new() { host with { Label = dialog.Nickname } });
+        });
+        Add("Ping in command window", () =>
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("ping.exe") { UseShellExecute = true };
+            start.ArgumentList.Add("-t"); start.ArgumentList.Add(address);
+            System.Diagnostics.Process.Start(start);
+        });
+        menu.Items.Add(new ToolStripSeparator());
+        Add(host.Options.Enabled ? "Disable monitoring" : "Enable monitoring", () =>
+        {
+            var current = HostSnapshot().FirstOrDefault(h => h.Options.Id == host.Options.Id);
+            if (current == null) return;
+            var options = current.Options.Copy(); options.Enabled = !options.Enabled;
+            SaveManagedHosts(new() { current with { Options = options } });
+        });
+        menu.Items.Add(new ToolStripSeparator());
+        Add("Remove host…", () =>
+        {
+            if (MessageBox.Show(surface.FindForm(), $"Remove {address} from {site}?", "Remove host",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                DeleteManagedHosts(new() { host });
+        });
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Show(surface, location);
+    }
+
     private List<ManagedHost> HostSnapshot() => _sites.SelectMany(site => site.Hosts.Select(address =>
         new ManagedHost(site.Name, address, GetNickname(site.Name, address), GetCategory(site.Name, address),
             GetHostOptions(site, address).Copy(), _hosts.TryGetValue(BuildHostKey(site.Name, address), out var host) ? host.State.ToString() : "Unknown"))).ToList();

@@ -1079,6 +1079,24 @@ public sealed partial class MainForm : Form
             }
         }
 
+        foreach (var viewport in new[] { new Size(1600, 1000), new Size(900, 650) })
+        {
+            var hitHosts = Enumerable.Range(1, 8).Select(i =>
+                new WallboardHostSnapshot("Hit test", $"192.0.2.{i}", $"Host {i}", HostState.Online, 1, null)).ToArray();
+            using var canvas = new WallboardCanvas { Size = viewport, ShowCli = false,
+                Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                    new[] { new WallboardSiteSnapshot("Hit test", hitHosts) },
+                    Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) };
+            using var bitmap = new Bitmap(viewport.Width, viewport.Height);
+            canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
+            var found = new HashSet<string>();
+            for (int y = 0; y < viewport.Height; y += 2)
+                for (int x = 0; x < viewport.Width; x += 2)
+                    if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
+            Check(found.Count == hitHosts.Length, "Wallboard right-click targets lost hosts after scaling.");
+            Check(canvas.HitTestHost(Point.Empty) == null, "Background must not target a host.");
+        }
+
         var labeledNode = WallboardCanvas.FormatHostNodeLines(
             new WallboardHostSnapshot(
                 "Test Site",
@@ -2819,21 +2837,7 @@ public sealed partial class MainForm : Form
         _gridMenu.BackColor = Color.FromArgb(22, 27, 34);
         _gridMenu.ForeColor = Color.FromArgb(230, 237, 243);
 
-        var setLabel = new ToolStripMenuItem("Set label / nickname");
-        var clearLabel = new ToolStripMenuItem("Clear label");
-        var setCategory = new ToolStripMenuItem("Set category...");
-        var clearCategory = new ToolStripMenuItem("Clear category");
-
-        setLabel.Click += (_, _) => SetLabelForSelectedHost();
-        clearLabel.Click += (_, _) => ClearLabelForSelectedHost();
-        setCategory.Click += (_, _) => SetCategoryForSelectedHost();
-        clearCategory.Click += (_, _) => ClearCategoryForSelectedHost();
-
-        _gridMenu.Items.Add(setLabel);
-        _gridMenu.Items.Add(clearLabel);
-        _gridMenu.Items.Add(new ToolStripSeparator());
-        _gridMenu.Items.Add(setCategory);
-        _gridMenu.Items.Add(clearCategory);
+        _gridMenu.Opening += (_, e) => e.Cancel = true;
         _grid.ContextMenuStrip = _gridMenu;
     }
 
@@ -2847,6 +2851,9 @@ public sealed partial class MainForm : Form
 
         if (e.ColumnIndex >= 0)
             _grid.CurrentCell = _grid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+        var identity = GetSelectedHostIdentity();
+        if (identity != null)
+            ShowHostQuickActions(_grid, _grid.PointToClient(Cursor.Position), identity.Value.Site, identity.Value.Host);
     }
 
     private (string Site, string Host)? GetSelectedHostIdentity()
@@ -4207,7 +4214,8 @@ public sealed partial class MainForm : Form
             target,
             CycleEventHistoryWindow,
             ToggleSuspectHistory,
-            _wallboardShowCli);
+            _wallboardShowCli,
+            ShowHostQuickActions);
 
         _wallboardForm.FormClosed += (_, _) =>
         {

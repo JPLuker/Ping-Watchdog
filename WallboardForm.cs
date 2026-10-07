@@ -100,7 +100,8 @@ internal sealed class WallboardForm : Form
         Screen targetScreen,
         Action cycleHistoryWindow,
         Action toggleSuspectHistory,
-        bool showCliByDefault)
+        bool showCliByDefault,
+        Action<Control, Point, string, string>? hostQuickActions = null)
     {
         _snapshotProvider = snapshotProvider;
         _controlProvider = controlProvider;
@@ -108,6 +109,17 @@ internal sealed class WallboardForm : Form
         _cycleHistoryWindow = cycleHistoryWindow;
         _toggleSuspectHistory = toggleSuspectHistory;
         _showCli = showCliByDefault;
+        _canvas.HostRightClicked += (host, point) =>
+            hostQuickActions?.Invoke(_canvas, point, host.Site, host.Address);
+        _hostGrid.CellMouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0) return;
+            _hostGrid.ClearSelection();
+            var row = _hostGrid.Rows[e.RowIndex]; row.Selected = true;
+            hostQuickActions?.Invoke(_hostGrid, _hostGrid.PointToClient(Cursor.Position),
+                row.Cells["SiteColumn"].Value?.ToString() ?? "",
+                row.Cells["HostColumn"].Value?.ToString() ?? "");
+        };
 
         Text = "Ping Watchdog Wallboard";
         Icon = _appIcon;
@@ -977,6 +989,27 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _coreFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
     private readonly Font _cliFont = new("Cascadia Mono", 8.5f);
 
+    private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostHitRegions = new();
+    private Rectangle _topologyViewport;
+    private Size _topologyVirtualSize;
+    internal event Action<WallboardHostSnapshot, Point>? HostRightClicked;
+
+    internal WallboardHostSnapshot? HitTestHost(Point location)
+    {
+        if (!_topologyViewport.Contains(location) || _topologyVirtualSize.Width <= 0) return null;
+        var point = new Point(
+            (int)((location.X - _topologyViewport.X) * (double)_topologyVirtualSize.Width / _topologyViewport.Width),
+            (int)((location.Y - _topologyViewport.Y) * (double)_topologyVirtualSize.Height / _topologyViewport.Height));
+        return _hostHitRegions.LastOrDefault(hit => hit.Bounds.Contains(point)).Host;
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (e.Button == MouseButtons.Right && HitTestHost(e.Location) is { } host)
+            HostRightClicked?.Invoke(host, e.Location);
+    }
+
     public WallboardSnapshot? Snapshot { get; set; }
     public bool ShowCli { get; set; } = true;
     internal Rectangle BrandLogoBounds => new(22, 12, 58, 58);
@@ -1038,6 +1071,7 @@ internal sealed class WallboardCanvas : Control
             "Last 24 hours",
             true);
 
+        _hostHitRegions.Clear();
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
@@ -1237,15 +1271,23 @@ internal sealed class WallboardCanvas : Control
             snapshot.Sites.Count,
             visibleHosts);
 
+        _topologyViewport = rect;
         if (renderScale >= 0.995)
         {
+            _topologyVirtualSize = rect.Size;
             DrawTopologyCore(g, snapshot, rect);
+            for (int i = 0; i < _hostHitRegions.Count; i++)
+            {
+                var hit = _hostHitRegions[i]; var bounds = hit.Bounds;
+                bounds.Offset(-rect.X, -rect.Y); _hostHitRegions[i] = (bounds, hit.Host);
+            }
             return;
         }
 
         int virtualWidth = Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
         int virtualHeight = Math.Max(rect.Height, (int)Math.Ceiling(rect.Height / renderScale));
 
+        _topologyVirtualSize = new Size(virtualWidth, virtualHeight);
         using var bitmap = new Bitmap(virtualWidth, virtualHeight);
         using (var virtualGraphics = Graphics.FromImage(bitmap))
         {
@@ -1612,6 +1654,7 @@ internal sealed class WallboardCanvas : Control
             g.FillEllipse(nodeBrush, point.X - 5, point.Y - 5, 10, 10);
             g.DrawEllipse(nodeBorder, point.X - 5, point.Y - 5, 10, 10);
 
+            _hostHitRegions.Add((new Rectangle(point.X - 10, point.Y - 10, 20, 20), host));
             DrawHostNodeCaption(g, host, point, angle, topologyBounds);
         }
 
@@ -1670,6 +1713,7 @@ internal sealed class WallboardCanvas : Control
             return;
         }
         _captionObstacles.Add(rect);
+        _hostHitRegions.Add((rect, host));
         using (var leader = new Pen(StateColor(host.State, 120), 1))
             g.DrawLine(leader, point, new Point(Math.Clamp(point.X, rect.Left, rect.Right),
                 Math.Clamp(point.Y, rect.Top, rect.Bottom)));
