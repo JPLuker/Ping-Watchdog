@@ -459,7 +459,8 @@ internal sealed record WallboardActions(
     Func<Task> RunUpdateAction,
     Action SaveConfig,
     Action LoadConfig,
-    Action ClearCommandLog);
+    Action ClearCommandLog,
+    Action? OpenHosts = null);
 
 internal sealed record WallboardHostSnapshot(
     string Site,
@@ -1501,6 +1502,13 @@ public sealed partial class MainForm : Form
                         Check(button.Parent!.ClientRectangle.Contains(button.Bounds), "Wallboard action extends outside toolbar.");
                     }
                 }
+                Check(form._wallboardForm.Controls.Find("WallboardToolbar", true).Single().Controls.OfType<Label>().Count() == 0,
+                    "Duplicate Wallboard branding returned in the toolbar.");
+                form.OpenHostManager(form._wallboardForm);
+                await Task.Delay(100);
+                Check(form._hostManager?.Visible == true && form._hostManager.Owner == form._wallboardForm,
+                    "Wallboard must open the shared Hosts manager.");
+                form._hostManager!.Close();
                 await CheckHostMenu(canvas);
                 Check(canvas.ClientRectangle.Contains(canvas.BrandLogoBounds), "Wallboard dog is outside the canvas.");
                 using (var rendered = new Bitmap(canvas.Width, canvas.Height))
@@ -1694,7 +1702,7 @@ public sealed partial class MainForm : Form
 
         _brandTitleLabel = new Label
         {
-            Text = "PING WATCHDOG",
+            Text = "Ping Watchdog",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 19, FontStyle.Bold),
             ForeColor = Color.White,
@@ -2032,7 +2040,7 @@ public sealed partial class MainForm : Form
         commandHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         commandHeader.Controls.Add(new Label
         {
-            Text = "CLI trace",
+            Text = "Ping activity",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 9.25f, FontStyle.Bold),
             Padding = new Padding(2, 6, 0, 0),
@@ -2398,7 +2406,7 @@ public sealed partial class MainForm : Form
         RefreshHostInventory();
         if (_selectedSiteName is null)
         {
-            _siteHeaderLabel.Text = "All sites • Read-only inventory";
+            _siteHeaderLabel.Text = "All hosts";
             _ipBox.ReadOnly = true;
             _ipBox.Text = string.Join(
                 Environment.NewLine,
@@ -4326,7 +4334,8 @@ public sealed partial class MainForm : Form
                 RunUpdateActionAsync,
                 () => SaveConfigFile(_wallboardForm),
                 () => LoadConfigFile(_wallboardForm),
-                ClearCommandLog),
+                ClearCommandLog,
+                () => OpenHostManager(_wallboardForm)),
             target,
             CycleEventHistoryWindow,
             ToggleSuspectHistory,

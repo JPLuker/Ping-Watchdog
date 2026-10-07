@@ -26,8 +26,8 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _restoreLastSite = new() { Text = "Restore the last selected site on startup", AutoSize = true };
     private readonly CheckBox _use12HourTime = new() { Text = "Use 12-hour time (AM / PM)", AutoSize = true };
     private readonly CheckBox _notifications = new() { Text = "Windows outage and recovery notifications", AutoSize = true };
-    private readonly CheckBox _showMainCli = new() { Text = "Show CLI trace in the main window", AutoSize = true };
-    private readonly CheckBox _wallboardCli = new() { Text = "Show CLI trace when Wallboard opens", AutoSize = true };
+    private readonly CheckBox _showMainCli = new() { Text = "Show ping log in the main window", AutoSize = true };
+    private readonly CheckBox _wallboardCli = new() { Text = "Show ping log when Wallboard opens", AutoSize = true };
 
     private readonly NumericUpDown _interval = Number(1, 300, 2, 1, 90);
     private readonly NumericUpDown _timeout = Number(250, 10000, 1000, 250, 110);
@@ -272,11 +272,11 @@ internal sealed class SettingsForm : Form
 
     private Control BuildDisplayPage()
     {
-        var page = Page("Display", "Clock format and command-trace visibility.");
+        var page = Page("Display", "Clock format and ping-log visibility.");
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
-        stack.Controls.Add(Section("CLI displays", new Control[] { _showMainCli, _wallboardCli },
-            "Choose which command-trace views are visible by default."));
+        stack.Controls.Add(Section("Ping log", new Control[] { _showMainCli, _wallboardCli },
+            "Choose where ping commands and replies are shown by default."));
         return page;
     }
 

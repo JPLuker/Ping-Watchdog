@@ -170,12 +170,13 @@ public sealed partial class MainForm
         foreach (var h in HostSnapshot().Where(h => _selectedSiteName == null || h.Site == _selectedSiteName))
             _hostInventory.Rows.Add(h.Label, h.Address, h.Site, h.Group, h.Options.IsSnoozed(DateTimeOffset.UtcNow) ? "Alerts snoozed" : h.Options.Enabled ? "Enabled" : "Disabled");
     }
-    private void OpenHostManager()
+    private void OpenHostManager() => OpenHostManager(null);
+    private void OpenHostManager(Form? owner)
     {
         if (_hostManager is { IsDisposed: false }) { _hostManager.RefreshNow(); _hostManager.Activate(); return; }
         _hostManager = new HostManagerForm(HostSnapshot, SaveManagedHosts, DeleteManagedHosts, OpenQuickAdd, SaveTemporaryHosts, () => _sites.Select(s => s.Name).ToList());
         _hostManager.FormClosed += (_, _) => _hostManager = null;
-        _hostManager.Show(this);
+        _hostManager.Show(owner ?? this);
     }
     private void OpenQuickAdd(bool temporary)
     {

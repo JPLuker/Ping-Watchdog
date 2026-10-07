@@ -58,26 +58,27 @@ internal sealed class WallboardForm : Form
     private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 72);
 
     private readonly Button _monitorButton = ToolbarButton("Start Monitoring", 112);
-    private readonly Button _operationsButton = ToolbarButton("Operations", 88);
+    private readonly Button _operationsButton = ToolbarButton("Sites", 66);
+    private readonly Button _hostsButton = ToolbarButton("Hosts", 66);
     private readonly Button _cliButton = ToolbarButton("CLI", 58);
-    private readonly Button _historyButton = ToolbarButton("History", 72);
+    private readonly Button _historyButton = ToolbarButton("Outage history", 102);
     private readonly Button _settingsButton = ToolbarButton("Settings", 74);
     private readonly Button _updateButton = ToolbarButton("Check Updates", 112);
-    private readonly Button _screenButton = ToolbarButton("Screen", 66);
-    private readonly Button _mainButton = ToolbarButton("Main Window", 92);
+    private readonly Button _screenButton = ToolbarButton("Move to next display", 130);
+    private readonly Button _mainButton = ToolbarButton("Exit Wallboard", 100);
 
     private readonly Button _applyHostsButton = DrawerButton("Apply Hosts");
-    private readonly Button _addSiteButton = DrawerButton("+ Add Site");
+    private readonly Button _addSiteButton = DrawerButton("Add site…");
     private readonly Button _renameSiteButton = DrawerButton("Rename");
     private readonly Button _deleteSiteButton = DrawerButton("Delete");
-    private readonly Button _organizeButton = DrawerButton("Folders / Organization");
+    private readonly Button _organizeButton = DrawerButton("Organize sites…");
     private readonly Button _editLabelButton = DrawerButton("Edit Label");
     private readonly Button _clearLabelButton = DrawerButton("Clear Label");
     private readonly Button _applyMonitoringButton = DrawerButton("Apply Monitoring Defaults");
-    private readonly Button _exportButton = DrawerButton("Export Config");
-    private readonly Button _importButton = DrawerButton("Import Config");
-    private readonly Button _clearCliButton = DrawerButton("Clear CLI");
-    private readonly Button _closeDrawerButton = DrawerButton("Close Operations");
+    private readonly Button _exportButton = DrawerButton("Export configuration…");
+    private readonly Button _importButton = DrawerButton("Import configuration…");
+    private readonly Button _clearCliButton = DrawerButton("Clear ping log");
+    private readonly Button _closeDrawerButton = DrawerButton("Close sites");
 
     private readonly Label _updateStatusLabel = new()
     {
@@ -238,14 +239,6 @@ internal sealed class WallboardForm : Form
             Margin = Padding.Empty,
             BackColor = Color.FromArgb(9, 15, 22)
         };
-        var title = new Label
-        {
-            Text = "PING WATCHDOG • WALLBOARD",
-            AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold),
-            ForeColor = Color.FromArgb(191, 211, 231),
-            Location = new Point(18, 8)
-        };
         var actions = new FlowLayoutPanel
         {
             Name = "WallboardActions",
@@ -255,10 +248,9 @@ internal sealed class WallboardForm : Form
             Margin = Padding.Empty,
             BackColor = Color.Transparent
         };
-        foreach (var button in new[] { _monitorButton, _operationsButton, _cliButton,
+        foreach (var button in new[] { _monitorButton, _operationsButton, _hostsButton, _cliButton,
             _historyButton, _settingsButton, _updateButton, _screenButton, _mainButton })
             actions.Controls.Add(button);
-        toolbar.Controls.Add(title);
         toolbar.Controls.Add(actions);
         bool sizingToolbar = false;
         void SizeToolbar()
@@ -267,7 +259,7 @@ internal sealed class WallboardForm : Form
             sizingToolbar = true;
             try
             {
-                actions.Location = new Point(14, title.Bottom + 3);
+                actions.Location = new Point(14, 4);
                 actions.Width = Math.Max(1, root.ClientSize.Width - 24);
                 actions.PerformLayout();
                 actions.Height = actions.Controls.Cast<Control>().Where(c => c.Visible)
@@ -313,9 +305,7 @@ internal sealed class WallboardForm : Form
             Margin = new Padding(0)
         };
 
-        stack.Controls.Add(SectionTitle("Operations"));
-        stack.Controls.Add(SectionNote(
-            "Wallboard controls the same live Ping Watchdog session as the main window."));
+        stack.Controls.Add(SectionTitle("Sites"));
 
         stack.Controls.Add(SectionTitle("Site"));
         stack.Controls.Add(_siteCombo);
@@ -325,19 +315,11 @@ internal sealed class WallboardForm : Form
         stack.Controls.Add(_organizeButton);
 
         stack.Controls.Add(SectionTitle("Hosts"));
-        stack.Controls.Add(_hostEditor);
-        stack.Controls.Add(_applyHostsButton);
-
-        stack.Controls.Add(SectionTitle("Live host status"));
         stack.Controls.Add(_hostGrid);
-        stack.Controls.Add(Row(_editLabelButton, _clearLabelButton));
-
-        stack.Controls.Add(SectionTitle("Monitoring defaults"));
-        stack.Controls.Add(MonitorRow("Interval", _interval, "sec"));
-        stack.Controls.Add(MonitorRow("Timeout", _timeout, "ms"));
-        stack.Controls.Add(MonitorRow("Down after", _downAfter, "fails"));
-        stack.Controls.Add(MonitorRow("Recover after", _recoverAfter, "successes"));
-        stack.Controls.Add(_applyMonitoringButton);
+        stack.Controls.Add(SectionNote("Right-click a host for quick actions. Use Hosts in the toolbar to add or edit hosts."));
+        var monitoringSettings = DrawerButton("Monitoring settings…");
+        monitoringSettings.Click += (_, _) => _actions.OpenSettings();
+        stack.Controls.Add(monitoringSettings);
 
         stack.Controls.Add(SectionTitle("Configuration"));
         stack.Controls.Add(Row(_exportButton, _importButton, _clearCliButton));
@@ -449,6 +431,7 @@ internal sealed class WallboardForm : Form
             RefreshSnapshot();
         };
 
+        _hostsButton.Click += (_, _) => _actions.OpenHosts?.Invoke();
         _operationsButton.Click += (_, _) => ToggleDrawer();
         _organizeButton.Click += (_, _) => _actions.OpenOrganization();
         _cliButton.Click += (_, _) => ToggleCli();
@@ -653,7 +636,7 @@ internal sealed class WallboardForm : Form
         foreach (var control in new Button[]
         {
             _monitorButton,
-            _operationsButton,
+            _operationsButton, _hostsButton,
             _cliButton,
             _historyButton,
             _settingsButton,
@@ -770,7 +753,7 @@ internal sealed class WallboardForm : Form
     {
         _showCli = !_showCli;
         _canvas.ShowCli = _showCli;
-        _cliButton.Text = _showCli ? "Hide CLI" : "Show CLI";
+        _cliButton.Text = _showCli ? "Hide ping log" : "Show ping log";
 
         _canvas.Invalidate();
     }
@@ -778,7 +761,7 @@ internal sealed class WallboardForm : Form
     private void ToggleDrawer(bool forceClosed = false)
     {
         _drawer.Visible = forceClosed ? false : !_drawer.Visible;
-        _operationsButton.Text = _drawer.Visible ? "Close Ops" : "Operations";
+        _operationsButton.Text = _drawer.Visible ? "Hide sites" : "Sites";
 
         if (_drawer.Visible)
         {
@@ -832,11 +815,12 @@ internal sealed class WallboardForm : Form
                 ? Color.FromArgb(151, 59, 70)
                 : Color.FromArgb(51, 157, 108);
 
-            _cliButton.Text = _showCli ? "Hide CLI" : "Show CLI";
+            _cliButton.Text = _showCli ? "Hide ping log" : "Show ping log";
     
 
             _updateButton.Text = state.UpdateActionText;
             _updateButton.Visible = state.ShowUpdateControl;
+            _screenButton.Visible = Screen.AllScreens.Length > 1;
             _updateStatusLabel.Text = $"{state.Version}\r\n{state.UpdateStatus}";
 
             RefreshSiteCombo(state);
@@ -1163,9 +1147,9 @@ internal sealed class WallboardCanvas : Control
 
         g.DrawImage(_brandBitmap, BrandLogoBounds);
         int textLeft = BrandLogoBounds.Right + 12;
-        g.DrawString("PING WATCHDOG", _brandFont, brandBrush, textLeft, 14);
+        g.DrawString("Ping Watchdog", _brandFont, brandBrush, textLeft, 14);
         g.DrawString(
-            "NETWORK OPERATIONS WALLBOARD",
+            "Wallboard",
             _subtitleFont,
             accentBrush,
             textLeft + 3,
@@ -1209,7 +1193,7 @@ internal sealed class WallboardCanvas : Control
         g.FillRectangle(stateBrush, stateRect);
         DrawCenteredText(
             g,
-            snapshot.Monitoring ? "LIVE MONITORING" : "IDLE / CONFIG VIEW",
+            snapshot.Monitoring ? "Monitoring" : "Stopped",
             _smallFont,
             stateText,
             stateRect);
@@ -1357,7 +1341,7 @@ internal sealed class WallboardCanvas : Control
         Rectangle rect)
     {
         using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
-        g.DrawString("LIVE SITE / HOST TOPOLOGY", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
+        g.DrawString("Sites and hosts", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
 
         var content = new Rectangle(
             rect.X + 18,
@@ -1521,7 +1505,7 @@ internal sealed class WallboardCanvas : Control
             radius * 2,
             24);
 
-        DrawCenteredText(g, "WATCHDOG", _coreFont, textBrush, coreRect);
+        DrawCenteredText(g, "Monitor", _coreFont, textBrush, coreRect);
 
         using var dotBrush = new SolidBrush(monitoring
             ? Color.FromArgb(87, 224, 149)
@@ -1822,7 +1806,7 @@ internal sealed class WallboardCanvas : Control
         using var mutedBrush = new SolidBrush(Color.FromArgb(126, 143, 160));
         using var dividerPen = new Pen(Color.FromArgb(31, 44, 57));
 
-        g.DrawString("ACTIVE OUTAGES", _sectionFont, titleBrush, x, y);
+        g.DrawString("Active outages", _sectionFont, titleBrush, x, y);
         y += 28;
 
         var outages = snapshot.Sites
@@ -1867,7 +1851,7 @@ internal sealed class WallboardCanvas : Control
 
         g.DrawLine(dividerPen, x, y + 3, x + width, y + 3);
         y += 20;
-        g.DrawString("OUTAGE HISTORY", _sectionFont, titleBrush, x, y);
+        g.DrawString("Recent outages", _sectionFont, titleBrush, x, y);
 
         string historyFilter = snapshot.HideSuspectEvents
             ? $"{snapshot.EventWindowLabel} • suspects hidden"
@@ -1969,9 +1953,9 @@ internal sealed class WallboardCanvas : Control
         using var successBrush = new SolidBrush(Color.FromArgb(100, 220, 132));
         using var failureBrush = new SolidBrush(Color.FromArgb(255, 111, 116));
 
-        g.DrawString("LIVE CLI / CMD TRACE", _sectionFont, titleBrush, x, y);
+        g.DrawString("Ping activity", _sectionFont, titleBrush, x, y);
 
-        string hint = "C  HIDE";
+        string hint = "C  Hide";
         var hintSize = g.MeasureString(hint, _tinyFont);
         g.DrawString(
             hint,
@@ -2031,19 +2015,9 @@ internal sealed class WallboardCanvas : Control
     {
         using var mutedBrush = new SolidBrush(Color.FromArgb(90, 107, 125));
         string left = ShowCli
-            ? "ESC Main   O Operations   P Start/Stop   C Hide CLI   H Range   S Suspects"
-            : "ESC Main   O Operations   P Start/Stop   C Show CLI   H Range   S Suspects";
-        string right = "© 2026 Joseph Luker • All rights reserved.";
-
+            ? "Esc Exit Wallboard   O Sites   P Start/Stop   C Hide log   H History range   S Suspects"
+            : "Esc Exit Wallboard   O Sites   P Start/Stop   C Show log   H History range   S Suspects";
         g.DrawString(left, _tinyFont, mutedBrush, 23, ClientSize.Height - 25);
-
-        var size = g.MeasureString(right, _tinyFont);
-        g.DrawString(
-            right,
-            _tinyFont,
-            mutedBrush,
-            ClientSize.Width - size.Width - 24,
-            ClientSize.Height - 25);
     }
 
     internal static HostState AggregateSiteState(WallboardSiteSnapshot site)
