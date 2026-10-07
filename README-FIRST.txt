@@ -105,3 +105,16 @@ HOST CATEGORIES
 Right-click a monitored host and choose Set category... to classify it separately from its nickname/label.
 Examples: AP, Firewall, Switch, Router, Server, Printer, Camera, UPS, Workstation, IoT, or any custom category.
 The live host table shows Category as its own column, and categories are saved with the site configuration.
+
+
+DISABLED HOSTS
+Disabling a host removes its active ping worker immediately.
+A disabled host cannot create new SUSPECT/DOWN/RECOVERED events, notifications, CLI entries, or Wallboard status even if a ping was already in flight when Disable was pressed.
+Existing historical outage records remain in Outage History because they describe events that occurred before the host was disabled.
+Re-enable the host to resume monitoring it.
+
+
+WALLBOARD AUTO-FIT
+Wallboard automatically scales dense site/host topologies to the available monitor area.
+It does not require the Wallboard window to be enlarged to resolve label collisions.
+The no-collision rules remain local to each node; when necessary, the entire topology scales down instead of sending labels far away from their hosts.
