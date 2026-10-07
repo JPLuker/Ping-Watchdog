@@ -23,6 +23,7 @@ internal sealed class SettingsForm : Form
     private readonly Button _closeButton = new() { Text = "Close", AutoSize = true };
 
     private readonly CheckBox _minimizeToTray = new() { Text = "Minimize to notification area", AutoSize = true };
+    private readonly CheckBox _restoreLastSite = new() { Text = "Restore the last selected site on startup", AutoSize = true };
     private readonly CheckBox _use12HourTime = new() { Text = "Use 12-hour time (AM / PM)", AutoSize = true };
     private readonly CheckBox _notifications = new() { Text = "Windows outage and recovery notifications", AutoSize = true };
     private readonly CheckBox _showMainCli = new() { Text = "Show CLI trace in the main window", AutoSize = true };
@@ -238,6 +239,7 @@ internal sealed class SettingsForm : Form
             "Window behavior",
             _minimizeToTray,
             "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues."));
+        stack.Controls.Add(Section("Startup view", _restoreLastSite, "All Hosts opens by default. Enable this to reopen the site you last selected."));
         stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
         stack.Controls.Add(Section(
             "Notifications",
@@ -505,6 +507,7 @@ internal sealed class SettingsForm : Form
             _minimizeToTray.Checked = s.MinimizeToTray;
             _notifications.Checked = s.NotificationsEnabled;
             _use12HourTime.Checked = s.Use12HourTime;
+            _restoreLastSite.Checked = s.RestoreLastSiteOnStartup;
             _autoUpdates.Checked = s.AutoCheckUpdates;
             _showHomeUpdateControl.Checked = s.ShowUpdateControlOnHome;
             _historyRange.SelectedIndex = HistoryHoursToIndex(s.EventHistoryHours);
@@ -533,6 +536,7 @@ internal sealed class SettingsForm : Form
             ShowUpdateControlOnHome = _showHomeUpdateControl.Checked,
             EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
             Use12HourTime = _use12HourTime.Checked,
+            RestoreLastSiteOnStartup = _restoreLastSite.Checked,
             HideSuspectEvents = _hideSuspects.Checked
         };
         _apply(settings);

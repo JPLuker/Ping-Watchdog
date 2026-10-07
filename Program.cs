@@ -410,7 +410,8 @@ internal sealed record AppSettingsSnapshot(
     bool MonitoringActive,
     string Version,
     string UpdateStatus,
-    string UpdateActionText);
+    string UpdateActionText,
+    bool RestoreLastSiteOnStartup = false);
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -956,7 +957,7 @@ public sealed partial class MainForm : Form
         if (_sites.Count == 0)
             _sites.Add(new SiteDefinition { Name = "Default Site" });
 
-        _selectedSiteName ??= _sites[0].Name;
+        ApplyStartupView();
         RefreshSiteList(_selectedSiteName);
         LoadHostEditor();
         ApplyDarkTheme();
@@ -1451,6 +1452,17 @@ public sealed partial class MainForm : Form
                 await Task.Delay(200);
                 Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
                 var canvas = (WallboardCanvas)form._wallboardForm!.Controls.Find("WallboardCanvas", true).Single();
+                foreach (int width in new[] { 900, 1320 })
+                {
+                    form._wallboardForm.ClientSize = new Size(width, 900);
+                    await Task.Delay(100);
+                    foreach (var button in form._wallboardForm.Controls.Find("WallboardActions", true).Single().Controls.OfType<Button>())
+                    {
+                        Check(button.Width >= button.PreferredSize.Width && button.Height >= button.PreferredSize.Height,
+                            "Wallboard button text is clipped.");
+                        Check(button.Parent!.ClientRectangle.Contains(button.Bounds), "Wallboard action extends outside toolbar.");
+                    }
+                }
                 await CheckHostMenu(canvas);
                 Check(canvas.ClientRectangle.Contains(canvas.BrandLogoBounds), "Wallboard dog is outside the canvas.");
                 using (var rendered = new Bitmap(canvas.Width, canvas.Height))
@@ -3176,7 +3188,7 @@ public sealed partial class MainForm : Form
         _selectedSiteName = config.SelectedSite is not null &&
             _sites.Any(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase))
             ? _sites.First(s => s.Name.Equals(config.SelectedSite, StringComparison.OrdinalIgnoreCase)).Name
-            : _sites[0].Name;
+            : null;
 
         _hosts.Clear();
         ClearCommandLog();
@@ -4314,7 +4326,8 @@ public sealed partial class MainForm : Form
             _cts is not null,
             GetDisplayVersion(),
             GetUpdateStatusText(),
-            GetUpdateActionText());
+            GetUpdateActionText(),
+            _restoreLastSiteOnStartup);
     }
 
     private string GetUpdateActionText()
@@ -4365,6 +4378,7 @@ public sealed partial class MainForm : Form
         _notificationsEnabled = settings.NotificationsEnabled;
         _wallboardShowCli = settings.WallboardShowCli;
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
+        _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
         SaveUserPreferences();
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;

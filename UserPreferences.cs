@@ -5,6 +5,7 @@ namespace PingWatchdog;
 internal sealed class UserPreferences
 {
     public bool ShowUpdateControlOnHome { get; set; }
+    public bool RestoreLastSiteOnStartup { get; set; }
 }
 
 internal static class UserPreferenceStore
@@ -74,6 +75,12 @@ internal static class UserPreferenceStore
 
 public sealed partial class MainForm
 {
+    private bool _restoreLastSiteOnStartup;
+    private void ApplyStartupView()
+    {
+        if (!_restoreLastSiteOnStartup) _selectedSiteName = null;
+    }
+
     private string UserPreferencesPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "PingWatchdog",
@@ -88,6 +95,7 @@ public sealed partial class MainForm
             UserPreferencesPath,
             _showUpdateControlOnHome);
         _showUpdateControlOnHome = preferences.ShowUpdateControlOnHome;
+        _restoreLastSiteOnStartup = preferences.RestoreLastSiteOnStartup;
     }
 
     private void SaveUserPreferences()
@@ -99,7 +107,8 @@ public sealed partial class MainForm
             UserPreferencesPath,
             new UserPreferences
             {
-                ShowUpdateControlOnHome = _showUpdateControlOnHome
+                ShowUpdateControlOnHome = _showUpdateControlOnHome,
+                RestoreLastSiteOnStartup = _restoreLastSiteOnStartup
             });
     }
 }

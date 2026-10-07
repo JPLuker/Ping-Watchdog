@@ -196,8 +196,10 @@ internal sealed class WallboardForm : Form
         return new Button
         {
             Text = text,
-            Width = width,
-            Height = 30,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(width, 30),
+            Padding = new Padding(10, 3, 10, 3),
             FlatStyle = FlatStyle.Flat,
             Margin = new Padding(3, 5, 3, 4)
         };
@@ -226,20 +228,22 @@ internal sealed class WallboardForm : Form
             Padding = new Padding(0),
             BackColor = Color.FromArgb(5, 9, 14)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var toolbar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
+            ColumnCount = 1,
+            RowCount = 2,
+            AutoSize = true,
             Padding = new Padding(14, 0, 10, 0),
             Margin = new Padding(0),
             BackColor = Color.FromArgb(9, 15, 22)
         };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         toolbar.Controls.Add(new Label
         {
@@ -252,8 +256,9 @@ internal sealed class WallboardForm : Form
 
         var actions = new FlowLayoutPanel
         {
+            Name = "WallboardActions",
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             FlowDirection = FlowDirection.LeftToRight,
             Margin = new Padding(0),
             BackColor = Color.Transparent
@@ -274,7 +279,8 @@ internal sealed class WallboardForm : Form
             actions.Controls.Add(button);
         }
 
-        toolbar.Controls.Add(actions, 1, 0);
+        toolbar.Controls.Add(actions, 0, 1);
+        toolbar.SizeChanged += (_, _) => actions.MaximumSize = new Size(Math.Max(1, toolbar.ClientSize.Width - toolbar.Padding.Horizontal), 0);
 
         var content = new Panel
         {
@@ -767,7 +773,7 @@ internal sealed class WallboardForm : Form
         _showCli = !_showCli;
         _canvas.ShowCli = _showCli;
         _cliButton.Text = _showCli ? "Hide CLI" : "Show CLI";
-        _cliButton.Width = 74;
+
         _canvas.Invalidate();
     }
 
@@ -829,7 +835,7 @@ internal sealed class WallboardForm : Form
                 : Color.FromArgb(51, 157, 108);
 
             _cliButton.Text = _showCli ? "Hide CLI" : "Show CLI";
-            _cliButton.Width = 74;
+    
 
             _updateButton.Text = state.UpdateActionText;
             _updateButton.Visible = state.ShowUpdateControl;
