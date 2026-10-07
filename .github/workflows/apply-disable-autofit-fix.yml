@@ -1,0 +1,35 @@
+name: Apply Disable and Wallboard Autofit Fix
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/scripts/apply-disable-autofit-fix.py"
+      - ".github/workflows/apply-disable-autofit-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply source patch
+        run: python3 .github/scripts/apply-disable-autofit-fix.py
+
+      - name: Commit patched source and remove one-time patcher
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/apply-disable-autofit-fix.py .github/workflows/apply-disable-autofit-fix.yml
+          git add Program.cs HostManagement.cs WallboardForm.cs .github/workflows/build-windows.yml
+          git diff --cached --check
+          git commit -m "Fix live host disable and auto-scale Wallboard topology"
+          git push origin HEAD:main
