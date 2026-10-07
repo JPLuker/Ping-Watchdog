@@ -1366,6 +1366,7 @@ public sealed partial class MainForm : Form
                 }
 
                 WindowsBranding.RunShortcutSmokeTest(output);
+                form.ImportManagedHosts(new() { new(form._sites[0].Name, "192.0.2.254", "Menu test", "", new HostOptions(), "Unknown") }, false);
                 await CheckHostMenu(form._hostInventory!);
                 await CheckHostMenu(form._grid);
 
