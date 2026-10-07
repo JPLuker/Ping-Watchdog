@@ -1105,8 +1105,8 @@ public sealed partial class MainForm : Form
             for (int y = 0; y < viewport.Height; y += 2)
                 for (int x = 0; x < viewport.Width; x += 2)
                     if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
-            Check(found.Count == hitHosts.Length, "Wallboard right-click targets lost hosts after scaling.");
-            Check(canvas.HitTestHost(Point.Empty) == null, "Background must not target a host.");
+            Check(found.Count == hitHosts.Length);
+            Check(canvas.HitTestHost(Point.Empty) == null);
         }
 
         var labeledNode = WallboardCanvas.FormatHostNodeLines(
