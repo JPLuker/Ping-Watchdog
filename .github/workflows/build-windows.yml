@@ -147,6 +147,8 @@ jobs:
           - Quiet background updater: startup checks and downloads run without occupying primary UI, then prompt once for restart. Manual controls remain in Settings, with an opt-in developer switch to expose update controls on the main screen and Wallboard.
           - Hierarchical site organization with persistent folders/subfolders, site moves, folder moves/renames, safe folder deletion, and a filesystem-style Organization window.
           - Wallboard topology renders individual host nodes with real status color, nickname/label, and IP address under each site hub.
+          - Disabled hosts are immediately removed from live monitoring and cannot emit new CLI entries, outage transitions, or notifications even if a ping was already in flight when Disable was pressed.
+          - Dense Wallboard topologies now auto-fit by scaling the full node/label layout to the available monitor instead of telling the operator to enlarge Wallboard or displacing captions far from their nodes.
           - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
           - Copyright © 2026 Joseph Luker. All rights reserved.
 
@@ -173,9 +175,26 @@ jobs:
           path: Releases/*
           if-no-files-found: error
 
-      - name: Publish Velopack release to GitHub
+      - name: Publish release to GitHub
         shell: pwsh
         env:
-          VPK_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          .\.tools\vpk.exe upload github --repoUrl https://github.com/JPLuker/Ping-Watchdog --token $env:VPK_TOKEN --channel win --outputDir Releases --publish --tag "v$env:WATCHDOG_VERSION" --releaseName "Ping Watchdog v$env:WATCHDOG_VERSION" --targetCommitish "${{ github.sha }}"
+          $tag = "v$env:WATCHDOG_VERSION"
+          $assets = @(
+            "Releases\PingWatchdog-$env:WATCHDOG_VERSION-full.nupkg",
+            "Releases\PingWatchdog-$env:WATCHDOG_VERSION-delta.nupkg",
+            "Releases\PingWatchdog-win-Setup.exe",
+            "Releases\PingWatchdog-win-Portable.zip",
+            "Releases\RELEASES",
+            "Releases\releases.win.json"
+          ) | Where-Object { Test-Path $_ }
+
+          if ($assets.Count -lt 4) {
+            throw "Expected Velopack release assets were not generated. Found $($assets.Count)."
+          }
+
+          & gh release create $tag @assets --repo "${{ github.repository }}" --title "Ping Watchdog $tag" --notes-file release-notes.md --target "${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub CLI could not publish release $tag."
+          }
