@@ -1164,6 +1164,8 @@ public sealed partial class MainForm : Form
                 new WallboardHostSnapshot("Tie", "2", "", HostState.Offline, null, DateTime.Now)
             });
         Check(WallboardCanvas.AggregateSiteState(tiedSite) == HostState.Offline);
+        Check(WallboardCanvas.CalculateTopologyRenderScale(new Rectangle(0, 0, 820, 300), 3, 25) < 0.80);
+        Check(WallboardCanvas.CalculateTopologyRenderScale(new Rectangle(0, 0, 1400, 700), 2, 10) == 1.0);
 
         form.ClientSize = new Size(960, 640);
         form.ApplyResponsiveLayout();
@@ -3497,8 +3499,11 @@ public sealed partial class MainForm : Form
                 resultText = $"FAILED ({ex.GetType().Name})";
             }
 
-            if (token.IsCancellationRequested || IsDisposed || Disposing)
+            if (token.IsCancellationRequested || IsDisposed || Disposing ||
+                !IsHostEnabled(host.Site, host.Address))
+            {
                 break;
+            }
 
             AppendCommandLog(host.Site, host.Address, success, resultText);
             ProcessResult(host, success, latency);
@@ -3526,6 +3531,12 @@ public sealed partial class MainForm : Form
 
     private void ProcessResult(HostMonitor host, bool success, long? latency)
     {
+        // Unit/self-tests exercise the state machine without a live session. During
+        // real monitoring, however, a disabled host is quarantined even if a probe
+        // completed concurrently with the Disable action.
+        if (_cts is not null && !IsHostEnabled(host.Site, host.Address))
+            return;
+
         string? notificationTitle = null;
         string? notificationBody = null;
         string? eventKind = null;
@@ -3637,6 +3648,9 @@ public sealed partial class MainForm : Form
         string kind,
         string message)
     {
+        if (_cts is not null && !IsHostEnabled(site, host))
+            return;
+
         lock (_stateEvents)
         {
             _stateEvents.Add(new StateEventRecord(

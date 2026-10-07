@@ -142,6 +142,14 @@ public sealed partial class MainForm
                 RemoveManagedHost(original); site.Hosts.Add(host.Address);
             }
             site.HostDetails[host.Address] = host.Options.Copy();
+
+            if (!host.Options.Enabled)
+            {
+                string workerKey = BuildHostKey(site.Name, host.Address);
+                StopHostWorker(workerKey);
+                _hosts.TryRemove(workerKey, out _);
+            }
+
             SetNicknameValue(site.Name, host.Address, host.Label); SetCategoryValue(site.Name, host.Address, host.Group);
         }
         CommitHostChanges();
@@ -188,10 +196,25 @@ public sealed partial class MainForm
         form.ImportManagedHosts(new() { new(siteName, "192.0.2.10", "Printer", "Printers", new HostOptions(), "Unknown") }, false);
         var imported = form.HostSnapshot().First(h => h.Address == "192.0.2.10");
         Check(imported.Label == "Printer" && imported.Group == "Printers", "import metadata");
+
+        form.StartMonitoring();
+        string liveKey = BuildHostKey(siteName, imported.Address);
+        Check(form._hosts.ContainsKey(liveKey), "enabled host starts a live worker");
+
         var options = imported.Options.Copy(); options.Enabled = false; options.TimeoutMs = 2345;
         form.SaveManagedHosts(new() { imported with { Label = "Accounting", Options = options } });
         Check(form.GetNickname(siteName, imported.Address) == "Accounting", "rename canonical source");
         Check(!form.GetConfiguredTargets().Any(h => h.Address == imported.Address), "disabled hosts excluded");
+        Check(!form._hosts.ContainsKey(liveKey), "disable removes active host immediately");
+        Check(!form._hostTokens.ContainsKey(liveKey), "disable cancels active worker immediately");
+
+        int eventCountBeforeDisabledResult = form._stateEvents.Count;
+        var disabledRuntime = new HostMonitor(siteName, imported.Address);
+        for (int i = 0; i < 3; i++)
+            form.ProcessResult(disabledRuntime, false, null);
+        Check(disabledRuntime.State == HostState.Unknown, "disabled host result ignored");
+        Check(form._stateEvents.Count == eventCountBeforeDisabledResult, "disabled host cannot create outage events");
+        form.StopMonitoring();
         var wallboard = form.BuildWallboardSnapshot();
         Check(!wallboard.Sites.SelectMany(site => site.Hosts).Any(h => h.Address == imported.Address),
             "disabled hosts excluded from Wallboard topology");

@@ -1230,6 +1230,75 @@ internal sealed class WallboardCanvas : Control
         WallboardSnapshot snapshot,
         Rectangle rect)
     {
+        int visibleHosts = snapshot.Sites.Sum(site =>
+            Math.Min(site.Hosts.Count, Presentation.VisibleTopologyHosts));
+        double renderScale = CalculateTopologyRenderScale(
+            rect,
+            snapshot.Sites.Count,
+            visibleHosts);
+
+        if (renderScale >= 0.995)
+        {
+            DrawTopologyCore(g, snapshot, rect);
+            return;
+        }
+
+        int virtualWidth = Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
+        int virtualHeight = Math.Max(rect.Height, (int)Math.Ceiling(rect.Height / renderScale));
+
+        using var bitmap = new Bitmap(virtualWidth, virtualHeight);
+        using (var virtualGraphics = Graphics.FromImage(bitmap))
+        {
+            virtualGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            virtualGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            virtualGraphics.Clear(Color.FromArgb(9, 15, 22));
+            DrawTopologyCore(
+                virtualGraphics,
+                snapshot,
+                new Rectangle(0, 0, virtualWidth, virtualHeight));
+        }
+
+        var previousInterpolation = g.InterpolationMode;
+        var previousPixelOffset = g.PixelOffsetMode;
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+        g.DrawImage(bitmap, rect);
+        g.InterpolationMode = previousInterpolation;
+        g.PixelOffsetMode = previousPixelOffset;
+
+        using var border = new Pen(Color.FromArgb(32, 44, 57));
+        g.DrawRectangle(border, rect);
+    }
+
+    internal static double CalculateTopologyRenderScale(
+        Rectangle rect,
+        int siteCount,
+        int visibleHostCount)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return 0.55;
+
+        double viewportScale = Math.Min(
+            rect.Width / 900d,
+            rect.Height / 420d);
+        double siteScale = siteCount <= 4
+            ? 1d
+            : Math.Sqrt(4d / Math.Max(1, siteCount));
+        double hostScale = visibleHostCount <= 18
+            ? 1d
+            : Math.Sqrt(18d / Math.Max(1, visibleHostCount));
+
+        return Math.Clamp(
+            Math.Min(1d, Math.Min(viewportScale, Math.Min(siteScale, hostScale))),
+            0.55d,
+            1d);
+    }
+
+    private void DrawTopologyCore(
+        Graphics g,
+        WallboardSnapshot snapshot,
+        Rectangle rect)
+    {
         using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
         g.DrawString("LIVE SITE / HOST TOPOLOGY", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
 
@@ -1305,10 +1374,9 @@ internal sealed class WallboardCanvas : Control
                 content,
                 i);
         }
-        if (_hiddenCaptions > 0)
-            TextRenderer.DrawText(g, $"{_hiddenCaptions} captions need more space — enlarge Wallboard or view Hosts",
-                _tinyFont, new Rectangle(content.Left, content.Bottom - 21, content.Width, 20),
-                Color.FromArgb(180, 195, 209), TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
+        // Dense layouts are rendered on a larger virtual canvas and scaled to fit.
+        // Any caption that still cannot be placed is silently omitted; the host node
+        // itself remains visible and Operations/Hosts retains the full details.
     }
 
     private void DrawRadar(Graphics g, Rectangle rect, Point center)
