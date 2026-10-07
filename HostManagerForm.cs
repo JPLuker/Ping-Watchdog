@@ -153,55 +153,118 @@ internal sealed class HostManagerForm : Form
     private readonly NumericUpDown _failures = new() { Maximum = 100, Width = 60 };
     private readonly Label _count = new() { AutoSize = true };
     private string? _siteFilter, _groupFilter;
+    private List<ManagedHost> _draft = new();
+    private readonly HashSet<string> _changedIds = new();
+    private bool _loading;
+    private readonly Label _saveStatus = new() { AutoSize = true, Padding = new Padding(8, 10, 0, 0) };
+    private Button _saveButton = null!;
+    private void UpdateSaveState()
+    {
+        _saveButton.Enabled = _changedIds.Count > 0;
+        _saveStatus.Text = _changedIds.Count > 0 ? $"Unsaved changes • {_changedIds.Count} host(s)" : "All changes saved";
+        _saveStatus.ForeColor = _changedIds.Count > 0 ? Color.Gold : Color.LightGreen;
+    }
+    private bool ConfirmPendingChanges()
+    {
+        _grid.EndEdit();
+        if (_changedIds.Count == 0) return true;
+        var result = MessageBox.Show(this, "Save your host changes before continuing?\n\nYes = Save changes · No = Discard changes · Cancel = Keep editing",
+            "Unsaved host changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        if (result == DialogResult.Cancel) return false;
+        if (result == DialogResult.Yes) return SaveEdits();
+        _changedIds.Clear(); Reload(); return true;
+    }
+    private void RunImmediate(Action action)
+    {
+        if (!ConfirmPendingChanges()) return;
+        action(); Reload();
+    }
     internal HostManagerForm(Func<List<ManagedHost>> provider, Action<List<ManagedHost>> save,
         Action<List<ManagedHost>> delete, Action<bool> quickAdd, Action<List<ManagedHost>> saveTemporary, Func<List<string>> sites)
     {
         _provider = provider; _save = save; _delete = delete; _sites = sites; HostUi.Theme(this, "Hosts");
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 4 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 6 };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var saveBar = HostUi.Bar();
+        _saveButton = HostUi.Button("Save Changes", () => SaveEdits());
+        _saveButton.BackColor = Color.FromArgb(25, 130, 100); _saveButton.Font = new Font(Font, FontStyle.Bold);
+        _saveButton.MinimumSize = new Size(150, 40);
+        saveBar.Controls.Add(_saveButton);
+        saveBar.Controls.Add(HostUi.Button("Discard Changes", () =>
+        {
+            if (_changedIds.Count == 0 || MessageBox.Show(this, "Discard all unsaved host changes?", "Discard changes", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            { _changedIds.Clear(); Reload(); }
+        }));
+        saveBar.Controls.Add(_saveStatus);
+        saveBar.Controls.Add(HostUi.Button("Close", Close));
+        root.Controls.Add(saveBar, 0, 0);
+        root.Controls.Add(new Label { AutoSize = true, Padding = new Padding(3, 6, 3, 10),
+            Text = "Edit the table or select hosts for bulk changes. Then click Save Changes above. Ctrl+S also saves.\nAdding hosts and saving temporary sessions use their own dialogs. Zero in monitoring settings uses the app default." }, 0, 1);
         var toolbar = HostUi.Bar(); toolbar.Controls.Add(_search);
-        toolbar.Controls.Add(HostUi.Button("Quick Add", () => { quickAdd(false); RefreshNow(); }));
-        toolbar.Controls.Add(HostUi.Button("Quick Monitor", () => { quickAdd(true); RefreshNow(); }));
-        toolbar.Controls.Add(HostUi.Button("Refresh", RefreshNow));
-        toolbar.Controls.Add(HostUi.Button("Save Temporary Hosts", () => { saveTemporary(Selected()); RefreshNow(); }));
-        root.Controls.Add(toolbar, 0, 0);
+        toolbar.Controls.Add(HostUi.Button("Quick Add", () => RunImmediate(() => quickAdd(false))));
+        toolbar.Controls.Add(HostUi.Button("Quick Monitor", () => RunImmediate(() => quickAdd(true))));
+        toolbar.Controls.Add(HostUi.Button("Reload Saved Hosts", () => { if (ConfirmPendingChanges()) Reload(); }));
+        toolbar.Controls.Add(HostUi.Button("Keep Temporary Hosts…", () => RunImmediate(() => saveTemporary(Selected()))));
+        root.Controls.Add(toolbar, 0, 2);
         var workspace = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
         workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210)); workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         workspace.Controls.Add(_tree, 0, 0);
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Enabled", FillWeight = 40 });
         foreach (var name in new[] { "Name", "Address", "Site", "Group", "Tags", "Interval (s)", "Timeout (ms)", "Failures", "State" }) _grid.Columns.Add(name, name);
         foreach (int i in new[] { 2, 3, 9 }) _grid.Columns[i].ReadOnly = true;
-        workspace.Controls.Add(_grid, 1, 0); root.Controls.Add(workspace, 0, 1);
+        workspace.Controls.Add(_grid, 1, 0); root.Controls.Add(workspace, 0, 3);
         var bulk = HostUi.Bar(); bulk.Controls.Add(new Label { Text = "Bulk edit selected:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) });
         bulk.Controls.Add(_destination); bulk.Controls.Add(HostUi.Button("Move Site", () => Bulk(h => h with { Site = _destination.Text })));
         bulk.Controls.Add(_group); bulk.Controls.Add(HostUi.Button("Set Group", () => Bulk(h => h with { Group = _group.Text.Trim() })));
         bulk.Controls.Add(_tags); bulk.Controls.Add(HostUi.Button("Set Tags", () => Bulk(h => h with { Options = Copy(h.Options, o => o.Tags = _tags.Text.Trim()) })));
         bulk.Controls.Add(HostUi.Button("Enable", () => Bulk(h => h with { Options = Copy(h.Options, o => o.Enabled = true) })));
         bulk.Controls.Add(HostUi.Button("Disable", () => Bulk(h => h with { Options = Copy(h.Options, o => o.Enabled = false) })));
-        root.Controls.Add(bulk, 0, 2);
+        root.Controls.Add(bulk, 0, 4);
         var footer = HostUi.Bar();
         footer.Controls.Add(new Label { AutoSize = true, Text = "Interval s / Timeout ms / Failures (0 inherits defaults):", Padding = new Padding(0, 8, 0, 0) });
         footer.Controls.Add(_interval); footer.Controls.Add(_timeout); footer.Controls.Add(_failures);
         footer.Controls.Add(HostUi.Button("Apply Policy", () => Bulk(h => h with { Options = Copy(h.Options, o =>
             { o.IntervalSeconds = (int)_interval.Value; o.TimeoutMs = (int)_timeout.Value; o.FailureThreshold = (int)_failures.Value; }) })));
-        footer.Controls.Add(HostUi.Button("Save Edits", SaveEdits));
+
         footer.Controls.Add(HostUi.Button("Delete Selected", () =>
         {
+            if (!ConfirmPendingChanges()) return;
             var selected = Selected(); if (selected.Count == 0) return;
             if (MessageBox.Show(this, $"Remove {selected.Count} hosts from monitoring and saved configuration?", "Remove hosts", MessageBoxButtons.YesNo) == DialogResult.Yes)
-            { _delete(selected); RefreshNow(); }
+            { _delete(selected); Reload(); }
         }));
-        footer.Controls.Add(_count); root.Controls.Add(footer, 0, 3); Controls.Add(root);
+        footer.Controls.Add(_count); root.Controls.Add(footer, 0, 5); Controls.Add(root);
         _search.TextChanged += (_, _) => FillGrid();
-        _tree.AfterSelect += (_, e) => { if (e.Node?.Tag is ValueTuple<string?, string?> filter) { (_siteFilter, _groupFilter) = filter; FillGrid(); } };
+        _tree.AfterSelect += (_, e) => { if (!_loading && e.Node?.Tag is ValueTuple<string?, string?> filter) { (_siteFilter, _groupFilter) = filter; FillGrid(); } };
         _grid.DataError += (_, e) => e.ThrowException = false;
+        _grid.CellValueChanged += (_, e) =>
+        {
+            if (_loading || e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not ManagedHost host) return;
+            _changedIds.Add(host.Options.Id); UpdateSaveState();
+        };
+        _grid.CurrentCellDirtyStateChanged += (_, _) =>
+        { if (_grid.IsCurrentCellDirty && _grid.CurrentCell is DataGridViewCheckBoxCell) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        FormClosing += (_, e) => { if (!ConfirmPendingChanges()) e.Cancel = true; };
+        KeyPreview = true;
+        KeyDown += (_, e) => { if (e.Control && e.KeyCode == Keys.S) { e.SuppressKeyPress = true; SaveEdits(); } };
         Shown += (_, _) => RefreshNow();
+        UpdateSaveState();
     }
     private static HostOptions Copy(HostOptions value, Action<HostOptions> edit) { var copy = value.Copy(); edit(copy); return copy; }
     internal void RefreshNow()
     {
-        var hosts = _provider(); _tree.BeginUpdate(); _tree.Nodes.Clear();
+        // Reopening the manager must never replace an unfinished edit session.
+        if (_changedIds.Count > 0) return;
+        Reload();
+    }
+    private void Reload()
+    {
+        _loading = true;
+        _draft = _provider();
+        var hosts = _draft; _tree.BeginUpdate(); _tree.Nodes.Clear();
         var all = _tree.Nodes.Add("All Hosts"); all.Tag = ((string?)null, (string?)null);
         foreach (var site in hosts.GroupBy(h => h.Site).OrderBy(s => s.Key))
         {
@@ -216,28 +279,43 @@ internal sealed class HostManagerForm : Form
         all.Expand(); _tree.EndUpdate(); _destination.Items.Clear();
         foreach (var site in _sites()) _destination.Items.Add(site);
         if (_destination.Items.Count > 0) _destination.SelectedIndex = 0;
-        FillGrid();
+        FillGrid(false); UpdateSaveState();
     }
-    private void FillGrid()
+    private void FillGrid(bool capture = true)
     {
+        if (capture && !CaptureEdits()) return;
+        var selectedIds = _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => ((ManagedHost)r.Tag!).Options.Id).ToHashSet();
+        _loading = true;
         _grid.Rows.Clear(); string search = _search.Text.Trim();
-        foreach (var h in _provider().Where(h => (_siteFilter == null || h.Site == _siteFilter) && (_groupFilter == null || h.Group == _groupFilter) &&
+        foreach (var h in _draft.Where(h => (_siteFilter == null || h.Site == _siteFilter) && (_groupFilter == null || h.Group == _groupFilter) &&
             $"{h.Label} {h.Address} {h.Site} {h.Group} {h.Options.Tags}".Contains(search, StringComparison.OrdinalIgnoreCase)))
         {
             int i = _grid.Rows.Add(h.Options.Enabled, h.Label, h.Address, h.Site, h.Group, h.Options.Tags,
                 h.Options.IntervalSeconds, h.Options.TimeoutMs, h.Options.FailureThreshold, h.State);
             _grid.Rows[i].Tag = h;
         }
-        _count.Text = $"{_grid.Rows.Count} hosts";
+        _grid.ClearSelection();
+        foreach (DataGridViewRow row in _grid.Rows)
+            if (selectedIds.Contains(((ManagedHost)row.Tag!).Options.Id)) row.Selected = true;
+        _loading = false;
+        _count.Text = $"{_grid.Rows.Count} hosts • {_grid.SelectedRows.Count} selected";
     }
     private List<ManagedHost> Selected() => _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => (ManagedHost)r.Tag!).ToList();
     private void Bulk(Func<ManagedHost, ManagedHost> edit)
     {
-        var selected = Selected(); if (selected.Count == 0) return;
-        try { _save(selected.Select(edit).ToList()); RefreshNow(); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Cannot apply edits"); }
+        if (!CaptureEdits()) return;
+        var selected = Selected();
+        if (selected.Count == 0) { MessageBox.Show(this, "Select one or more host rows first.", "Select hosts"); return; }
+        foreach (var host in selected)
+        {
+            var updated = edit(host);
+            int index = _draft.FindIndex(h => h.Options.Id == host.Options.Id);
+            if (index >= 0) _draft[index] = updated;
+            _changedIds.Add(host.Options.Id);
+        }
+        FillGrid(false); UpdateSaveState();
     }
-    private void SaveEdits()
+    private bool CaptureEdits()
     {
         _grid.EndEdit(); var updated = new List<ManagedHost>();
         foreach (DataGridViewRow row in _grid.Rows)
@@ -247,11 +325,48 @@ internal sealed class HostManagerForm : Form
             if (!int.TryParse(Cell(6), out int interval) || interval is < 0 or > 3600 ||
                 !int.TryParse(Cell(7), out int timeout) || timeout is < 0 or > 60000 ||
                 !int.TryParse(Cell(8), out int failures) || failures is < 0 or > 100)
-            { MessageBox.Show(this, "Use interval 0–3600, timeout 0–60000, and failures 0–100. Zero inherits defaults."); return; }
+            { MessageBox.Show(this, "Use interval 0–3600, timeout 0–60000, and failures 0–100. Zero inherits defaults."); return false; }
             options.Enabled = Equals(row.Cells[0].Value, true); options.Tags = Cell(5);
             options.IntervalSeconds = interval; options.TimeoutMs = timeout; options.FailureThreshold = failures;
-            updated.Add(host with { Label = Cell(1), Group = Cell(4), Options = options });
+            var edited = host with { Label = Cell(1), Group = Cell(4), Options = options };
+            updated.Add(edited); row.Tag = edited;
         }
-        try { _save(updated); RefreshNow(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Cannot save edits"); }
+        foreach (var edited in updated)
+        {
+            int index = _draft.FindIndex(h => h.Options.Id == edited.Options.Id);
+            if (index >= 0) _draft[index] = edited;
+        }
+        return true;
+    }
+    private bool SaveEdits()
+    {
+        if (!CaptureEdits()) return false;
+        try
+        {
+            _save(_draft.Where(h => _changedIds.Contains(h.Options.Id)).ToList());
+            _changedIds.Clear(); Reload();
+            _saveStatus.Text = "Saved successfully";
+            return true;
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Changes were not saved"); return false; }
+    }
+    internal static void RunDraftTests()
+    {
+        var host = new ManagedHost("Office", "192.0.2.1", "Before", "", new HostOptions(), "Unknown");
+        var saved = new List<ManagedHost> { host };
+        using var form = new HostManagerForm(() => saved.ToList(), edits => saved = edits.ToList(), _ => { }, _ => { }, _ => { }, () => new() { "Office", "Branch" });
+        form.Reload();
+        form._grid.Rows[0].Selected = true;
+        form._grid.Rows[0].Cells[1].Value = "After";
+        form._search.Text = "no match";
+        form._search.Text = "";
+        if (form._grid.Rows[0].Cells[1].Value?.ToString() != "After" || saved[0].Label != "Before")
+            throw new InvalidOperationException("Host draft must survive filtering without saving.");
+        form._grid.Rows[0].Selected = true;
+        form.Bulk(h => h with { Site = "Branch" });
+        if (saved[0].Site != "Office" || !form._saveButton.Enabled)
+            throw new InvalidOperationException("Bulk edits must be staged.");
+        if (!form.SaveEdits() || saved[0].Label != "After" || saved[0].Site != "Branch" || form._saveButton.Enabled)
+            throw new InvalidOperationException("Save Changes must commit draft edits.");
     }
 }

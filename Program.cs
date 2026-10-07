@@ -988,6 +988,7 @@ public sealed partial class MainForm : Form
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
         DisplayTime.RunTests();
+        HostManagerForm.RunDraftTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
         var host = new HostMonitor("Test Site", "127.0.0.1");
