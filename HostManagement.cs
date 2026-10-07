@@ -103,6 +103,14 @@ public sealed partial class MainForm
             if (dialog.ShowDialog(surface.FindForm()) == DialogResult.OK)
                 SaveManagedHosts(new() { host with { Label = dialog.Nickname } });
         });
+        Add("Clear label", () => SaveManagedHosts(new() { host with { Label = "" } }));
+        Add("Set category…", () =>
+        {
+            using var dialog = new CategoryDialog(address, host.Group);
+            if (dialog.ShowDialog(surface.FindForm()) == DialogResult.OK)
+                SaveManagedHosts(new() { host with { Group = dialog.Category } });
+        });
+        Add("Clear category", () => SaveManagedHosts(new() { host with { Group = "" } }));
         Add("Ping in command window", () =>
         {
             var start = new System.Diagnostics.ProcessStartInfo("ping.exe") { UseShellExecute = true };
