@@ -61,9 +61,9 @@ internal static class UserPreferenceStore
         string path = Path.Combine(directory, "preferences.json");
         try
         {
-            Save(path, new UserPreferences { ShowUpdateControlOnHome = true });
+            Save(path, new UserPreferences { ShowUpdateControlOnHome = true, RestoreLastSiteOnStartup = true });
             var loaded = Load(path, fallbackShowUpdateControl: false);
-            if (!loaded.ShowUpdateControlOnHome)
+            if (!loaded.ShowUpdateControlOnHome || !loaded.RestoreLastSiteOnStartup)
                 throw new InvalidOperationException("User preference persistence regression.");
         }
         finally

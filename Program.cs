@@ -991,6 +991,15 @@ public sealed partial class MainForm : Form
             suppressNotifications: true,
             persistSites: false);
 
+        if (form._selectedSiteName != null)
+            throw new InvalidOperationException("All Hosts must be the default startup view.");
+        form._restoreLastSiteOnStartup = true;
+        form._selectedSiteName = form._sites[0].Name;
+        form.ApplyStartupView();
+        if (form._selectedSiteName != form._sites[0].Name)
+            throw new InvalidOperationException("Startup site override was ignored.");
+        form._restoreLastSiteOnStartup = false;
+        form.LoadHostEditor();
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
         DisplayTime.RunTests();
