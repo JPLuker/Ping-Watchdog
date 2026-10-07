@@ -109,10 +109,10 @@ internal static class TopologyLayout
     {
         var anchors = new[]
         {
-            new Rectangle(preferRight ? node.X + 9 : node.X - size.Width - 9, node.Y - size.Height / 2, size.Width, size.Height),
-            new Rectangle(preferRight ? node.X - size.Width - 9 : node.X + 9, node.Y - size.Height / 2, size.Width, size.Height),
-            new Rectangle(node.X - size.Width / 2, node.Y + 9, size.Width, size.Height),
-            new Rectangle(node.X - size.Width / 2, node.Y - size.Height - 9, size.Width, size.Height)
+            new Rectangle(preferRight ? node.X + 12 : node.X - size.Width - 12, node.Y - size.Height / 2, size.Width, size.Height),
+            new Rectangle(preferRight ? node.X - size.Width - 12 : node.X + 12, node.Y - size.Height / 2, size.Width, size.Height),
+            new Rectangle(node.X - size.Width / 2, node.Y + 12, size.Width, size.Height),
+            new Rectangle(node.X - size.Width / 2, node.Y - size.Height - 12, size.Width, size.Height)
         };
         long Distance(Rectangle r)
         {

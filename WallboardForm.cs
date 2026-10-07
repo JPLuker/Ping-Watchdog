@@ -995,6 +995,11 @@ internal sealed class WallboardCanvas : Control
 
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostHitRegions = new();
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _sidebarHitRegions = new();
+    private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostCaptionRegions = new();
+    internal bool HasHostCaption(string site, string address) =>
+        _hostCaptionRegions.Any(hit => hit.Host.Site == site && hit.Host.Address == address);
+    internal bool CaptionsOverlap() => _hostCaptionRegions.SelectMany((a, i) =>
+        _hostCaptionRegions.Skip(i + 1).Select(b => a.Bounds.IntersectsWith(b.Bounds))).Any(overlap => overlap);
     private Rectangle _topologyViewport;
     private Size _topologyVirtualSize;
     internal event Action<WallboardHostSnapshot, Point>? HostRightClicked;
@@ -1079,6 +1084,7 @@ internal sealed class WallboardCanvas : Control
             true);
 
         _hostHitRegions.Clear();
+        _hostCaptionRegions.Clear();
         _sidebarHitRegions.Clear();
         DrawBackground(g);
         DrawHeader(g, snapshot);
@@ -1279,6 +1285,7 @@ internal sealed class WallboardCanvas : Control
             snapshot.Sites.Count,
             visibleHosts);
 
+        renderScale = Math.Min(renderScale, rect.Height / 680d);
         _topologyViewport = rect;
         if (renderScale >= 0.995)
         {
@@ -1386,6 +1393,22 @@ internal sealed class WallboardCanvas : Control
             content,
             center,
             coreRadius);
+
+        // Site orbits must leave room for captions at the top and bottom,
+        // rather than forcing edge hosts to compete with their neighbours.
+        for (int i = 0; i < sitePoints.Count; i++)
+        {
+            var site = snapshot.Sites[i];
+            int orbit = site.Hosts.Count > 7 ? 112 : 68;
+            int captionHalfHeight = site.Hosts.Take(Presentation.VisibleTopologyHosts).Select(host =>
+            {
+                var lines = FormatHostNodeLines(host);
+                return MeasureHostNodeCaption(g, lines.Primary, lines.Secondary, _hostLabelFont, _hostIpFont).Height / 2;
+            }).DefaultIfEmpty(0).Max();
+            int margin = orbit + captionHalfHeight + 16;
+            sitePoints[i] = new Point(sitePoints[i].X,
+                Math.Clamp(sitePoints[i].Y, content.Top + margin, Math.Max(content.Top + margin, content.Bottom - margin)));
+        }
 
         _captionObstacles.Clear();
         _hiddenCaptions = 0;
@@ -1711,6 +1734,7 @@ internal sealed class WallboardCanvas : Control
         }
         _captionObstacles.Add(rect);
         _hostHitRegions.Add((rect, host));
+        _hostCaptionRegions.Add((rect, host));
         using (var leader = new Pen(StateColor(host.State, 120), 1))
             g.DrawLine(leader, point, new Point(Math.Clamp(point.X, rect.Left, rect.Right),
                 Math.Clamp(point.Y, rect.Top, rect.Bottom)));

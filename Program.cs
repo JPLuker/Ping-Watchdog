@@ -1143,6 +1143,26 @@ public sealed partial class MainForm : Form
             Check(sidebarHosts.SetEquals(new[] { active.Address, recovered.Address }));
         }
 
+        foreach (var size in new[] { new Size(900, 650), new Size(1600, 1000), new Size(1920, 1080) })
+        foreach (bool showCli in new[] { false, true })
+        {
+            WallboardHostSnapshot[] Branch(string site, int count) => Enumerable.Range(0, count).Select(i =>
+                new WallboardHostSnapshot(site, $"192.0.2.{i + 1}", i == 3 ? "Cloudkey" : "Host " + i,
+                    HostState.Online, 1, null)).ToArray();
+            using var canvas = new WallboardCanvas { Size = size, ShowCli = showCli,
+                Snapshot = new WallboardSnapshot(true, DateTime.Now, new[]
+                {
+                    new WallboardSiteSnapshot("Hammond Munster", Branch("Hammond Munster", 8)),
+                    new WallboardSiteSnapshot("Gary", Branch("Gary", 6)),
+                    new WallboardSiteSnapshot("East Chicago", Branch("East Chicago", 6)),
+                    new WallboardSiteSnapshot("Anderson", Branch("Anderson", 1))
+                }, Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) };
+            using var bitmap = new Bitmap(size.Width, size.Height);
+            canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, size));
+            Check(canvas.HasHostCaption("East Chicago", "192.0.2.4"));
+            Check(!canvas.CaptionsOverlap());
+        }
+
         var labeledNode = WallboardCanvas.FormatHostNodeLines(
             new WallboardHostSnapshot(
                 "Test Site",
