@@ -19,7 +19,7 @@ internal sealed class WallboardForm : Form
         Width = 420,
         Visible = false,
         Padding = new Padding(14),
-        BackColor = Color.FromArgb(10, 16, 23)
+        BackColor = WallboardStyle.Panel
     };
 
     private readonly ComboBox _siteCombo = new()
@@ -34,7 +34,7 @@ internal sealed class WallboardForm : Form
         ScrollBars = ScrollBars.Vertical,
         Width = 372,
         Height = 120,
-        Font = new Font("Cascadia Mono", 9)
+        Font = new Font("Consolas", 9)
     };
 
     private readonly DataGridView _hostGrid = new()
@@ -85,7 +85,7 @@ internal sealed class WallboardForm : Form
         AutoSize = false,
         Width = 372,
         Height = 42,
-        ForeColor = Color.FromArgb(139, 158, 178)
+        ForeColor = WallboardStyle.Muted
     };
 
     private int _screenIndex;
@@ -126,7 +126,7 @@ internal sealed class WallboardForm : Form
         Icon = _appIcon;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
-        BackColor = Color.FromArgb(5, 9, 14);
+        BackColor = WallboardStyle.Background;
         ForeColor = Color.White;
         KeyPreview = true;
         ShowInTaskbar = true;
@@ -194,7 +194,7 @@ internal sealed class WallboardForm : Form
 
     private static Button ToolbarButton(string text, int width)
     {
-        return new Button
+        return new WallboardButton
         {
             Text = text,
             AutoSize = true,
@@ -208,7 +208,7 @@ internal sealed class WallboardForm : Form
 
     private static Button DrawerButton(string text)
     {
-        return new Button
+        return new WallboardButton
         {
             Text = text,
             AutoSize = true,
@@ -227,7 +227,7 @@ internal sealed class WallboardForm : Form
             RowCount = 2,
             Margin = new Padding(0),
             Padding = new Padding(0),
-            BackColor = Color.FromArgb(5, 9, 14)
+            BackColor = WallboardStyle.Background
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -237,7 +237,7 @@ internal sealed class WallboardForm : Form
             Name = "WallboardToolbar",
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            BackColor = Color.FromArgb(9, 15, 22)
+            BackColor = WallboardStyle.Panel
         };
         var actions = new FlowLayoutPanel
         {
@@ -276,7 +276,7 @@ internal sealed class WallboardForm : Form
         {
             Dock = DockStyle.Fill,
             Margin = new Padding(0),
-            BackColor = Color.FromArgb(5, 9, 14)
+            BackColor = WallboardStyle.Background
         };
 
         _canvas.Dock = DockStyle.Fill;
@@ -353,7 +353,7 @@ internal sealed class WallboardForm : Form
             Text = text,
             AutoSize = true,
             MaximumSize = new Size(372, 0),
-            ForeColor = Color.FromArgb(126, 143, 160),
+            ForeColor = WallboardStyle.Muted,
             Margin = new Padding(0, 0, 0, 7)
         };
     }
@@ -401,7 +401,7 @@ internal sealed class WallboardForm : Form
             Text = suffix,
             AutoSize = true,
             Padding = new Padding(0, 8, 0, 0),
-            ForeColor = Color.FromArgb(126, 143, 160)
+            ForeColor = WallboardStyle.Muted
         });
         return row;
     }
@@ -628,10 +628,10 @@ internal sealed class WallboardForm : Form
 
     private void ApplyControlTheme()
     {
-        var border = Color.FromArgb(39, 53, 67);
-        var button = Color.FromArgb(20, 29, 39);
-        var text = Color.FromArgb(230, 238, 246);
-        var input = Color.FromArgb(7, 12, 18);
+        var border = WallboardStyle.Line;
+        var button = WallboardStyle.Panel;
+        var text = WallboardStyle.Text;
+        var input = WallboardStyle.Background;
 
         foreach (var control in new Button[]
         {
@@ -664,15 +664,15 @@ internal sealed class WallboardForm : Form
             control.ForeColor = text;
         }
 
-        _operationsButton.BackColor = Color.FromArgb(19, 58, 79);
-        _operationsButton.FlatAppearance.BorderColor = Color.FromArgb(48, 119, 150);
+        _operationsButton.BackColor = WallboardStyle.Selection;
+        _operationsButton.FlatAppearance.BorderColor = WallboardStyle.Accent;
 
         _siteCombo.BackColor = input;
         _siteCombo.ForeColor = text;
         _siteCombo.FlatStyle = FlatStyle.Flat;
 
         _hostEditor.BackColor = input;
-        _hostEditor.ForeColor = Color.FromArgb(207, 221, 234);
+        _hostEditor.ForeColor = WallboardStyle.Text;
         _hostEditor.BorderStyle = BorderStyle.FixedSingle;
 
         foreach (var numeric in new[] { _interval, _timeout, _downAfter, _recoverAfter })
@@ -681,16 +681,16 @@ internal sealed class WallboardForm : Form
             numeric.ForeColor = text;
         }
 
-        _hostGrid.BackgroundColor = Color.FromArgb(7, 12, 18);
-        _hostGrid.GridColor = Color.FromArgb(31, 43, 55);
-        _hostGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(19, 28, 38);
-        _hostGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(139, 158, 178);
-        _hostGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(19, 28, 38);
-        _hostGrid.DefaultCellStyle.BackColor = Color.FromArgb(10, 16, 23);
+        _hostGrid.BackgroundColor = WallboardStyle.Background;
+        _hostGrid.GridColor = WallboardStyle.Line;
+        _hostGrid.ColumnHeadersDefaultCellStyle.BackColor = WallboardStyle.Panel;
+        _hostGrid.ColumnHeadersDefaultCellStyle.ForeColor = WallboardStyle.Muted;
+        _hostGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = WallboardStyle.Panel;
+        _hostGrid.DefaultCellStyle.BackColor = WallboardStyle.Panel;
         _hostGrid.DefaultCellStyle.ForeColor = text;
-        _hostGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(31, 74, 102);
+        _hostGrid.DefaultCellStyle.SelectionBackColor = WallboardStyle.Selection;
         _hostGrid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _hostGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(8, 14, 20);
+        _hostGrid.AlternatingRowsDefaultCellStyle.BackColor = WallboardStyle.Background;
     }
 
     private void OnWallboardKeyDown(object? sender, KeyEventArgs e)
@@ -809,11 +809,11 @@ internal sealed class WallboardForm : Form
         {
             _monitorButton.Text = state.Monitoring ? "Stop Monitoring" : "Start Monitoring";
             _monitorButton.BackColor = state.Monitoring
-                ? Color.FromArgb(87, 35, 43)
-                : Color.FromArgb(28, 99, 68);
+                ? WallboardStyle.Selection
+                : WallboardStyle.Primary;
             _monitorButton.FlatAppearance.BorderColor = state.Monitoring
-                ? Color.FromArgb(151, 59, 70)
-                : Color.FromArgb(51, 157, 108);
+                ? WallboardStyle.Red
+                : WallboardStyle.Accent;
 
             _cliButton.Text = _showCli ? "Hide ping log" : "Show ping log";
     
@@ -925,10 +925,10 @@ internal sealed class WallboardForm : Form
             string status = row.Cells["StatusColumn"].Value?.ToString() ?? string.Empty;
             row.Cells["StatusColumn"].Style.ForeColor = status switch
             {
-                "Online" => Color.FromArgb(78, 216, 143),
-                "Suspect" => Color.FromArgb(245, 191, 71),
-                "Offline" => Color.FromArgb(255, 101, 111),
-                _ => Color.FromArgb(139, 158, 178)
+                "Online" => WallboardStyle.Green,
+                "Suspect" => WallboardStyle.Yellow,
+                "Offline" => WallboardStyle.Red,
+                _ => WallboardStyle.Muted
             };
 
             if (selectedHost is not null &&
@@ -960,22 +960,22 @@ internal sealed class WallboardCanvas : Control
     private readonly List<Rectangle> _captionObstacles = new();
     private int _hiddenCaptions;
     private readonly Bitmap _brandBitmap = BrandAssets.LoadLogo();
-    private readonly Font _brandFont = new("Segoe UI Semibold", 24, FontStyle.Bold);
-    private readonly Font _subtitleFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
+    private readonly Font _brandFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
+    private readonly Font _subtitleFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
     private readonly Font _clockFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
     private readonly Font _dateFont = new("Segoe UI", 9.5f);
     private readonly Font _statValueFont = new("Segoe UI Semibold", 25, FontStyle.Bold);
-    private readonly Font _statLabelFont = new("Segoe UI Semibold", 8, FontStyle.Bold);
-    private readonly Font _sectionFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
+    private readonly Font _statLabelFont = new("Segoe UI", 10);
+    private readonly Font _sectionFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
     private readonly Font _siteFont = new("Segoe UI Semibold", 9.5f, FontStyle.Bold);
     private readonly Font _siteSmallFont = new("Segoe UI Semibold", 8f, FontStyle.Bold);
     private readonly Font _siteTinyFont = new("Segoe UI Semibold", 6.75f, FontStyle.Bold);
     private readonly Font _hostLabelFont = new("Segoe UI Semibold", 7.5f, FontStyle.Bold);
-    private readonly Font _hostIpFont = new("Cascadia Mono", 6.8f);
+    private readonly Font _hostIpFont = new("Consolas", 6.8f);
     private readonly Font _smallFont = new("Segoe UI", 8.5f);
     private readonly Font _tinyFont = new("Segoe UI", 7.5f);
-    private readonly Font _coreFont = new("Segoe UI Semibold", 9, FontStyle.Bold);
-    private readonly Font _cliFont = new("Cascadia Mono", 8.5f);
+    private readonly Font _coreFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
+    private readonly Font _cliFont = new("Consolas", 8.5f);
 
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostHitRegions = new();
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _sidebarHitRegions = new();
@@ -1015,7 +1015,7 @@ internal sealed class WallboardCanvas : Control
         Name = "WallboardCanvas";
         DoubleBuffered = true;
         ResizeRedraw = true;
-        BackColor = Color.FromArgb(5, 9, 14);
+        BackColor = WallboardStyle.Background;
         ForeColor = Color.White;
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
@@ -1128,28 +1128,20 @@ internal sealed class WallboardCanvas : Control
 
     private void DrawBackground(Graphics g)
     {
-        g.Clear(Color.FromArgb(5, 9, 14));
-
-        using var gridPen = new Pen(Color.FromArgb(18, 27, 37), 1);
-
-        for (int x = 0; x < ClientSize.Width; x += 48)
-            g.DrawLine(gridPen, x, 0, x, ClientSize.Height);
-
-        for (int y = 0; y < ClientSize.Height; y += 48)
-            g.DrawLine(gridPen, 0, y, ClientSize.Width, y);
+        g.Clear(WallboardStyle.Background);
     }
 
     private void DrawHeader(Graphics g, WallboardSnapshot snapshot)
     {
-        using var brandBrush = new SolidBrush(Color.FromArgb(238, 244, 250));
-        using var accentBrush = new SolidBrush(Color.FromArgb(82, 177, 202));
-        using var mutedBrush = new SolidBrush(Color.FromArgb(126, 143, 160));
+        using var brandBrush = new SolidBrush(WallboardStyle.Text);
+        using var accentBrush = new SolidBrush(WallboardStyle.Accent);
+        using var mutedBrush = new SolidBrush(WallboardStyle.Muted);
 
         g.DrawImage(_brandBitmap, BrandLogoBounds);
         int textLeft = BrandLogoBounds.Right + 12;
-        g.DrawString("Ping Watchdog", _brandFont, brandBrush, textLeft, 14);
+        g.DrawString("Wallboard", _brandFont, brandBrush, textLeft, 14);
         g.DrawString(
-            "Wallboard",
+            "Ping Watchdog · Live network status",
             _subtitleFont,
             accentBrush,
             textLeft + 3,
@@ -1184,13 +1176,13 @@ internal sealed class WallboardCanvas : Control
             24);
 
         using var stateBrush = new SolidBrush(snapshot.Monitoring
-            ? Color.FromArgb(24, 92, 64)
-            : Color.FromArgb(48, 58, 70));
+            ? WallboardStyle.Selection
+            : WallboardStyle.Panel);
         using var stateText = new SolidBrush(snapshot.Monitoring
-            ? Color.FromArgb(112, 229, 162)
-            : Color.FromArgb(165, 179, 194));
+            ? WallboardStyle.Green
+            : WallboardStyle.Muted);
 
-        g.FillRectangle(stateBrush, stateRect);
+        using (var pill = WallboardStyle.Rounded(stateRect, 10)) g.FillPath(stateBrush, pill);
         DrawCenteredText(
             g,
             snapshot.Monitoring ? "Monitoring" : "Stopped",
@@ -1198,7 +1190,7 @@ internal sealed class WallboardCanvas : Control
             stateText,
             stateRect);
 
-        using var divider = new Pen(Color.FromArgb(28, 40, 52), 1);
+        using var divider = new Pen(WallboardStyle.Line, 1);
         g.DrawLine(
             divider,
             22,
@@ -1224,10 +1216,10 @@ internal sealed class WallboardCanvas : Control
         int width = ClientSize.Width - 44;
         int cardWidth = (width - gap * 3) / 4;
 
-        DrawStatCard(g, new Rectangle(left, top, cardWidth, height), "TOTAL HOSTS", total, Color.FromArgb(188, 210, 232));
-        DrawStatCard(g, new Rectangle(left + (cardWidth + gap), top, cardWidth, height), "ONLINE", online, Color.FromArgb(78, 216, 143));
-        DrawStatCard(g, new Rectangle(left + (cardWidth + gap) * 2, top, cardWidth, height), "SUSPECT", suspect, Color.FromArgb(245, 191, 71));
-        DrawStatCard(g, new Rectangle(left + (cardWidth + gap) * 3, top, cardWidth, height), "OFFLINE", offline, Color.FromArgb(255, 101, 111));
+        DrawStatCard(g, new Rectangle(left, top, cardWidth, height), "Total hosts", total, WallboardStyle.Text);
+        DrawStatCard(g, new Rectangle(left + (cardWidth + gap), top, cardWidth, height), "Online", online, WallboardStyle.Green);
+        DrawStatCard(g, new Rectangle(left + (cardWidth + gap) * 2, top, cardWidth, height), "Suspect", suspect, WallboardStyle.Yellow);
+        DrawStatCard(g, new Rectangle(left + (cardWidth + gap) * 3, top, cardWidth, height), "Offline", offline, WallboardStyle.Red);
     }
 
     private void DrawStatCard(
@@ -1237,13 +1229,12 @@ internal sealed class WallboardCanvas : Control
         int value,
         Color valueColor)
     {
-        using var cardBrush = new SolidBrush(Color.FromArgb(14, 21, 29));
-        using var borderPen = new Pen(Color.FromArgb(34, 47, 61));
+        using var cardBrush = new SolidBrush(WallboardStyle.Panel);
+        using var borderPen = new Pen(WallboardStyle.Line);
         using var valueBrush = new SolidBrush(valueColor);
-        using var labelBrush = new SolidBrush(Color.FromArgb(125, 143, 161));
+        using var labelBrush = new SolidBrush(WallboardStyle.Muted);
 
-        g.FillRectangle(cardBrush, rect);
-        g.DrawRectangle(borderPen, rect);
+        WallboardStyle.DrawSurface(g, rect, cardBrush, borderPen);
 
         g.DrawString(label, _statLabelFont, labelBrush, rect.X + 15, rect.Y + 10);
         g.DrawString(value.ToString(), _statValueFont, valueBrush, rect.X + 14, rect.Y + 28);
@@ -1251,10 +1242,9 @@ internal sealed class WallboardCanvas : Control
 
     private static void DrawPanel(Graphics g, Rectangle rect)
     {
-        using var fill = new SolidBrush(Color.FromArgb(9, 15, 22));
-        using var border = new Pen(Color.FromArgb(32, 44, 57));
-        g.FillRectangle(fill, rect);
-        g.DrawRectangle(border, rect);
+        using var fill = new SolidBrush(WallboardStyle.Panel);
+        using var border = new Pen(WallboardStyle.Line);
+        WallboardStyle.DrawSurface(g, rect, fill, border);
     }
 
     private void DrawTopology(
@@ -1292,7 +1282,7 @@ internal sealed class WallboardCanvas : Control
         {
             virtualGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             virtualGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            virtualGraphics.Clear(Color.FromArgb(9, 15, 22));
+            virtualGraphics.Clear(WallboardStyle.Panel);
             DrawTopologyCore(
                 virtualGraphics,
                 snapshot,
@@ -1303,12 +1293,19 @@ internal sealed class WallboardCanvas : Control
         var previousPixelOffset = g.PixelOffsetMode;
         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
         g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-        g.DrawImage(bitmap, rect);
+        var graphicsState = g.Save();
+        using (var clip = WallboardStyle.Rounded(rect, 14))
+        {
+            g.SetClip(clip, System.Drawing.Drawing2D.CombineMode.Intersect);
+            g.DrawImage(bitmap, rect);
+        }
+        g.Restore(graphicsState);
         g.InterpolationMode = previousInterpolation;
         g.PixelOffsetMode = previousPixelOffset;
 
-        using var border = new Pen(Color.FromArgb(32, 44, 57));
-        g.DrawRectangle(border, rect);
+        using var border = new Pen(WallboardStyle.Line);
+        using var outline = WallboardStyle.Rounded(rect, 14);
+        g.DrawPath(border, outline);
     }
 
     internal static double CalculateTopologyRenderScale(
@@ -1340,7 +1337,7 @@ internal sealed class WallboardCanvas : Control
         WallboardSnapshot snapshot,
         Rectangle rect)
     {
-        using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
+        using var titleBrush = new SolidBrush(WallboardStyle.Muted);
         g.DrawString("Sites and hosts", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
 
         var content = new Rectangle(
@@ -1351,7 +1348,7 @@ internal sealed class WallboardCanvas : Control
 
         if (snapshot.Sites.Count == 0)
         {
-            using var emptyBrush = new SolidBrush(Color.FromArgb(100, 119, 138));
+            using var emptyBrush = new SolidBrush(WallboardStyle.Muted);
             DrawCenteredText(
                 g,
                 "No sites configured",
@@ -1365,7 +1362,7 @@ internal sealed class WallboardCanvas : Control
             content.X + content.Width / 2,
             content.Y + content.Height / 2);
 
-        DrawRadar(g, content, center);
+        // Quiet topology: status and host labels provide the visual emphasis.
 
         int coreRadius = Math.Clamp(
             Math.Min(content.Width, content.Height) / 11,
@@ -1436,24 +1433,6 @@ internal sealed class WallboardCanvas : Control
         // itself remains visible and Operations/Hosts retains the full details.
     }
 
-    private void DrawRadar(Graphics g, Rectangle rect, Point center)
-    {
-        using var ringPen = new Pen(Color.FromArgb(18, 62, 72), 1);
-
-        int maxRadius = Math.Max(80, Math.Min(rect.Width, rect.Height) / 2 - 12);
-
-        for (int r = maxRadius / 4; r <= maxRadius; r += Math.Max(1, maxRadius / 4))
-            g.DrawEllipse(ringPen, center.X - r, center.Y - r, r * 2, r * 2);
-
-        double phase = DateTime.UtcNow.TimeOfDay.TotalSeconds * 0.45;
-        var end = new Point(
-            center.X + (int)(Math.Cos(phase) * maxRadius),
-            center.Y + (int)(Math.Sin(phase) * maxRadius));
-
-        using var sweepPen = new Pen(Color.FromArgb(80, 52, 166, 183), 2);
-        g.DrawLine(sweepPen, center, end);
-    }
-
     private static List<Point> CalculateSitePoints(
         int count,
         Rectangle rect,
@@ -1475,13 +1454,7 @@ internal sealed class WallboardCanvas : Control
         using var linePen = new Pen(color, status == HostState.Offline ? 2.4f : 1.4f);
         g.DrawLine(linePen, center, site);
 
-        double phase = (DateTime.UtcNow.TimeOfDay.TotalMilliseconds / 1400d + index * 0.17) % 1d;
-        var pulse = new Point(
-            center.X + (int)((site.X - center.X) * phase),
-            center.Y + (int)((site.Y - center.Y) * phase));
 
-        using var pulseBrush = new SolidBrush(StateColor(status, 220));
-        g.FillEllipse(pulseBrush, pulse.X - 3, pulse.Y - 3, 6, 6);
     }
 
     private void DrawCore(
@@ -1490,12 +1463,10 @@ internal sealed class WallboardCanvas : Control
         int radius,
         bool monitoring)
     {
-        using var glowBrush = new SolidBrush(Color.FromArgb(24, 60, 175, 194));
-        using var fillBrush = new SolidBrush(Color.FromArgb(15, 39, 48));
-        using var outlinePen = new Pen(Color.FromArgb(77, 190, 208), 2);
-        using var textBrush = new SolidBrush(Color.FromArgb(205, 238, 243));
+        using var fillBrush = new SolidBrush(WallboardStyle.Selection);
+        using var outlinePen = new Pen(WallboardStyle.Accent, 2);
+        using var textBrush = new SolidBrush(WallboardStyle.Text);
 
-        g.FillEllipse(glowBrush, center.X - radius - 8, center.Y - radius - 8, (radius + 8) * 2, (radius + 8) * 2);
         g.FillEllipse(fillBrush, center.X - radius, center.Y - radius, radius * 2, radius * 2);
         g.DrawEllipse(outlinePen, center.X - radius, center.Y - radius, radius * 2, radius * 2);
 
@@ -1508,8 +1479,8 @@ internal sealed class WallboardCanvas : Control
         DrawCenteredText(g, "Monitor", _coreFont, textBrush, coreRect);
 
         using var dotBrush = new SolidBrush(monitoring
-            ? Color.FromArgb(87, 224, 149)
-            : Color.FromArgb(118, 134, 151));
+            ? WallboardStyle.Green
+            : WallboardStyle.Muted);
 
         g.FillEllipse(dotBrush, center.X - 4, center.Y + radius - 15, 8, 8);
     }
@@ -1525,23 +1496,10 @@ internal sealed class WallboardCanvas : Control
         int radius = 38;
         Color color = StateColor(state, 255);
 
-        if (state == HostState.Offline)
-        {
-            double pulse = (Math.Sin(DateTime.UtcNow.TimeOfDay.TotalMilliseconds / 280d) + 1d) / 2d;
-            int pulseRadius = radius + 7 + (int)(pulse * 8);
-            using var pulsePen = new Pen(StateColor(state, 85), 2);
-            g.DrawEllipse(
-                pulsePen,
-                center.X - pulseRadius,
-                center.Y - pulseRadius,
-                pulseRadius * 2,
-                pulseRadius * 2);
-        }
-
-        using var fillBrush = new SolidBrush(Color.FromArgb(15, 23, 31));
+        using var fillBrush = new SolidBrush(WallboardStyle.Panel);
         using var borderPen = new Pen(color, 2);
-        using var nameBrush = new SolidBrush(Color.FromArgb(232, 239, 246));
-        using var countBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
+        using var nameBrush = new SolidBrush(WallboardStyle.Text);
+        using var countBrush = new SolidBrush(WallboardStyle.Muted);
 
         g.FillEllipse(fillBrush, center.X - radius, center.Y - radius, radius * 2, radius * 2);
         g.DrawEllipse(borderPen, center.X - radius, center.Y - radius, radius * 2, radius * 2);
@@ -1665,7 +1623,7 @@ internal sealed class WallboardCanvas : Control
             }
 
             using var nodeBrush = new SolidBrush(stateColor);
-            using var nodeBorder = new Pen(Color.FromArgb(225, 236, 246), 1);
+            using var nodeBorder = new Pen(WallboardStyle.Text, 1);
             g.FillEllipse(nodeBrush, point.X - 5, point.Y - 5, 10, 10);
             g.DrawEllipse(nodeBorder, point.X - 5, point.Y - 5, 10, 10);
 
@@ -1675,7 +1633,7 @@ internal sealed class WallboardCanvas : Control
 
         if (site.Hosts.Count > visible)
         {
-            using var moreBrush = new SolidBrush(Color.FromArgb(152, 169, 186));
+            using var moreBrush = new SolidBrush(WallboardStyle.Muted);
             string more = $"+{site.Hosts.Count - visible} more";
             var size = g.MeasureString(more, _tinyFont);
 
@@ -1687,7 +1645,7 @@ internal sealed class WallboardCanvas : Control
                     (int)size.Height + 4),
                 topologyBounds);
 
-            using var fill = new SolidBrush(Color.FromArgb(205, 8, 14, 20));
+            using var fill = new SolidBrush(WallboardStyle.Panel);
             g.FillRectangle(fill, rect);
             g.DrawString(more, _tinyFont, moreBrush, rect.X + 4, rect.Y + 2);
         }
@@ -1723,13 +1681,12 @@ internal sealed class WallboardCanvas : Control
             g.DrawLine(leader, point, new Point(Math.Clamp(point.X, rect.Left, rect.Right),
                 Math.Clamp(point.Y, rect.Top, rect.Bottom)));
 
-        using var fill = new SolidBrush(Color.FromArgb(220, 7, 13, 19));
+        using var fill = new SolidBrush(WallboardStyle.Panel);
         using var border = new Pen(StateColor(host.State, 115), 1);
-        using var primaryBrush = new SolidBrush(Color.FromArgb(232, 240, 247));
-        using var secondaryBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
+        using var primaryBrush = new SolidBrush(WallboardStyle.Text);
+        using var secondaryBrush = new SolidBrush(WallboardStyle.Muted);
 
-        g.FillRectangle(fill, rect);
-        g.DrawRectangle(border, rect);
+        WallboardStyle.DrawSurface(g, rect, fill, border);
 
         TextRenderer.DrawText(
             g,
@@ -1801,10 +1758,10 @@ internal sealed class WallboardCanvas : Control
         int y = rect.Y + 13;
         int width = rect.Width - 32;
 
-        using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
-        using var primaryBrush = new SolidBrush(Color.FromArgb(226, 234, 242));
-        using var mutedBrush = new SolidBrush(Color.FromArgb(126, 143, 160));
-        using var dividerPen = new Pen(Color.FromArgb(31, 44, 57));
+        using var titleBrush = new SolidBrush(WallboardStyle.Muted);
+        using var primaryBrush = new SolidBrush(WallboardStyle.Text);
+        using var mutedBrush = new SolidBrush(WallboardStyle.Muted);
+        using var dividerPen = new Pen(WallboardStyle.Line);
 
         g.DrawString("Active outages", _sectionFont, titleBrush, x, y);
         y += 28;
@@ -1818,7 +1775,7 @@ internal sealed class WallboardCanvas : Control
 
         if (outages.Count == 0)
         {
-            using var okBrush = new SolidBrush(Color.FromArgb(87, 207, 142));
+            using var okBrush = new SolidBrush(WallboardStyle.Green);
             g.DrawString(
                 snapshot.Monitoring ? "No active outages" : "Monitoring is idle",
                 _smallFont,
@@ -1832,7 +1789,7 @@ internal sealed class WallboardCanvas : Control
             foreach (var outage in outages)
             {
                 _sidebarHitRegions.Add((Rectangle.Intersect(rect, new Rectangle(x, y, width, 44)), outage));
-                using var redBrush = new SolidBrush(Color.FromArgb(255, 110, 119));
+                using var redBrush = new SolidBrush(WallboardStyle.Red);
                 string display = string.IsNullOrWhiteSpace(outage.Label)
                     ? outage.Address
                     : outage.Label;
@@ -1888,9 +1845,9 @@ internal sealed class WallboardCanvas : Control
                 _sidebarHitRegions.Add((Rectangle.Intersect(rect, new Rectangle(x, y, width, 57)), target));
             Color kindColor = item.Kind switch
             {
-                "DOWN" => Color.FromArgb(255, 101, 111),
-                "RECOVERED" => Color.FromArgb(78, 216, 143),
-                "SUSPECT" => Color.FromArgb(245, 191, 71),
+                "DOWN" => WallboardStyle.Red,
+                "RECOVERED" => WallboardStyle.Green,
+                "SUSPECT" => WallboardStyle.Yellow,
                 _ => Color.FromArgb(152, 170, 188)
             };
 
@@ -1947,11 +1904,11 @@ internal sealed class WallboardCanvas : Control
         int contentTop = y + 27;
         int contentBottom = rect.Bottom - 10;
 
-        using var titleBrush = new SolidBrush(Color.FromArgb(139, 158, 178));
+        using var titleBrush = new SolidBrush(WallboardStyle.Muted);
         using var hintBrush = new SolidBrush(Color.FromArgb(84, 111, 128));
         using var idleBrush = new SolidBrush(Color.FromArgb(98, 116, 133));
-        using var successBrush = new SolidBrush(Color.FromArgb(100, 220, 132));
-        using var failureBrush = new SolidBrush(Color.FromArgb(255, 111, 116));
+        using var successBrush = new SolidBrush(WallboardStyle.Green);
+        using var failureBrush = new SolidBrush(WallboardStyle.Red);
 
         g.DrawString("Ping activity", _sectionFont, titleBrush, x, y);
 
@@ -2013,7 +1970,7 @@ internal sealed class WallboardCanvas : Control
 
     private void DrawFooter(Graphics g)
     {
-        using var mutedBrush = new SolidBrush(Color.FromArgb(90, 107, 125));
+        using var mutedBrush = new SolidBrush(WallboardStyle.Muted);
         string left = ShowCli
             ? "Esc Exit Wallboard   O Sites   P Start/Stop   C Hide log   H History range   S Suspects"
             : "Esc Exit Wallboard   O Sites   P Start/Stop   C Show log   H History range   S Suspects";
@@ -2052,10 +2009,10 @@ internal sealed class WallboardCanvas : Control
     private static Color StateColor(HostState state, int alpha)
     {
         string value = state switch {
-            HostState.Online => Presentation.WallboardOnline,
-            HostState.Suspect => Presentation.WallboardSuspect,
-            HostState.Offline => Presentation.WallboardOffline,
-            _ => Presentation.WallboardUnknown
+            HostState.Online => "#59d9b6",
+            HostState.Suspect => "#edc477",
+            HostState.Offline => "#ef879d",
+            _ => "#919ab6"
         };
         return Color.FromArgb(alpha, ColorTranslator.FromHtml(value));
     }
@@ -2109,3 +2066,4 @@ internal sealed class WallboardCanvas : Control
         return $"{Math.Max(1, (int)duration.TotalSeconds)}s";
     }
 }
+
