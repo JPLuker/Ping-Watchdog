@@ -1,7 +1,8 @@
 # Ping Watchdog final feature release
 
-Status: planning; design migration and release acceptance are not complete.
-Current published Windows baseline: v1.14.81.
+Status: implementation in progress; design migration and release acceptance are not complete.
+Current published Windows build: v1.14.84 (appearance foundation).
+Pre-migration baseline for update acceptance: v1.14.81.
 Design authority: [DESIGN.md](DESIGN.md), Aurora Glass v1.1.
 
 ## Release goal
@@ -85,3 +86,22 @@ Linux remains separately labeled beta. Its existing packaging, updater, tray/not
 Work in reviewable stages: foundation, main/Hosts, Wallboard, supporting windows, candidate validation, release. Preserve existing behavior at every stage. Each implementation reports the affected screens, reused components, actual checks and captures, and remaining gaps. Do not claim visual verification from source review or automated layout assertions alone.
 
 This is a full design migration, not the previously proposed single cleanup pass. Do not promise a release date before the migration is rendered, reviewed, and tested.
+
+## Implementation checkpoint — 2026-10-17
+
+The appearance foundation now includes centralized light/dark palettes, native font tokens, persisted System / Light / Dark selection in Settings, live updates of registered windows, shared pill buttons and context-menu colors, and opaque dense-content surfaces. Palette text-pair contrast and preference compatibility have automated coverage. This is partial stage 1 implementation, not completion of the design migration.
+
+Current source-review gaps (rendering acceptance remains separate):
+
+| Surface | Remaining design work |
+| --- | --- |
+| Main monitoring window | Reduce repeated summaries, consolidate task hierarchy, migrate remaining fixed dimensions and fonts, and verify constrained-height layout. |
+| Hosts and Quick Add | Reduce default column density without removing editing fields; unify input/focus/error states and readable row sizing. |
+| Wallboard | Replace bitmap/text shrinking with readable navigation; migrate topology and outage typography, keyboard host access, and secondary information hierarchy. |
+| Settings | Complete shared input styling and spacing; review explanatory copy, pending/saved feedback, and keyboard navigation. |
+| Supporting and recovery windows | Audit History, Organization, import/export, editing, About, updater, and independently launched recovery against both themes. Automatic window theming alone does not establish compliance. |
+| Shared foundation | Complete component states, semantic contrast on actual surfaces, typography adoption, and native material/fallback acceptance. |
+
+Windows builds 82 and 83 were withheld by existing tests: first a clipped Wallboard button, then a compact More button shrinking below its explicit width. Shared sizing was corrected to measure labels and padding while preserving explicit sizes. Windows build 84 passed the configuration/monitoring/updater self-tests, published startup and UI smoke tests, and independent recovery tests. Its installer, portable package and update feed were published as v1.14.84.
+
+Actual Windows captures of Main, Hosts and Settings in Light and Dark were inspected through the CI appearance review sheet. They show the shared palette and pill controls working, but also legacy selection colors, dense Hosts columns, uneven spacing, and native input borders still needing refinement. The reduced review sheet is not evidence of minimum-size typography or all DPI configurations. Wallboard captures and all remaining screen/state combinations still require the broader design review. Physical scaling, screen-reader, mixed-monitor, installation/update and workday checks remain pending.
