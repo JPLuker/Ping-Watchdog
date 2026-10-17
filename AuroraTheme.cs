@@ -258,12 +258,22 @@ internal class AuroraButton : Button
     protected override void OnFontChanged(EventArgs e)
     {
         base.OnFontChanged(e);
-        if (Parent != null) { Size = GetPreferredSize(Size.Empty); Parent.PerformLayout(); }
+        if (Parent != null)
+        {
+            var preferred = GetPreferredSize(Size.Empty);
+            Size = new Size(Math.Max(Width, preferred.Width), Math.Max(Height, preferred.Height));
+            Parent.PerformLayout();
+        }
     }
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
-        if (Parent != null) { Size = GetPreferredSize(Size.Empty); Parent.PerformLayout(); }
+        if (Parent != null)
+        {
+            var preferred = GetPreferredSize(Size.Empty);
+            Size = new Size(Math.Max(Width, preferred.Width), Math.Max(Height, preferred.Height));
+            Parent.PerformLayout();
+        }
     }
     protected override void OnMouseEnter(EventArgs e) { _hover = true; base.OnMouseEnter(e); Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { _hover = false; base.OnMouseLeave(e); Invalidate(); }
