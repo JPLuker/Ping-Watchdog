@@ -807,6 +807,7 @@ internal sealed class WallboardForm : Form
         _loadingControls = true;
         try
         {
+            ((AuroraButton)_monitorButton).Primary = true;
             _monitorButton.Text = state.Monitoring ? "Stop Monitoring" : "Start Monitoring";
             _monitorButton.BackColor = state.Monitoring
                 ? WallboardStyle.Selection
@@ -2008,13 +2009,12 @@ internal sealed class WallboardCanvas : Control
 
     private static Color StateColor(HostState state, int alpha)
     {
-        string value = state switch {
-            HostState.Online => "#59d9b6",
-            HostState.Suspect => "#edc477",
-            HostState.Offline => "#ef879d",
-            _ => "#919ab6"
+        var p = AuroraTheme.Palette;
+        Color value = state switch {
+            HostState.Online => p.Teal, HostState.Suspect => p.Warning,
+            HostState.Offline => p.Danger, _ => p.Secondary
         };
-        return Color.FromArgb(alpha, ColorTranslator.FromHtml(value));
+        return Color.FromArgb(alpha, p.StatusText(value));
     }
 
     private static void DrawCenteredText(
@@ -2066,4 +2066,3 @@ internal sealed class WallboardCanvas : Control
         return $"{Math.Max(1, (int)duration.TotalSeconds)}s";
     }
 }
-

@@ -98,9 +98,9 @@ public sealed partial class MainForm
         menu.Items.Clear();
         menu.ShowImageMargin = false;
         menu.ShowCheckMargin = false;
-        menu.Renderer = new ToolStripProfessionalRenderer(new HostMenuColors());
-        menu.BackColor = Color.FromArgb(22, 27, 34);
-        menu.ForeColor = Color.White;
+        menu.Renderer = new ToolStripProfessionalRenderer(new AuroraMenuColors());
+        menu.BackColor = AuroraTheme.Palette.Surface;
+        menu.ForeColor = AuroraTheme.Palette.Text;
         void Add(string title, Action action) => menu.Items.Add(title, null, (_, _) =>
         {
             try { action(); }
@@ -149,6 +149,7 @@ public sealed partial class MainForm
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 DeleteManagedHosts(new() { host });
         });
+        AuroraTheme.ApplyMenu(menu);
         menu.Show(surface, location);
     }
 

@@ -193,7 +193,7 @@ internal sealed class NicknameDialog : Form
             WrapContents = false
         };
 
-        var ok = new Button
+        var ok = new AuroraButton
         {
             Text = "Save Label",
             DialogResult = DialogResult.OK,
@@ -203,7 +203,7 @@ internal sealed class NicknameDialog : Form
             ForeColor = Color.White
         };
 
-        var cancel = new Button
+        var cancel = new AuroraButton
         {
             Text = "Cancel",
             DialogResult = DialogResult.Cancel,
@@ -264,7 +264,7 @@ internal sealed class SiteNameDialog : Form
         _box.BorderStyle = BorderStyle.FixedSingle;
         _box.SelectAll();
 
-        var ok = new Button
+        var ok = new AuroraButton
         {
             Text = actionText,
             DialogResult = DialogResult.OK,
@@ -274,7 +274,7 @@ internal sealed class SiteNameDialog : Form
             ForeColor = Color.White
         };
 
-        var cancel = new Button
+        var cancel = new AuroraButton
         {
             Text = "Cancel",
             DialogResult = DialogResult.Cancel,
@@ -412,7 +412,8 @@ internal sealed record AppSettingsSnapshot(
     string UpdateStatus,
     string UpdateActionText,
     bool RestoreLastSiteOnStartup = false,
-    bool StartMonitoringOnLaunch = false);
+    bool StartMonitoringOnLaunch = false,
+    AppearanceMode Appearance = AppearanceMode.System);
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -532,28 +533,28 @@ public sealed partial class MainForm : Form
         Font = new Font("Segoe UI", 10)
     };
 
-    private readonly Button _addSiteButton = new() { Text = "+ Add Site", AutoSize = true };
-    private readonly Button _organizeButton = new() { Text = "Organize", AutoSize = true };
-    private readonly Button _renameSiteButton = new() { Text = "Rename Site", AutoSize = true };
-    private readonly Button _deleteSiteButton = new() { Text = "Delete Site", AutoSize = true };
+    private readonly Button _addSiteButton = new AuroraButton() { Text = "+ Add Site", AutoSize = true };
+    private readonly Button _organizeButton = new AuroraButton() { Text = "Organize", AutoSize = true };
+    private readonly Button _renameSiteButton = new AuroraButton() { Text = "Rename Site", AutoSize = true };
+    private readonly Button _deleteSiteButton = new AuroraButton() { Text = "Delete Site", AutoSize = true };
     private readonly Label _autoSaveLabel = new()
     {
         Text = "Auto-save • live apply",
         AutoSize = true,
         Padding = new Padding(0, 7, 0, 0)
     };
-    private readonly Button _saveConfigButton = new() { Text = "Save Config", AutoSize = true };
-    private readonly Button _loadConfigButton = new() { Text = "Load Config", AutoSize = true };
-    private readonly Button _checkUpdateButton = new() { Text = "Updates", AutoSize = false, Width = 120 };
-    private readonly Button _wallboardButton = new()
+    private readonly Button _saveConfigButton = new AuroraButton() { Text = "Save Config", AutoSize = true };
+    private readonly Button _loadConfigButton = new AuroraButton() { Text = "Load Config", AutoSize = true };
+    private readonly Button _checkUpdateButton = new AuroraButton() { Text = "Updates", AutoSize = false, Width = 120 };
+    private readonly Button _wallboardButton = new AuroraButton()
     {
         Text = "Wallboard",
         AutoSize = true,
         AutoSizeMode = AutoSizeMode.GrowOnly,
         MinimumSize = new Size(88, 32)
     };
-    private readonly Button _settingsButton = new() { Text = "Settings", AutoSize = false, Width = 88 };
-    private readonly Button _moreButton = new()
+    private readonly Button _settingsButton = new AuroraButton() { Text = "Settings", AutoSize = false, Width = 88 };
+    private readonly Button _moreButton = new AuroraButton()
     {
         Text = "⋯",
         AutoSize = false,
@@ -622,15 +623,15 @@ public sealed partial class MainForm : Form
         Width = 90
     };
 
-    private readonly Button _startButton = new() { Text = "Start Monitoring", AutoSize = true };
-    private readonly Button _stopButton = new() { Text = "Stop", AutoSize = true, Enabled = false };
+    private readonly Button _startButton = new AuroraButton() { Text = "Start Monitoring", AutoSize = true };
+    private readonly Button _stopButton = new AuroraButton() { Text = "Stop", AutoSize = true, Enabled = false };
     private readonly CheckBox _showCommandView = new()
     {
         Text = "Show CMD view",
         AutoSize = true,
         Padding = new Padding(8, 5, 0, 0)
     };
-    private readonly Button _clearLogButton = new() { Text = "Clear", AutoSize = true };
+    private readonly Button _clearLogButton = new AuroraButton() { Text = "Clear", AutoSize = true };
     private readonly Label _totalValueLabel = CreateStatValueLabel();
     private readonly Label _onlineValueLabel = CreateStatValueLabel();
     private readonly Label _suspectValueLabel = CreateStatValueLabel();
@@ -703,7 +704,7 @@ public sealed partial class MainForm : Form
     private readonly Icon _appIcon;
     private readonly Bitmap _brandBitmap;
     private readonly Font _siteItemFont = new("Segoe UI Semibold", 9.5f);
-    private readonly Font _statusCellFont = new("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+    private readonly Font _statusCellFont = new("Segoe UI", 10.5f, FontStyle.Bold);
 
     private TableLayoutPanel? _rootLayout;
     private TableLayoutPanel? _rightLayout;
@@ -965,6 +966,8 @@ public sealed partial class MainForm : Form
         RefreshSiteList(_selectedSiteName);
         LoadHostEditor();
         ApplyDarkTheme();
+        AuroraTheme.Changed += RefreshAppearance;
+        Disposed += (_, _) => AuroraTheme.Changed -= RefreshAppearance;
         UpdateActionState();
         RefreshGrid();
     }
@@ -978,7 +981,7 @@ public sealed partial class MainForm : Form
 
         try
         {
-            int enabled = 1;
+            int enabled = AuroraTheme.Palette.Dark ? 1 : 0;
             if (DwmSetWindowAttribute(Handle, 20, ref enabled, sizeof(int)) != 0)
                 DwmSetWindowAttribute(Handle, 19, ref enabled, sizeof(int));
         }
@@ -1007,6 +1010,7 @@ public sealed partial class MainForm : Form
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
         DisplayTime.RunTests();
+        AuroraTheme.RunTests();
         HostManagerForm.RunDraftTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
@@ -1538,6 +1542,22 @@ public sealed partial class MainForm : Form
                 form._wallboardForm!.Close();
                 await Task.Delay(100);
                 Check(form.Visible, "Closing Wallboard did not restore the main window.");
+                var appearanceBefore = AuroraTheme.Mode;
+                foreach (var appearance in new[] { AppearanceMode.Light, AppearanceMode.Dark })
+                {
+                    AuroraTheme.SetMode(appearance);
+                    form.OpenSettings();
+                    form.OpenHostManager();
+                    await Task.Delay(100);
+                    Check(form.BackColor == AuroraTheme.Palette.Canvas, "Main appearance did not update.");
+                    Check(form._settingsForm!.BackColor == AuroraTheme.Palette.Canvas, "Open Settings appearance did not update.");
+                    Check(form._hostManager!.BackColor == AuroraTheme.Palette.Canvas, "Open Hosts appearance did not update.");
+                    Capture(form, "appearance-main-" + appearance);
+                    Capture(form._settingsForm!, "appearance-settings-" + appearance);
+                    Capture(form._hostManager!, "appearance-hosts-" + appearance);
+                    form._settingsForm!.Close(); form._hostManager!.Close();
+                }
+                AuroraTheme.SetMode(appearanceBefore);
                 File.WriteAllText(Path.Combine(output, "passed.txt"), "UI smoke test passed.");
                 Environment.ExitCode = 0;
             }
@@ -2186,11 +2206,11 @@ public sealed partial class MainForm : Form
         var bounds = new Rectangle(e.Bounds.X + 2, e.Bounds.Y + 2, e.Bounds.Width - 4, e.Bounds.Height - 4);
 
         using var background = new SolidBrush(selected
-            ? Color.FromArgb(27, 76, 94)
-            : Color.FromArgb(18, 24, 32));
+            ? AuroraTheme.Palette.Surface3
+            : AuroraTheme.Palette.Surface);
         using var textBrush = new SolidBrush(selected
-            ? Color.White
-            : Color.FromArgb(210, 218, 228));
+            ? AuroraTheme.Palette.Text
+            : AuroraTheme.Palette.Secondary);
 
         e.Graphics.FillRectangle(background, bounds);
 
@@ -4375,7 +4395,8 @@ public sealed partial class MainForm : Form
             GetUpdateStatusText(),
             GetUpdateActionText(),
             _restoreLastSiteOnStartup,
-            _startMonitoringOnLaunch);
+            _startMonitoringOnLaunch,
+            AuroraTheme.Mode);
     }
 
     private string GetUpdateActionText()
@@ -4428,6 +4449,7 @@ public sealed partial class MainForm : Form
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = settings.StartMonitoringOnLaunch;
+        AuroraTheme.SetMode(settings.Appearance);
         SaveUserPreferences();
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
@@ -4868,8 +4890,8 @@ public sealed partial class MainForm : Form
         _commandBox.SelectionStart = _commandBox.TextLength;
         _commandBox.SelectionLength = 0;
         _commandBox.SelectionColor = entry.Success
-            ? Color.FromArgb(126, 231, 135)
-            : Color.FromArgb(255, 123, 114);
+            ? AuroraTheme.Palette.Text
+            : AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Danger);
 
         _commandBox.AppendText(command + Environment.NewLine);
         _commandBox.SelectionColor = _commandBox.ForeColor;
@@ -4881,190 +4903,24 @@ public sealed partial class MainForm : Form
         }
     }
 
+    private void RefreshAppearance()
+    {
+        if (IsDisposed) return;
+        AuroraTheme.ApplyMenu(_appMenu);
+        AuroraTheme.ApplyMenu(_hostQuickMenu);
+        RefreshGrid();
+        RebuildCommandView();
+        _siteList.Invalidate();
+    }
+
     private void ApplyDarkTheme()
     {
-        var window = ColorTranslator.FromHtml(Presentation.Window);
-        var header = ColorTranslator.FromHtml(Presentation.Header);
-        var nav = ColorTranslator.FromHtml(Presentation.Navigation);
-        var card = ColorTranslator.FromHtml(Presentation.Card);
-        var input = ColorTranslator.FromHtml(Presentation.Input);
-        var border = ColorTranslator.FromHtml(Presentation.Border);
-        var text = ColorTranslator.FromHtml(Presentation.Text);
-        var muted = ColorTranslator.FromHtml(Presentation.Muted);
-        var accent = ColorTranslator.FromHtml(Presentation.Accent);
-
-        BackColor = window;
-        ForeColor = text;
-
-        void Theme(Control parent)
-        {
-            foreach (Control control in parent.Controls)
-            {
-                string tag = control.Tag?.ToString() ?? string.Empty;
-
-                control.ForeColor = text;
-
-                if (tag == "header")
-                    control.BackColor = header;
-                else if (tag == "nav")
-                    control.BackColor = nav;
-                else if (tag == "card")
-                    control.BackColor = card;
-                else if (tag == "window")
-                    control.BackColor = window;
-
-                switch (control)
-                {
-                    case TextBox box:
-                        box.BackColor = input;
-                        box.ForeColor = text;
-                        box.BorderStyle = BorderStyle.FixedSingle;
-                        box.Margin = new Padding(0);
-                        break;
-
-                    case RichTextBox rich:
-                        rich.BackColor = Color.FromArgb(6, 10, 15);
-                        rich.ForeColor = Color.FromArgb(199, 211, 223);
-                        break;
-
-                    case NumericUpDown number:
-                        number.BackColor = input;
-                        number.ForeColor = text;
-                        number.BorderStyle = BorderStyle.FixedSingle;
-                        break;
-
-                    case Button button:
-                        button.FlatStyle = FlatStyle.Flat;
-                        button.FlatAppearance.BorderColor = border;
-                        button.FlatAppearance.BorderSize = 1;
-                        button.BackColor = Color.FromArgb(25, 34, 45);
-                        button.ForeColor = text;
-
-                        if (ReferenceEquals(button, _moreButton))
-                        {
-                            button.Padding = Padding.Empty;
-                            button.Width = Math.Max(button.Width, 48);
-                            button.Height = Math.Max(button.Height, 34);
-                            button.Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold);
-                            button.TextAlign = ContentAlignment.MiddleCenter;
-                        }
-                        else
-                        {
-                            button.Padding = new Padding(8, 2, 8, 2);
-                            button.Height = Math.Max(button.Height, 32);
-                        }
-                        break;
-
-                    case Label label:
-                        label.BackColor = Color.Transparent;
-                        label.ForeColor = tag switch
-                        {
-                            "title" => Color.White,
-                            "primaryText" => text,
-                            "accentText" => accent,
-                            "statOnline" => Color.FromArgb(72, 207, 137),
-                            "statSuspect" => Color.FromArgb(244, 190, 72),
-                            "statOffline" => Color.FromArgb(255, 104, 112),
-                            "statTotal" => Color.FromArgb(190, 210, 232),
-                            "stateBadge" => Color.FromArgb(155, 220, 255),
-                            _ => muted
-                        };
-                        break;
-
-                    case CheckBox check:
-                        check.BackColor = Color.Transparent;
-                        check.ForeColor = text;
-                        check.Padding = new Padding(6, 8, 0, 0);
-                        break;
-
-                    case ListBox list:
-                        list.BackColor = nav;
-                        list.ForeColor = text;
-                        list.BorderStyle = BorderStyle.None;
-                        break;
-
-                    case ContextMenuStrip menu:
-                        menu.BackColor = card;
-                        menu.ForeColor = text;
-                        break;
-
-                    case FlowLayoutPanel flow when string.IsNullOrEmpty(tag):
-                        flow.BackColor = window;
-                        break;
-
-                    case TableLayoutPanel table when string.IsNullOrEmpty(tag):
-                        table.BackColor = window;
-                        break;
-
-                    case SplitContainer split:
-                        split.BackColor = border;
-                        if (split.Panel1.Tag?.ToString() != "nav")
-                            split.Panel1.BackColor = window;
-                        split.Panel2.BackColor = window;
-                        break;
-                }
-
-                if (control.HasChildren)
-                    Theme(control);
-            }
-        }
-
-        Theme(this);
-
-        _monitorStateLabel.BackColor = Color.FromArgb(20, 50, 68);
-        _monitorStateLabel.ForeColor = Color.FromArgb(139, 211, 255);
-
-        _startButton.BackColor = Color.FromArgb(31, 120, 82);
-        _startButton.FlatAppearance.BorderColor = Color.FromArgb(53, 170, 116);
-        _startButton.ForeColor = Color.White;
-
-        _stopButton.BackColor = Color.FromArgb(93, 38, 45);
-        _stopButton.FlatAppearance.BorderColor = Color.FromArgb(155, 64, 75);
-        _stopButton.ForeColor = Color.White;
-
-        _addSiteButton.BackColor = Color.FromArgb(20, 69, 82);
-        _addSiteButton.FlatAppearance.BorderColor = Color.FromArgb(42, 170, 189);
-        _deleteSiteButton.BackColor = Color.FromArgb(57, 28, 34);
-        _deleteSiteButton.FlatAppearance.BorderColor = Color.FromArgb(100, 45, 55);
-
-        _wallboardButton.BackColor = Color.FromArgb(20, 69, 82);
-        _wallboardButton.FlatAppearance.BorderColor = Color.FromArgb(42, 170, 189);
-
-        _settingsButton.BackColor = Color.FromArgb(25, 34, 45);
-        _settingsButton.FlatAppearance.BorderColor = Color.FromArgb(39, 49, 61);
-
-        _moreButton.BackColor = Color.FromArgb(25, 34, 45);
-        _moreButton.FlatAppearance.BorderColor = Color.FromArgb(39, 49, 61);
-        _moreButton.ForeColor = accent;
-
-        _appMenu.BackColor = card;
-        _appMenu.ForeColor = text;
-
-        _checkUpdateButton.BackColor = Color.FromArgb(24, 55, 82);
-        _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(48, 103, 153);
-
-        _grid.EnableHeadersVisualStyles = false;
-        _grid.BackgroundColor = card;
-        _grid.GridColor = Color.FromArgb(31, 40, 50);
-        _grid.DefaultCellStyle.BackColor = card;
-        _grid.DefaultCellStyle.ForeColor = text;
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(34, 101, 124);
-        _grid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
-        _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(16, 23, 31);
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(22, 31, 42);
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(183, 205, 220);
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(22, 31, 42);
-        _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
-
-        _statusStrip.BackColor = Color.FromArgb(11, 16, 23);
-        _statusStrip.ForeColor = muted;
-        _statusLabel.ForeColor = muted;
-        _ownershipLabel.ForeColor = Color.FromArgb(105, 119, 135);
-
-        _commandBox.BackColor = Color.FromArgb(5, 9, 14);
-        _commandBox.ForeColor = Color.FromArgb(199, 211, 223);
+        AuroraTheme.Initialize(this);
+        AuroraTheme.Apply(this);
+        ((AuroraButton)_startButton).Primary = true;
+        ((AuroraButton)_stopButton).Primary = true;
+        AuroraTheme.ApplyMenu(_appMenu);
+        AuroraTheme.ApplyMenu(_hostQuickMenu);
     }
 
     private void ShowNotification(
@@ -5188,14 +5044,14 @@ public sealed partial class MainForm : Form
             cell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             cell.Style.ForeColor = status switch
             {
-                "OFFLINE" => Color.FromArgb(255, 120, 128),
-                "SUSPECT" => Color.FromArgb(244, 194, 84),
-                "ONLINE" => Color.FromArgb(88, 214, 148),
-                _ => Color.FromArgb(139, 153, 169)
+                "OFFLINE" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Danger),
+                "SUSPECT" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning),
+                "ONLINE" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Teal),
+                _ => AuroraTheme.Palette.Secondary
             };
 
             if (status == "OFFLINE")
-                row.DefaultCellStyle.BackColor = Color.FromArgb(40, 24, 29);
+                row.DefaultCellStyle.BackColor = AuroraTheme.Palette.Surface2;
         }
 
         int online = rows.Count(h => h.Status == "ONLINE");

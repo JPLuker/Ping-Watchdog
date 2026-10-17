@@ -7,6 +7,7 @@ internal sealed class UserPreferences
     public bool ShowUpdateControlOnHome { get; set; }
     public bool RestoreLastSiteOnStartup { get; set; }
     public bool StartMonitoringOnLaunch { get; set; }
+    public AppearanceMode Appearance { get; set; } = AppearanceMode.System;
 }
 
 internal static class UserPreferenceStore
@@ -62,10 +63,13 @@ internal static class UserPreferenceStore
         string path = Path.Combine(directory, "preferences.json");
         try
         {
-            Save(path, new UserPreferences { ShowUpdateControlOnHome = true, RestoreLastSiteOnStartup = true, StartMonitoringOnLaunch = true });
+            Save(path, new UserPreferences { ShowUpdateControlOnHome = true, RestoreLastSiteOnStartup = true, StartMonitoringOnLaunch = true, Appearance = AppearanceMode.Dark });
             var loaded = Load(path, fallbackShowUpdateControl: false);
-            if (!loaded.ShowUpdateControlOnHome || !loaded.RestoreLastSiteOnStartup || !loaded.StartMonitoringOnLaunch)
+            if (!loaded.ShowUpdateControlOnHome || !loaded.RestoreLastSiteOnStartup || !loaded.StartMonitoringOnLaunch || loaded.Appearance != AppearanceMode.Dark)
                 throw new InvalidOperationException("User preference persistence regression.");
+            File.WriteAllText(path, "{\"ShowUpdateControlOnHome\":true}");
+            if (Load(path, false).Appearance != AppearanceMode.System)
+                throw new InvalidOperationException("Legacy preferences must follow the system theme.");
         }
         finally
         {
@@ -99,6 +103,7 @@ public sealed partial class MainForm
         _showUpdateControlOnHome = preferences.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = preferences.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = preferences.StartMonitoringOnLaunch;
+        AuroraTheme.SetMode(preferences.Appearance);
     }
 
     private void SaveUserPreferences()
@@ -112,7 +117,8 @@ public sealed partial class MainForm
             {
                 ShowUpdateControlOnHome = _showUpdateControlOnHome,
                 RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
-                StartMonitoringOnLaunch = _startMonitoringOnLaunch
+                StartMonitoringOnLaunch = _startMonitoringOnLaunch,
+                Appearance = AuroraTheme.Mode
             });
     }
 }

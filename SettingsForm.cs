@@ -18,9 +18,11 @@ internal sealed class SettingsForm : Form
         Font = new Font("Segoe UI Semibold", 10)
     };
 
+    private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, AccessibleName = "Appearance" };
+
     private readonly Panel _content = new() { Dock = DockStyle.Fill };
-    private readonly Button _saveButton = new() { Text = "Save Settings", AutoSize = true };
-    private readonly Button _closeButton = new() { Text = "Close", AutoSize = true };
+    private readonly Button _saveButton = new AuroraButton() { Text = "Save changes", AutoSize = true };
+    private readonly Button _closeButton = new AuroraButton() { Text = "Close", AutoSize = true };
 
     private readonly CheckBox _minimizeToTray = new() { Text = "Minimize to notification area", AutoSize = true };
     private readonly CheckBox _restoreLastSite = new() { Text = "Restore the last selected site on startup", AutoSize = true };
@@ -41,20 +43,20 @@ internal sealed class SettingsForm : Form
         Width = 180
     };
     private readonly CheckBox _hideSuspects = new() { Text = "Hide SUSPECT events by default", AutoSize = true };
-    private readonly Button _openHistoryButton = new() { Text = "Open Outage History", AutoSize = true };
+    private readonly Button _openHistoryButton = new AuroraButton() { Text = "Open history", AutoSize = true };
 
     private readonly CheckBox _autoUpdates = new() { Text = "Check automatically on startup and every 6 hours", AutoSize = true };
     private readonly CheckBox _showHomeUpdateControl = new() { Text = "Developer: show update control in the main UI", AutoSize = true };
     private readonly Label _versionValue = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 10) };
     private readonly Label _updateStatus = new() { AutoSize = false, Height = 48, Width = 560 };
-    private readonly Button _updateButton = new() { Text = "Check for Updates", AutoSize = true };
+    private readonly Button _updateButton = new AuroraButton() { Text = "Check for Updates", AutoSize = true };
 
     private readonly Dictionary<string, Control> _pages = new(StringComparer.OrdinalIgnoreCase);
     private bool _loading;
     private AppSettingsSnapshot? _baseline;
     private readonly Label _saveStatus = new() { AutoSize = true, Padding = new Padding(0, 8, 12, 0) };
     private readonly CheckBox _autoStart = new() { Text = "Start monitoring automatically when the app opens", AutoSize = true };
-    private readonly Button _resetButton = new() { Text = "Restore default settings…", AutoSize = true };
+    private readonly Button _resetButton = new AuroraButton() { Text = "Restore default settings…", AutoSize = true };
 
     public SettingsForm(
         Func<AppSettingsSnapshot> provider,
@@ -85,8 +87,12 @@ internal sealed class SettingsForm : Form
             "All time"
         });
 
+        _appearance.Items.AddRange(new object[] { "System", "Light", "Dark" });
+        _appearance.SelectedIndex = 0;
+        _appearance.SelectedIndexChanged += (_, _) => UpdateDirtyState();
         BuildLayout();
         ApplyTheme();
+        Shown += (_, _) => AuroraTheme.Register(this);
 
         _nav.Items.AddRange(new object[] { "General", "Display", "Monitoring", "Notifications", "History", "Updates", "Advanced" });
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
@@ -201,13 +207,6 @@ internal sealed class SettingsForm : Form
             ForeColor = Color.White,
             Location = new Point(24, 14)
         });
-        header.Controls.Add(new Label
-        {
-            Text = "Configure Ping Watchdog without crowding the monitoring workspace.",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 153, 169),
-            Location = new Point(27, 49)
-        });
         root.Controls.Add(header, 0, 0);
         root.SetColumnSpan(header, 2);
 
@@ -274,6 +273,7 @@ internal sealed class SettingsForm : Form
     {
         var page = Page("Display", "Clock format and ping-log visibility.");
         var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(Section("Appearance", _appearance, "System follows Windows. Changes apply when saved."));
         stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
         stack.Controls.Add(Section("Ping log", new Control[] { _showMainCli, _wallboardCli },
             "Choose where ping commands and replies are shown by default."));
@@ -513,39 +513,8 @@ internal sealed class SettingsForm : Form
 
     private void ApplyTheme()
     {
-        var nav = Color.FromArgb(14, 20, 28);
-        var input = Color.FromArgb(11, 17, 24);
-        var border = Color.FromArgb(39, 49, 61);
-        var text = Color.FromArgb(234, 240, 246);
-
-        _nav.BackColor = nav;
-        _nav.ForeColor = text;
-
-        foreach (var button in new[] { _saveButton, _closeButton, _openHistoryButton, _updateButton, _resetButton })
-        {
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderColor = border;
-            button.BackColor = Color.FromArgb(25, 34, 45);
-            button.ForeColor = text;
-            button.Padding = new Padding(10, 3, 10, 3);
-            button.Height = Math.Max(button.Height, 34);
-        }
-
-        _saveButton.BackColor = Color.FromArgb(24, 76, 105);
-        _saveButton.FlatAppearance.BorderColor = Color.FromArgb(58, 132, 171);
-
-        foreach (var number in new[] { _interval, _timeout, _downAfter, _recoverAfter })
-        {
-            number.BackColor = input;
-            number.ForeColor = text;
-        }
-
-        _historyRange.BackColor = input;
-        _historyRange.ForeColor = text;
-        _historyRange.FlatStyle = FlatStyle.Flat;
-
-        foreach (var check in new[] { _use12HourTime, _minimizeToTray, _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
-            check.ForeColor = text;
+        ((AuroraButton)_saveButton).Primary = true;
+        AuroraTheme.Apply(this);
     }
 
     private void ShowSelectedPage()
@@ -573,6 +542,7 @@ internal sealed class SettingsForm : Form
             _minimizeToTray.Checked = s.MinimizeToTray;
             _notifications.Checked = s.NotificationsEnabled;
             _use12HourTime.Checked = s.Use12HourTime;
+            _appearance.SelectedIndex = Enum.IsDefined(s.Appearance) ? (int)s.Appearance : 0;
             _restoreLastSite.Checked = s.RestoreLastSiteOnStartup;
             _autoStart.Checked = s.StartMonitoringOnLaunch;
             _autoUpdates.Checked = s.AutoCheckUpdates;
@@ -593,6 +563,7 @@ internal sealed class SettingsForm : Form
         AutoCheckUpdates = _autoUpdates.Checked, ShowUpdateControlOnHome = _showHomeUpdateControl.Checked,
         EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
         Use12HourTime = _use12HourTime.Checked, RestoreLastSiteOnStartup = _restoreLastSite.Checked,
+        Appearance = (AppearanceMode)Math.Max(0, _appearance.SelectedIndex),
         StartMonitoringOnLaunch = _autoStart.Checked, HideSuspectEvents = _hideSuspects.Checked
     };
     private bool HasChanges() => !_loading && _baseline != null && ReadSettings(_baseline) != _baseline;
@@ -601,7 +572,7 @@ internal sealed class SettingsForm : Form
         if (_loading) return;
         bool dirty = HasChanges();
         _saveButton.Enabled = dirty;
-        _saveStatus.Text = dirty ? "Unsaved changes" : "All changes saved";
+        _saveStatus.Text = dirty ? "Unsaved changes" : "Saved";
     }
     private void SaveSettings()
     {
@@ -616,6 +587,7 @@ internal sealed class SettingsForm : Form
         if (!_provider().MonitoringActive)
         { _interval.Value = 2; _timeout.Value = 1000; _downAfter.Value = 3; _recoverAfter.Value = 2; }
         _minimizeToTray.Checked = true; _restoreLastSite.Checked = false; _autoStart.Checked = false;
+        _appearance.SelectedIndex = 0;
         _use12HourTime.Checked = false; _notifications.Checked = true;
         _showMainCli.Checked = true; _wallboardCli.Checked = true;
         _autoUpdates.Checked = true; _showHomeUpdateControl.Checked = false;
@@ -624,6 +596,11 @@ internal sealed class SettingsForm : Form
     }
     internal void RunLayoutChecks()
     {
+        int originalAppearance = _appearance.SelectedIndex;
+        _appearance.SelectedIndex = (originalAppearance + 1) % 3;
+        if (!HasChanges()) throw new InvalidOperationException("Appearance changes were not tracked.");
+        _appearance.SelectedIndex = originalAppearance;
+        if (HasChanges()) throw new InvalidOperationException("Reverting appearance left unsaved changes.");
         bool original = _autoStart.Checked;
         _autoStart.Checked = !original;
         if (!HasChanges() || !_saveButton.Enabled) throw new InvalidOperationException("Settings edits are not marked unsaved.");

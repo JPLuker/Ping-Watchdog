@@ -83,6 +83,29 @@ jobs:
             throw "Published Ping Watchdog failed UI smoke test (exit $($process.ExitCode))."
           }
 
+      - name: Render appearance review sheet
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $files = @(Get-ChildItem "ui-smoke-test/appearance-*.png" | Sort-Object Name)
+          if ($files.Count -ne 6) { throw "Expected six appearance screenshots." }
+          $sheet = [System.Drawing.Bitmap]::new(1200, 1200)
+          $graphics = [System.Drawing.Graphics]::FromImage($sheet)
+          $graphics.Clear([System.Drawing.Color]::White)
+          for ($i = 0; $i -lt $files.Count; $i++) {
+            $source = [System.Drawing.Image]::FromFile($files[$i].FullName)
+            $scale = [Math]::Min(600.0 / $source.Width, 380.0 / $source.Height)
+            $x = ($i % 2) * 600
+            $y = [Math]::Floor($i / 2) * 400
+            $graphics.DrawString($files[$i].BaseName, [System.Drawing.SystemFonts]::DefaultFont, [System.Drawing.Brushes]::Black, [single]$x, [single]$y)
+            $graphics.DrawImage($source, [int]$x, [int]($y + 20), [int]($source.Width * $scale), [int]($source.Height * $scale))
+            $source.Dispose()
+          }
+          $graphics.Dispose()
+          $sheet.Save("ui-smoke-test/appearance-review.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          $sheet.Dispose()
+          Write-Output ("APPEARANCE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/appearance-review.png")) + "APPEARANCE_IMAGE_END")
+
       - name: Upload UI smoke-test screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,40 +142,15 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          Self-updating Windows release.
+          Windows appearance foundation for the final design migration.
 
-          - Adds a separate startup recovery window with saved error details, manual update checks, download/restart, retry, and installer access.
-          - Observes startup in a separate process to detect early exits, while suppressing recovery for normal exits and intentional update restarts.
-          - Tests constructor, first-frame, background, and abrupt startup failures plus recovery updater success and failure paths before release.
-          - Adds the exact supplied dog artwork beside the Wallboard title.
-          - Sizes the main window's Wallboard button to fit its text, including larger UI fonts.
-          - Verifies rendered Wallboard dog pixels and button text fit before publishing.
-          - Restores the visual refresh using normal UI construction, with no idle startup hooks or reflection-based layout changes.
-          - Uses the supplied dog SVG exactly for the header, application/tray icon, installer, and Linux package branding.
-          - Refined cyan/teal accents and cleaner header/sidebar chrome, with version information retained in the footer.
-          - Host selection, selected column, and scroll positions survive live data refreshes.
-          - Published-EXE UI tests exercise responsive layouts, repeated host refreshes, Settings, and Wallboard with screenshots before release.
-          - Centers the supplied dog beside the title/subtitle and tests the header group's vertical alignment.
-          - Refreshes existing Watchdog desktop, Start menu, and pinned taskbar shortcut icons using a distinct dog icon path while preserving their launch settings.
-          - Registers notification artwork explicitly and restores the updater's app identity for consistent taskbar grouping.
-          - Checks GitHub Releases automatically on startup and every six hours.
-          - Downloads updates in-app.
-          - Downloads updates without interrupting monitoring, then exposes a one-click Restart to Update action.
-          - Restart to Update saves the current setup, stops monitoring cleanly if needed, applies the downloaded update, and relaunches.
-          - Fullscreen multi-monitor Wallboard / NOC mode with live topology, majority-aware degraded-site coloring, outage feed, real host status, toggleable live CLI trace, corrected responsive labels/header spacing, and Esc/F11 returning to the base window.
-          - Version 1.9 modern desktop shell: stable app bar, overflow menu for secondary actions, tighter hierarchy, larger host workspace, and responsive navigation.
-          - Persistent outage history with saved 24h / 7d / 30d / all-time filters, optional suspect suppression, full desktop history viewer, and Wallboard history integration.
-          - Full Settings window for app behavior, monitoring defaults, history, Wallboard/CLI preferences, notifications, tray behavior, and permanent manual update checks.
-          - Full-control Wallboard operations mode: start/stop monitoring, site selection and management, live host editing, host labels, monitoring defaults, config import/export, CLI clearing, history, settings, updates, and monitor switching from the fullscreen NOC UI.
-          - Quiet background updater: startup checks and downloads run without occupying primary UI, then prompt once for restart. Manual controls remain in Settings, with an opt-in developer switch to expose update controls on the main screen and Wallboard.
-          - Hierarchical site organization with persistent folders/subfolders, site moves, folder moves/renames, safe folder deletion, and a filesystem-style Organization window.
-          - Wallboard topology renders individual host nodes with real status color, nickname/label, and IP address under each site hub.
-          - Disabled hosts are immediately removed from live monitoring and cannot emit new CLI entries, outage transitions, or notifications even if a ping was already in flight when Disable was pressed.
-          - Dense Wallboard topologies now auto-fit by scaling the full node/label layout to the available monitor instead of telling the operator to enlarge Wallboard or displacing captions far from their nodes.
-          - Includes live site/host management, autosave, nicknames, grouping, dark mode, and live CMD trace.
-          - Copyright © 2026 Joseph Luker. All rights reserved.
+          - Adds System, Light, and Dark appearance in Settings → Display, using the existing save/discard flow.
+          - Shares appearance colors across the main window, Hosts, Settings, menus, and Wallboard.
+          - Adds reusable pill buttons, visible keyboard focus, and theme-aware status/table rendering.
+          - Preserves saved hosts, monitoring, alerts, history, and updates.
+          - Checks preference compatibility and text contrast; captures both appearances during Windows UI tests.
+          - The full design migration is still in progress. This is not the final maintenance release.
 
-          Made by Joseph Luker.
           "@ | Set-Content release-notes.md
 
       - name: Download previous Velopack release for delta generation

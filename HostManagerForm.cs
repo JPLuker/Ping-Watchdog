@@ -6,7 +6,7 @@ internal static class HostUi
 {
     internal static Button Button(string text, Action action)
     {
-        var b = new Button { Text = text, AutoSize = true, MinimumSize = new Size(75, 32), FlatStyle = FlatStyle.Flat,
+        var b = new AuroraButton { Text = text, AutoSize = true, MinimumSize = new Size(75, 32), FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(25, 34, 45), ForeColor = Color.White, Margin = new Padding(3) };
         b.Click += (_, _) => action(); return b;
     }
@@ -22,6 +22,7 @@ internal static class HostUi
     {
         f.Text = title + " • Ping Watchdog"; f.Size = new Size(1100, 720); f.MinimumSize = new Size(850, 580);
         f.StartPosition = FormStartPosition.CenterParent; f.AutoScaleMode = AutoScaleMode.Dpi;
+        f.Shown += (_, _) => AuroraTheme.Register(f);
         f.Font = new Font("Segoe UI", 9.5f); f.BackColor = Color.FromArgb(10, 14, 20); f.ForeColor = Color.White;
     }
     internal static FlowLayoutPanel Bar() => new() { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
@@ -189,11 +190,11 @@ internal sealed class HostManagerForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var saveBar = HostUi.Bar();
-        _saveButton = HostUi.Button("Save Changes", () => SaveEdits());
-        _saveButton.BackColor = Color.FromArgb(25, 130, 100); _saveButton.Font = new Font(Font, FontStyle.Bold);
+        _saveButton = HostUi.Button("Save changes", () => SaveEdits());
+        ((AuroraButton)_saveButton).Primary = true; _saveButton.Font = new Font(Font, FontStyle.Bold);
         _saveButton.MinimumSize = new Size(150, 40);
         saveBar.Controls.Add(_saveButton);
-        saveBar.Controls.Add(HostUi.Button("Discard Changes", () =>
+        saveBar.Controls.Add(HostUi.Button("Discard changes", () =>
         {
             if (_changedIds.Count == 0 || MessageBox.Show(this, "Discard all unsaved host changes?", "Discard changes", MessageBoxButtons.YesNo) == DialogResult.Yes)
             { _changedIds.Clear(); Reload(); }
