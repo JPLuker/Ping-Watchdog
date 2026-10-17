@@ -1,12 +1,24 @@
-# Wallboard design review
+# Wallboard design migration
 
-Reference: [Watchdog Toolkit style guide](https://github.com/JPLuker/Watchdog-Toolkit/blob/main/STYLE-GUIDE.md).
-Target: standalone Windows Ping Watchdog. Toolkit and Linux remain separate.
+Authority: [DESIGN.md](DESIGN.md). Scope and release gates: [ROADMAP.md](ROADMAP.md).
 
-The fullscreen presentation now uses the guide's navy background and panel surfaces, purple emphasis, semantic green/yellow/red health colors, Segoe UI headings, Consolas technical output, rounded summary panels and keyboard-focus outlines on rounded buttons. The grid, radar sweep, traveling connection pulses and offline site glow were removed so observed health and host captions carry the emphasis.
+The v1.14.81 Windows Wallboard is the existing behavioral baseline, not a completed implementation of the new design standard. Its previous external design reference is superseded.
 
-The existing topology placement and collision rules, host and outage hit testing, monitoring commands, shared Hosts editor, saved time format, history filters, site organization, and ping output remain in place. Summary labels use sentence case. The header identifies the current view with one product subtitle.
+## Preserve
 
-Validation: the Windows pipeline runs the existing alert/configuration tests, caption visibility and collision regressions at multiple canvas sizes with the ping log on/off, host and outage hit testing, published UI/Settings/Hosts checks, startup and recovery checks. Check the workflow result for actual pass/fail status.
+Monitoring state, site/host identity, caption collision protection, complete addresses, host and outage context actions, snooze, saved time format, history filters, site organization, ping output, display selection, and safe entry/exit.
 
-Limitations: fullscreen topology captions still use compact text and scale for dense site inventories. Native advanced dialogs retain their existing presentation. Generated Windows screenshots require human visual review; automated layout assertions do not establish visual quality or cover every user's display scaling.
+## Remaining design work
+
+- Adopt centralized Aurora Glass tokens and System / Light / Dark appearance.
+- Use one focal point, floating pill controls, native window conventions, and restrained material layering. Keep dense content on opaque surfaces.
+- Remove repeated facts, explanatory subtitles, unnecessary summaries, and visible shortcut legends.
+- Replace tiny-font topology scaling with readable, navigable layouts. Keep full values available and prevent vanished or overlapping captions.
+- Add keyboard-accessible host selection/actions and meaningful accessible status/name information.
+- Review all interaction states, actual contrast, reduced transparency/motion, large system text, and display scaling.
+
+## Verification
+
+Existing Windows automation covers caption visibility/collisions at several canvas sizes with output shown/hidden, topology/outage hit testing, host actions, published UI, startup, and recovery. Passing that baseline does not certify the new appearance.
+
+Record actual rendered dimensions and inspected captures for both themes, including dense inventories and long labels/addresses. Physical display, assistive-technology, installer/update, and full-workday acceptance checks remain release gates until performed.

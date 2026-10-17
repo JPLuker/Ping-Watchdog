@@ -1,8 +1,16 @@
 # Working agreement
 
-This repository is standalone Ping Watchdog. Keep Windows work separate from Linux and from Watchdog Toolkit unless Joseph explicitly changes the scope.
+This repository is standalone Ping Watchdog. Keep Windows work separate from Linux unless Joseph explicitly changes the scope.
 
-Use the established chat scope when a request refers to a shared design or feature. A style guide from Watchdog Toolkit can be a visual reference without changing the target repository.
+## Required design review
+
+Read DESIGN.md in full before implementing or modifying Windows UI. It is the design authority and supersedes prior visual references. Follow its token system, native-platform conventions, accessibility floors, and Part 21 review checklist. ROADMAP.md defines the remaining final-release milestones. Do not claim an unimplemented theme, uninspected rendering, or unperformed acceptance check as complete.
+
+Keep the product, documentation, and release materials focused exclusively on Ping Watchdog. Do not add cross-promotion, external-product references, promotional cards, or upgrade prompts.
+
+## Execution
+
+Use the established chat scope when a request refers to a shared design or feature.
 
 Do not let optional clarification block implementation. State a reasonable assumption and continue independent work. Use a normal, brief question only when missing information makes a safe implementation impossible; avoid a blocking question tool for optional choices. If the user stops work, stop immediately. An unanswered question is never permission for a restricted action.
 
