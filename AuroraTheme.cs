@@ -242,6 +242,29 @@ internal class AuroraButton : Button
         FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
         Padding = new Padding(AuroraTheme.Space4, AuroraTheme.Space1, AuroraTheme.Space4, AuroraTheme.Space1);
     }
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var text = TextRenderer.MeasureText(Text, Font, Size.Empty,
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+        int focusSpace = (int)Math.Ceiling(8 * DeviceDpi / 96f);
+        return new Size(Math.Max(MinimumSize.Width, text.Width + Padding.Horizontal + focusSpace),
+            Math.Max(MinimumSize.Height, Math.Max((int)Math.Ceiling(36 * DeviceDpi / 96f), text.Height + Padding.Vertical + focusSpace)));
+    }
+    protected override void SetBoundsCore(int x, int y, int width, int height, BoundsSpecified specified)
+    {
+        var preferred = GetPreferredSize(Size.Empty);
+        base.SetBoundsCore(x, y, Math.Max(width, preferred.Width), Math.Max(height, preferred.Height), specified);
+    }
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        if (Parent != null) { Size = GetPreferredSize(Size.Empty); Parent.PerformLayout(); }
+    }
+    protected override void OnTextChanged(EventArgs e)
+    {
+        base.OnTextChanged(e);
+        if (Parent != null) { Size = GetPreferredSize(Size.Empty); Parent.PerformLayout(); }
+    }
     protected override void OnMouseEnter(EventArgs e) { _hover = true; base.OnMouseEnter(e); Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { _hover = false; base.OnMouseLeave(e); Invalidate(); }
     protected override void OnMouseDown(MouseEventArgs e) { _pressed = e.Button == MouseButtons.Left; base.OnMouseDown(e); Invalidate(); }
