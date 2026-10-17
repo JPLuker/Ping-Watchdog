@@ -3,7 +3,7 @@
 Status: implementation in progress; design migration and release acceptance are not complete.
 Current published Windows build: v1.14.84 (appearance foundation).
 Pre-migration baseline for update acceptance: v1.14.81.
-Design authority: [DESIGN.md](DESIGN.md), Aurora Glass v1.1.
+Design authority: [DESIGN.md](DESIGN.md), Aurora Glass v1.2.
 
 ## Release goal
 
@@ -105,3 +105,9 @@ Current source-review gaps (rendering acceptance remains separate):
 Windows builds 82 and 83 were withheld by existing tests: first a clipped Wallboard button, then a compact More button shrinking below its explicit width. Shared sizing was corrected to measure labels and padding while preserving explicit sizes. Windows build 84 passed the configuration/monitoring/updater self-tests, published startup and UI smoke tests, and independent recovery tests. Its installer, portable package and update feed were published as v1.14.84.
 
 Actual Windows captures of Main, Hosts and Settings in Light and Dark were inspected through the CI appearance review sheet. They show the shared palette and pill controls working, but also legacy selection colors, dense Hosts columns, uneven spacing, and native input borders still needing refinement. The reduced review sheet is not evidence of minimum-size typography or all DPI configurations. Wallboard captures and all remaining screen/state combinations still require the broader design review. Physical scaling, screen-reader, mixed-monitor, installation/update and workday checks remain pending.
+
+## Screenshot cleanup — 2026-10-17
+
+Synced DESIGN.md with InternalDesignGuidelines v1.2. The current cleanup removes redundant Wallboard branding and its permanent shortcut legend, adds a collapsible controls bar (F10), moves main timing fields to Settings → Monitoring, and corrects the main logo/action backgrounds. Existing monitoring and quick actions remain available.
+
+The next version is 1.15.0 in PingWatchdog.csproj. Pushes build validation artifacts; automatic public publishing is held until human testing and the new release requirements are met. Tag-based publishing, checksum manifests, asset naming, changelog-based notes, and the remaining release-policy audit must be completed before re-enabling publication. v1.14.84 remains the published build.

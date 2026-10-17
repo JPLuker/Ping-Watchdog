@@ -627,7 +627,7 @@ public sealed partial class MainForm : Form
     private readonly Button _stopButton = new AuroraButton() { Text = "Stop", AutoSize = true, Enabled = false };
     private readonly CheckBox _showCommandView = new()
     {
-        Text = "Show CMD view",
+        Text = "Show ping log",
         AutoSize = true,
         Padding = new Padding(8, 5, 0, 0)
     };
@@ -1514,30 +1514,15 @@ public sealed partial class MainForm : Form
                     "Wallboard must open the shared Hosts manager.");
                 form._hostManager!.Close();
                 await CheckHostMenu(canvas);
-                Check(canvas.ClientRectangle.Contains(canvas.BrandLogoBounds), "Wallboard dog is outside the canvas.");
-                using (var rendered = new Bitmap(canvas.Width, canvas.Height))
-                using (var expected = new Bitmap(canvas.BrandLogoBounds.Width, canvas.BrandLogoBounds.Height))
-                using (var logo = BrandAssets.LoadLogo())
-                {
-                    canvas.DrawToBitmap(rendered, canvas.ClientRectangle);
-                    using (var graphics = Graphics.FromImage(expected))
-                    {
-                        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                        graphics.DrawImage(logo, new Rectangle(Point.Empty, expected.Size));
-                    }
-                    int opaque = 0, matching = 0;
-                    for (int y = 0; y < expected.Height; y++)
-                    for (int x = 0; x < expected.Width; x++)
-                    {
-                        var wanted = expected.GetPixel(x, y);
-                        if (wanted.A < 250) continue;
-                        opaque++;
-                        var actual = rendered.GetPixel(canvas.BrandLogoBounds.X + x, canvas.BrandLogoBounds.Y + y);
-                        if (Math.Abs(actual.R - wanted.R) <= 5 && Math.Abs(actual.G - wanted.G) <= 5 &&
-                            Math.Abs(actual.B - wanted.B) <= 5) matching++;
-                    }
-                    Check(opaque > 100 && matching >= opaque * 0.9, "Wallboard did not render the supplied dog artwork.");
-                }
+                form._wallboardForm!.SetControlsVisible(false);
+                await Task.Delay(100);
+                Check(!form._wallboardForm.ControlsExpanded, "Wallboard controls did not collapse.");
+                var collapsedActions = form._wallboardForm.Controls.Find("WallboardActions", true).Single();
+                Check(collapsedActions.Controls.Cast<Control>().Count(c => c.Visible) == 1,
+                    "Hidden toolbar still exposes actions.");
+                Capture(form._wallboardForm, "wallboard-controls-hidden");
+                form._wallboardForm.SetControlsVisible(true);
+                Check(form._wallboardForm.ControlsExpanded, "Wallboard controls did not reopen.");
                 Capture(form._wallboardForm!, "wallboard");
                 form._wallboardForm!.Close();
                 await Task.Delay(100);
@@ -1731,7 +1716,8 @@ public sealed partial class MainForm : Form
 
         _brandSubtitleLabel = new Label
         {
-            Text = "Availability monitor",
+            Text = "",
+            Visible = false,
             AutoSize = true,
             Font = new Font("Segoe UI", 9.25f),
             Tag = "muted"
@@ -1743,7 +1729,7 @@ public sealed partial class MainForm : Form
             Image = _brandBitmap,
             SizeMode = PictureBoxSizeMode.Zoom,
             Margin = Padding.Empty,
-            BackColor = Color.FromArgb(12, 18, 26),
+            BackColor = Color.Transparent,
             TabStop = false,
             AccessibleName = "Ping Watchdog logo"
         };
@@ -1968,52 +1954,12 @@ public sealed partial class MainForm : Form
         };
         _settingsFlowPanel = settings;
 
-        Control Setting(string title, Control input, string suffix)
+        var monitoringOptions = HostUi.Button("Monitoring settings", () =>
         {
-            var wrap = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Margin = new Padding(0, 0, 16, 0),
-                Tag = "card"
-            };
-
-            wrap.Controls.Add(new Label
-            {
-                Text = title,
-                AutoSize = true,
-                Font = new Font("Segoe UI Semibold", 8.25f, FontStyle.Bold),
-                Tag = "muted"
-            });
-
-            var row = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Margin = new Padding(0),
-                Tag = "card"
-            };
-
-            input.Margin = new Padding(0, 2, 4, 0);
-            row.Controls.Add(input);
-            row.Controls.Add(new Label
-            {
-                Text = suffix,
-                AutoSize = true,
-                Padding = new Padding(0, 7, 0, 0),
-                Tag = "muted"
-            });
-            wrap.Controls.Add(row);
-
-            return wrap;
-        }
-
-        settings.Controls.Add(Setting("Interval", _intervalSeconds, "sec"));
-        settings.Controls.Add(Setting("Timeout", _timeoutMs, "ms"));
-        settings.Controls.Add(Setting("Down after", _failureThreshold, "fails"));
-        settings.Controls.Add(Setting("Recover after", _recoveryThreshold, "successes"));
+            OpenSettings();
+            _settingsForm?.SelectCategory("Monitoring");
+        });
+        settings.Controls.Add(monitoringOptions);
         settings.Controls.Add(_showCommandView);
         settingsCard.Controls.Add(settings, 0, 0);
 
@@ -2023,7 +1969,7 @@ public sealed partial class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             Anchor = AnchorStyles.Right | AnchorStyles.Top,
-            Margin = new Padding(8, 9, 0, 0),
+            Margin = new Padding(8, 0, 0, 0),
             Tag = "card"
         };
 
@@ -2045,7 +1991,7 @@ public sealed partial class MainForm : Form
             Padding = new Padding(0, 8, 0, 0),
             Tag = "window"
         };
-        commandPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        commandPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         commandPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var commandHeader = new TableLayoutPanel
@@ -2150,7 +2096,7 @@ public sealed partial class MainForm : Form
                 .Max();
             var settingsCard = _settingsFlowPanel.Parent!;
             _rightLayout.RowStyles[2].Height = Math.Max(
-                84,
+                64,
                 settingsHeight + settingsCard.Padding.Vertical + settingsCard.Margin.Vertical);
             ApplyInventoryHeight();
 
@@ -2169,7 +2115,7 @@ public sealed partial class MainForm : Form
             }
 
             if (_brandSubtitleLabel is not null)
-                _brandSubtitleLabel.Visible = !veryNarrow;
+                _brandSubtitleLabel.Visible = false;
 
             _siteList.ItemHeight = Math.Max(
                 34,

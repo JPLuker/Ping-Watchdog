@@ -254,6 +254,12 @@ internal sealed class SettingsForm : Form
         Controls.Add(root);
     }
 
+    internal void SelectCategory(string category)
+    {
+        int index = _nav.Items.IndexOf(category);
+        if (index >= 0) _nav.SelectedIndex = index;
+    }
+
     private Control BuildGeneralPage()
     {
         var page = Page("General", "Application behavior and display defaults.");

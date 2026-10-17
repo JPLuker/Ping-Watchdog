@@ -64,7 +64,7 @@ public sealed partial class MainForm
     }
     private FlowLayoutPanel BuildHostActions()
     {
-        var actions = HostUi.Bar(); actions.WrapContents = false;
+        var actions = HostUi.Bar(); actions.WrapContents = false; actions.Tag = "card";
         actions.Controls.Add(HostUi.Button("Hosts", OpenHostManager));
         actions.Controls.Add(HostUi.Button("Quick Add", () => OpenQuickAdd(false)));
         actions.Controls.Add(HostUi.Button("Quick Monitor", () => OpenQuickAdd(true)));

@@ -123,6 +123,9 @@ internal static class AuroraTheme
         control.BackColor = role is "card" or "nav" or "header" ? p.Surface : p.Canvas;
         switch (control)
         {
+            case PictureBox picture:
+                picture.BackColor = Color.Transparent;
+                break;
             case DataGridView grid:
                 grid.EnableHeadersVisualStyles = false;
                 grid.BackgroundColor = p.Surface; grid.GridColor = p.Surface2;
@@ -132,6 +135,10 @@ internal static class AuroraTheme
                 grid.DefaultCellStyle.BackColor = p.Surface; grid.DefaultCellStyle.ForeColor = p.Text;
                 grid.DefaultCellStyle.SelectionBackColor = p.Surface3; grid.DefaultCellStyle.SelectionForeColor = p.Text;
                 grid.DefaultCellStyle.Font = BodyFont;
+                grid.RowsDefaultCellStyle.SelectionBackColor = p.Surface3;
+                grid.RowsDefaultCellStyle.SelectionForeColor = p.Text;
+                grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = p.Surface3;
+                grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = p.Text;
                 grid.AlternatingRowsDefaultCellStyle.BackColor = p.Surface;
                 grid.ColumnHeadersDefaultCellStyle.BackColor = p.Surface2; grid.ColumnHeadersDefaultCellStyle.ForeColor = p.Secondary;
                 grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = p.Surface2; grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = p.Secondary;

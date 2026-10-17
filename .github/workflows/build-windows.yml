@@ -32,7 +32,8 @@ jobs:
       - name: Set release version
         shell: pwsh
         run: |
-          "WATCHDOG_VERSION=1.14.${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $version = ([xml](Get-Content PingWatchdog.csproj -Raw)).Project.PropertyGroup.Version
+          "WATCHDOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install matching Velopack CLI
         shell: pwsh
@@ -142,14 +143,13 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          Windows appearance foundation for the final design migration.
+          - Added a collapsible Wallboard toolbar, available through Show controls or F10.
+          - Removed the repeated Wallboard heading, subtitle, and shortcut footer.
+          - Moved main-window timing controls into Settings → Monitoring.
+          - Removed the main header tagline and corrected logo/action backgrounds.
+          - Preserved monitoring, host actions, and existing keyboard shortcuts.
 
-          - Adds System, Light, and Dark appearance in Settings → Display, using the existing save/discard flow.
-          - Shares appearance colors across the main window, Hosts, Settings, menus, and Wallboard.
-          - Adds reusable pill buttons, visible keyboard focus, and theme-aware status/table rendering.
-          - Preserves saved hosts, monitoring, alerts, history, and updates.
-          - Checks preference compatibility and text contrast; captures both appearances during Windows UI tests.
-          - The full design migration is still in progress. This is not the final maintenance release.
+          Internal validation build. Public release acceptance is pending.
 
           "@ | Set-Content release-notes.md
 
@@ -173,7 +173,9 @@ jobs:
           path: Releases/*
           if-no-files-found: error
 
+      # Hold public releases while the new design and release-policy acceptance are incomplete.
       - name: Publish release to GitHub
+        if: ${{ false }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

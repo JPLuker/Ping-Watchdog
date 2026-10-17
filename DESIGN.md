@@ -119,6 +119,15 @@ Each principle has: **what it means → why → how it shows up → how it fails
   - **The repeat test:** if the same value is visible in two places on one screen, delete one.
 - **Fails when:** the sidebar, header, and a stat card all show the same count; every row shows every column "just in case"; a dashboard restates what each module's own screen already shows; metadata (IDs, timestamps, paths) is visible by default when nobody needs it at a glance.
 
+### P12. The main UI is for doing; Settings is for configuring
+- **Means:** anything a person sets once, or changes rarely, lives in Settings, not on the main screens.
+- **The test:** "Will someone touch this in most sessions?" **No → Settings.** Yes → it may stay in the main UI.
+- **Belongs in Settings:** theme, update checks, data folder, version and build info, account details, language, keyboard shortcuts, default values, export formats, notifications, privacy options, anything labeled "advanced."
+- **Stays in the main UI:** controls that change per task or per session. Example: a Writing / Revision mode toggle the person flips while working.
+- **No duplicates.** A setting has one home (P11). A quick toggle in the main UI and the same option in Settings is allowed only for a per-session control, and both must stay in sync.
+- **Fails when:** a theme toggle, version badge, "Check updates" button, or privacy blurb sits in the header of a tool; a status bar shows configuration nobody changes; a dashboard has a card for a preference.
+- See Part 14.19 for how Settings itself is organized.
+
 ---
 
 ## 3. What the reference images taught us
@@ -540,6 +549,39 @@ For each: anatomy → rules → states. All states required: **rest, hover, pres
 ### 14.18 Media controls
 - Circular glass buttons; the play/pause button is the largest (focal), skip buttons smaller.
 
+### 14.19 Settings
+**Opening it**
+- Desktop: `Ctrl+,` (Windows/Linux) or `Cmd+,` (macOS), a gear at the bottom of the sidebar, and on macOS "Settings…" in the app menu.
+- Opens as its own page or window (desktop) or a full-screen view (mobile). Never a small modal.
+
+**Structure**
+- Desktop: category list on the left, settings for the selected category on the right. Mobile: a category list that drills into each category.
+- Categories, in this order. Include only the ones that have settings:
+  1. **General**
+  2. **Appearance**: theme (System / Light / Dark), density, text size
+  3. **App-specific categories**, one per feature area (e.g. "Goals", "Monitoring")
+  4. **Notifications**
+  5. **Updates**: check automatically, channel (Stable / Beta), "Check now"
+  6. **Data & storage**: data folder location, "Open data folder", export, import, "Delete all data"
+  7. **Privacy & security**
+  8. **Advanced**: debug, logging level, experimental features, "Reset all settings"
+  9. **About**: app name, version, build, license, links, "Copy diagnostic info"
+- More than ~20 settings total → add a search field at the top of the category list.
+
+**Each setting**
+- A row: label on the left, control on the right. A one-line description under the label only when the label alone is ambiguous (DESIGN.md Part 10).
+- Controls: toggle for on/off; segmented control for 2–4 options; dropdown for 5+; text field for free values; a button for actions.
+- Changes apply immediately. No Save button, except for grouped forms (e.g. account details) where partial values make no sense.
+- Settings that need a restart show "Restart required" inline with a "Restart" button. No modal.
+
+**Order within a category**
+- Most-used first. Destructive actions last, in `danger` text, each behind a confirmation dialog that states the consequence.
+- Group related settings with a `caption` group header. Sentence case, no all-caps.
+
+**Defaults**
+- Every setting has a sensible default so the app works without opening Settings at all.
+- Privacy-related defaults are the private option (see SECURITY-BASELINE.md).
+
 ---
 
 ## 15. Data & dashboards
@@ -957,6 +999,7 @@ body {
 - [ ] Every value appears in only one place on this screen?
 - [ ] Each piece of data shown here is needed for this screen's task (otherwise it moves to its home screen or behind disclosure)?
 - [ ] Details, metadata, and advanced options are on demand rather than shown by default?
+- [ ] Nothing set once or rarely changed is on a main screen (P12)? Version, theme, update, and data options are in Settings?
 
 **Copy**
 - [ ] Zero taglines, slogans, or self-descriptions?
@@ -1002,5 +1045,6 @@ body {
 - Changing a core value (accent, radius scale, font)? Change it here first, then in code. This file is the source of truth.
 
 **Changelog**
+- v1.2 — Added P12 "The main UI is for doing; Settings is for configuring" and Part 14.19 Settings organization.
 - v1.1 — Added P11 "Not every piece of data needs to be everywhere" (one home per fact, progressive disclosure), table column default, checklist section.
 - v1.0 — Initial Aurora Glass system: layer model, glass tiers, pill-first shape language, concentric radii, say-less copy rules, platform adaptation, tokens.

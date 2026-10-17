@@ -57,6 +57,21 @@ internal sealed class WallboardForm : Form
     private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 72);
     private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 72);
 
+    private readonly Button _toolbarToggle = ToolbarButton("Hide controls", 104);
+    private FlowLayoutPanel? _toolbarActions;
+    private bool _controlsVisible = true;
+    internal bool ControlsExpanded => _controlsVisible;
+    internal void SetControlsVisible(bool visible)
+    {
+        _controlsVisible = visible;
+        if (_toolbarActions == null) return;
+        _toolbarActions.SuspendLayout();
+        foreach (Control control in _toolbarActions.Controls)
+            if (control != _toolbarToggle) control.Visible = visible && (control != _updateButton || _controlProvider().ShowUpdateControl) && (control != _screenButton || Screen.AllScreens.Length > 1);
+        _toolbarToggle.Text = visible ? "Hide controls" : "Show controls";
+        _toolbarActions.ResumeLayout(true);
+    }
+
     private readonly Button _monitorButton = ToolbarButton("Start Monitoring", 112);
     private readonly Button _operationsButton = ToolbarButton("Sites", 66);
     private readonly Button _hostsButton = ToolbarButton("Hosts", 66);
@@ -248,6 +263,10 @@ internal sealed class WallboardForm : Form
             Margin = Padding.Empty,
             BackColor = Color.Transparent
         };
+        _toolbarActions = actions;
+        _toolbarToggle.AccessibleName = "Show or hide Wallboard controls";
+        _toolbarToggle.Click += (_, _) => SetControlsVisible(!_controlsVisible);
+        actions.Controls.Add(_toolbarToggle);
         foreach (var button in new[] { _monitorButton, _operationsButton, _hostsButton, _cliButton,
             _historyButton, _settingsButton, _updateButton, _screenButton, _mainButton })
             actions.Controls.Add(button);
@@ -695,7 +714,13 @@ internal sealed class WallboardForm : Form
 
     private void OnWallboardKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode is Keys.Escape or Keys.F11)
+        if (e.KeyCode == Keys.F10)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            SetControlsVisible(!_controlsVisible);
+        }
+        else if (e.KeyCode is Keys.Escape or Keys.F11)
         {
             e.Handled = true;
             Close();
@@ -820,8 +845,8 @@ internal sealed class WallboardForm : Form
     
 
             _updateButton.Text = state.UpdateActionText;
-            _updateButton.Visible = state.ShowUpdateControl;
-            _screenButton.Visible = Screen.AllScreens.Length > 1;
+            _updateButton.Visible = _controlsVisible && state.ShowUpdateControl;
+            _screenButton.Visible = _controlsVisible && Screen.AllScreens.Length > 1;
             _updateStatusLabel.Text = $"{state.Version}\r\n{state.UpdateStatus}";
 
             RefreshSiteCombo(state);
@@ -1124,7 +1149,7 @@ internal sealed class WallboardCanvas : Control
             DrawCli(g, snapshot, cliRect);
         }
 
-        DrawFooter(g);
+        // Shortcuts remain available without a permanent legend.
     }
 
     private void DrawBackground(Graphics g)
@@ -1137,16 +1162,6 @@ internal sealed class WallboardCanvas : Control
         using var brandBrush = new SolidBrush(WallboardStyle.Text);
         using var accentBrush = new SolidBrush(WallboardStyle.Accent);
         using var mutedBrush = new SolidBrush(WallboardStyle.Muted);
-
-        g.DrawImage(_brandBitmap, BrandLogoBounds);
-        int textLeft = BrandLogoBounds.Right + 12;
-        g.DrawString("Wallboard", _brandFont, brandBrush, textLeft, 14);
-        g.DrawString(
-            "Ping Watchdog · Live network status",
-            _subtitleFont,
-            accentBrush,
-            textLeft + 3,
-            57);
 
         string clock = DisplayTime.Clock(snapshot.CapturedAt);
         string date = snapshot.CapturedAt.ToString("dddd, MMMM d, yyyy");
