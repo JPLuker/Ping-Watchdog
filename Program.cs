@@ -947,6 +947,8 @@ public sealed partial class MainForm : Form
             _updateTimer.Dispose();
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
+            _siteActionsMenu.Dispose();
+            _columnsMenu.Dispose();
             _siteItemFont.Dispose();
             _statusCellFont.Dispose();
             _appIcon.Dispose();
@@ -1124,9 +1126,17 @@ public sealed partial class MainForm : Form
             using var bitmap = new Bitmap(viewport.Width, viewport.Height);
             canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
             var found = new HashSet<string>();
-            for (int y = 0; y < viewport.Height; y += 2)
-                for (int x = 0; x < viewport.Width; x += 2)
-                    if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
+            // Every host must remain reachable after panning, including at narrow sizes.
+            for (int panY = 0; panY <= canvas.TopologyContentSize.Height; panY += 300)
+            for (int panX = 0; panX <= canvas.TopologyContentSize.Width; panX += 300)
+            {
+                canvas.PanTopology(-100000, -100000);
+                canvas.PanTopology(panX, panY);
+                canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
+                for (int y = 0; y < viewport.Height; y += 4)
+                    for (int x = 0; x < viewport.Width; x += 4)
+                        if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
+            }
             Check(found.Count == hitHosts.Length);
             Check(canvas.HitTestHost(Point.Empty) == null);
         }

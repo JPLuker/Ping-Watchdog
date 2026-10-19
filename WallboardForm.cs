@@ -1019,6 +1019,7 @@ internal sealed class WallboardCanvas : Control
         _hostCaptionRegions.Skip(i + 1).Select(b => a.Bounds.IntersectsWith(b.Bounds))).Any(overlap => overlap);
     private Rectangle _topologyViewport;
     private Size _topologyVirtualSize;
+    internal Size TopologyContentSize => _topologyVirtualSize;
     private Point _panOffset;
     private Point? _dragOrigin;
     private Point _dragPan;
