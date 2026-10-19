@@ -176,6 +176,7 @@ internal sealed class WallboardForm : Form
             _drawer.Width = Math.Clamp(ClientSize.Width / 3, 360, 440);
             RefreshSnapshot();
             RefreshControlState(force: true);
+            SetControlsVisible(false);
             _timer.Start();
             Activate();
         };
@@ -714,7 +715,13 @@ internal sealed class WallboardForm : Form
 
     private void OnWallboardKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.F10)
+        if (!_drawer.Visible && e.KeyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down)
+        {
+            e.Handled = true; e.SuppressKeyPress = true;
+            _canvas.PanTopology(e.KeyCode == Keys.Left ? -80 : e.KeyCode == Keys.Right ? 80 : 0,
+                e.KeyCode == Keys.Up ? -80 : e.KeyCode == Keys.Down ? 80 : 0);
+        }
+        else if (e.KeyCode == Keys.F10)
         {
             e.Handled = true;
             e.SuppressKeyPress = true;
@@ -994,14 +1001,14 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _statLabelFont = new("Segoe UI", 10);
     private readonly Font _sectionFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
     private readonly Font _siteFont = new("Segoe UI Semibold", 9.5f, FontStyle.Bold);
-    private readonly Font _siteSmallFont = new("Segoe UI Semibold", 8f, FontStyle.Bold);
-    private readonly Font _siteTinyFont = new("Segoe UI Semibold", 6.75f, FontStyle.Bold);
-    private readonly Font _hostLabelFont = new("Segoe UI Semibold", 7.5f, FontStyle.Bold);
-    private readonly Font _hostIpFont = new("Consolas", 6.8f);
-    private readonly Font _smallFont = new("Segoe UI", 8.5f);
-    private readonly Font _tinyFont = new("Segoe UI", 7.5f);
+    private readonly Font _siteSmallFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
+    private readonly Font _siteTinyFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
+    private readonly Font _hostLabelFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
+    private readonly Font _hostIpFont = new("Consolas", 9.75f);
+    private readonly Font _smallFont = new("Segoe UI", 9.75f);
+    private readonly Font _tinyFont = new("Segoe UI", 9.75f);
     private readonly Font _coreFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
-    private readonly Font _cliFont = new("Consolas", 8.5f);
+    private readonly Font _cliFont = new("Consolas", 9.75f);
 
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostHitRegions = new();
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _sidebarHitRegions = new();
@@ -1012,6 +1019,46 @@ internal sealed class WallboardCanvas : Control
         _hostCaptionRegions.Skip(i + 1).Select(b => a.Bounds.IntersectsWith(b.Bounds))).Any(overlap => overlap);
     private Rectangle _topologyViewport;
     private Size _topologyVirtualSize;
+    private Point _panOffset;
+    private Point? _dragOrigin;
+    private Point _dragPan;
+
+    internal void PanTopology(int dx, int dy)
+    {
+        _panOffset = new Point(
+            Math.Clamp(_panOffset.X + dx, 0, Math.Max(0, _topologyVirtualSize.Width - _topologyViewport.Width)),
+            Math.Clamp(_panOffset.Y + dy, 0, Math.Max(0, _topologyVirtualSize.Height - _topologyViewport.Height)));
+        Invalidate();
+    }
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button == MouseButtons.Left && _topologyViewport.Contains(e.Location))
+        {
+            Focus(); _dragOrigin = e.Location; _dragPan = _panOffset; Capture = true;
+        }
+    }
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_dragOrigin is Point origin)
+        {
+            _panOffset = _dragPan;
+            PanTopology(origin.X - e.X, origin.Y - e.Y);
+        }
+    }
+    protected override void OnMouseCaptureChanged(EventArgs e)
+    {
+        base.OnMouseCaptureChanged(e);
+        if (!Capture) _dragOrigin = null;
+    }
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if ((ModifierKeys & Keys.Shift) != 0) PanTopology(-e.Delta, 0);
+        else PanTopology(0, -e.Delta);
+    }
+
     internal event Action<WallboardHostSnapshot, Point>? HostRightClicked;
 
     internal WallboardHostSnapshot? HitTestHost(Point location)
@@ -1020,14 +1067,15 @@ internal sealed class WallboardCanvas : Control
         if (sidebar != null) return sidebar;
         if (!_topologyViewport.Contains(location) || _topologyVirtualSize.Width <= 0) return null;
         var point = new Point(
-            (int)((location.X - _topologyViewport.X) * (double)_topologyVirtualSize.Width / _topologyViewport.Width),
-            (int)((location.Y - _topologyViewport.Y) * (double)_topologyVirtualSize.Height / _topologyViewport.Height));
+            location.X - _topologyViewport.X + _panOffset.X,
+            location.Y - _topologyViewport.Y + _panOffset.Y);
         return _hostHitRegions.LastOrDefault(hit => hit.Bounds.Contains(point)).Host;
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+        if (e.Button == MouseButtons.Left) { _dragOrigin = null; Capture = false; }
         if (e.Button == MouseButtons.Right && HitTestHost(e.Location) is { } host)
             HostRightClicked?.Invoke(host, e.Location);
     }
@@ -1039,6 +1087,8 @@ internal sealed class WallboardCanvas : Control
     public WallboardCanvas()
     {
         Name = "WallboardCanvas";
+        TabStop = true;
+        AccessibleName = "Host topology. Drag or use arrow keys to pan. Shift and mouse wheel pans horizontally.";
         DoubleBuffered = true;
         ResizeRedraw = true;
         BackColor = WallboardStyle.Background;
@@ -1099,10 +1149,10 @@ internal sealed class WallboardCanvas : Control
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
-        const int headerBandHeight = Presentation.WallboardHeaderHeight;
+        const int headerBandHeight = 112;
         int statsTop = headerBandHeight;
-        int statsHeight = Presentation.WallboardStatsHeight;
-        DrawStats(g, snapshot, statsTop, statsHeight);
+        int statsHeight = 0;
+
 
         int bodyTop = statsTop + statsHeight + 18;
         int footerHeight = Presentation.WallboardFooterHeight;
@@ -1163,6 +1213,11 @@ internal sealed class WallboardCanvas : Control
         using var accentBrush = new SolidBrush(WallboardStyle.Accent);
         using var mutedBrush = new SolidBrush(WallboardStyle.Muted);
 
+        var hosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
+        string summary = $"{hosts.Count(h => h.State == HostState.Online)} online · " +
+            $"{hosts.Count(h => h.State == HostState.Suspect)} suspect · " +
+            $"{hosts.Count(h => h.State == HostState.Offline)} offline";
+        g.DrawString(summary, _sectionFont, brandBrush, 24, 32);
         string clock = DisplayTime.Clock(snapshot.CapturedAt);
         string date = snapshot.CapturedAt.ToString("dddd, MMMM d, yyyy");
 
@@ -1275,53 +1330,23 @@ internal sealed class WallboardCanvas : Control
             snapshot.Sites.Count,
             visibleHosts);
 
-        renderScale = Math.Min(renderScale, rect.Height / 680d);
         _topologyViewport = rect;
-        if (renderScale >= 0.995)
-        {
-            _topologyVirtualSize = rect.Size;
-            DrawTopologyCore(g, snapshot, rect);
-            for (int i = 0; i < _hostHitRegions.Count; i++)
-            {
-                var hit = _hostHitRegions[i]; var bounds = hit.Bounds;
-                bounds.Offset(-rect.X, -rect.Y); _hostHitRegions[i] = (bounds, hit.Host);
-            }
-            return;
-        }
-
+        // Preserve logical text size. Extra space is navigable, never a shrunken bitmap.
         int virtualWidth = Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
-        int virtualHeight = Math.Max(rect.Height, (int)Math.Ceiling(rect.Height / renderScale));
-
+        int virtualHeight = Math.Max(680, (int)Math.Ceiling(rect.Height / renderScale));
         _topologyVirtualSize = new Size(virtualWidth, virtualHeight);
-        using var bitmap = new Bitmap(virtualWidth, virtualHeight);
-        using (var virtualGraphics = Graphics.FromImage(bitmap))
+        _panOffset = new Point(Math.Clamp(_panOffset.X, 0, Math.Max(0, virtualWidth - rect.Width)),
+            Math.Clamp(_panOffset.Y, 0, Math.Max(0, virtualHeight - rect.Height)));
+        var state = g.Save();
+        g.SetClip(rect, System.Drawing.Drawing2D.CombineMode.Intersect);
+        g.TranslateTransform(rect.X - _panOffset.X, rect.Y - _panOffset.Y);
+        DrawTopologyCore(g, snapshot, new Rectangle(0, 0, virtualWidth, virtualHeight));
+        g.Restore(state);
+        if (virtualWidth > rect.Width || virtualHeight > rect.Height)
         {
-            virtualGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            virtualGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            virtualGraphics.Clear(WallboardStyle.Panel);
-            DrawTopologyCore(
-                virtualGraphics,
-                snapshot,
-                new Rectangle(0, 0, virtualWidth, virtualHeight));
+            using var hint = new SolidBrush(WallboardStyle.Muted);
+            g.DrawString("Drag to pan", _tinyFont, hint, rect.X + 16, rect.Bottom - 24);
         }
-
-        var previousInterpolation = g.InterpolationMode;
-        var previousPixelOffset = g.PixelOffsetMode;
-        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-        var graphicsState = g.Save();
-        using (var clip = WallboardStyle.Rounded(rect, 14))
-        {
-            g.SetClip(clip, System.Drawing.Drawing2D.CombineMode.Intersect);
-            g.DrawImage(bitmap, rect);
-        }
-        g.Restore(graphicsState);
-        g.InterpolationMode = previousInterpolation;
-        g.PixelOffsetMode = previousPixelOffset;
-
-        using var border = new Pen(WallboardStyle.Line);
-        using var outline = WallboardStyle.Rounded(rect, 14);
-        g.DrawPath(border, outline);
     }
 
     internal static double CalculateTopologyRenderScale(

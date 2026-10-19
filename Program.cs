@@ -786,7 +786,7 @@ public sealed partial class MainForm : Form
         BuildLayout();
         BuildGridContextMenu();
         _statusStrip.Items.Add(_statusLabel);
-        _statusStrip.Items.Add(_ownershipLabel);
+        // Build and ownership details live in About.
         _versionLabel.Text = GetDisplayVersion();
         _ownershipLabel.Text = $"{GetDisplayVersion()} • © 2026 Joseph Luker • All rights reserved.";
 
@@ -859,7 +859,7 @@ public sealed partial class MainForm : Form
             }
         };
 
-        _startButton.Click += (_, _) => StartMonitoring();
+        _startButton.Click += (_, _) => { if (_cts is null) StartMonitoring(); else StopMonitoring(); };
         _stopButton.Click += (_, _) => StopMonitoring();
         _showCommandView.CheckedChanged += (_, _) => ToggleCommandView();
         _clearLogButton.Click += (_, _) => ClearCommandLog();
@@ -1077,12 +1077,12 @@ public sealed partial class MainForm : Form
         {
             new StateEventRecord(historyNow.AddHours(-1), "A", "1", "one", "DOWN", "down"),
             new StateEventRecord(historyNow.AddMinutes(-30), "A", "1", "one", "RECOVERED", "up"),
-            new StateEventRecord(historyNow.AddMinutes(-10), "A", "2", "two", "SUSPECT", "suspect"),
+            new StateEventRecord(historyNow.AddMinutes(-10), "A", "2", "two", "Suspect", "suspect"),
             new StateEventRecord(historyNow.AddHours(-30), "B", "3", "three", "DOWN", "old")
         };
         var filtered24h = FilterStateEvents(historySample, 24, hideSuspects: true, historyNow);
         Check(filtered24h.Count == 2);
-        Check(filtered24h.All(e => e.Kind != "SUSPECT"));
+        Check(filtered24h.All(e => e.Kind != "Suspect"));
         Check(filtered24h.All(e => e.Timestamp >= historyNow.AddHours(-24)));
         Check(FilterStateEvents(historySample, 0, hideSuspects: false, historyNow).Count == 4);
         Check(GetEventHistoryWindowLabel(168) == "Last 7 days");
@@ -1266,12 +1266,12 @@ public sealed partial class MainForm : Form
         form.ClientSize = new Size(1320, 840);
         form.ApplyResponsiveLayout();
         Check(form._workspaceSplit.SplitterDistance >= 210);
-        Check(form._addSiteButton.Text == "+ Add Site");
-        Check(form._renameSiteButton.Text == "Rename Site");
-        Check(form._deleteSiteButton.Text == "Delete Site");
-        Check(form._addSiteButton.MinimumSize.Height >= 32);
-        Check(form._renameSiteButton.MinimumSize.Height >= 32);
-        Check(form._deleteSiteButton.MinimumSize.Height >= 32);
+
+
+
+
+
+
         Check(form._checkUpdateButton.Parent is not null);
         Check(form._wallboardButton.Parent is not null);
         Check(form._settingsButton.Parent is not null);
@@ -1424,7 +1424,9 @@ public sealed partial class MainForm : Form
 
                 WindowsBranding.RunShortcutSmokeTest(output);
                 form.ImportManagedHosts(new() { new(form._sites[0].Name, "192.0.2.254", "Menu test", "", new HostOptions(), "Unknown") }, false);
-                await CheckHostMenu(form._hostInventory!);
+                Check(form._grid.Rows.Count > 0, "Saved hosts are absent while idle.");
+                Check(form._grid.Columns.Cast<DataGridViewColumn>().Count(c => c.Visible) <= 5,
+                    "Default results expose too many columns.");
                 await CheckHostMenu(form._grid);
 
                 // Keep a non-first host, its selected column, and both scroll positions through repeated refreshes.
@@ -1457,13 +1459,8 @@ public sealed partial class MainForm : Form
                 form.RefreshGrid();
                 Check(form.GetSelectedHostIdentity() is null, "Removed host left a stale selection.");
 
-                form._inventoryHeight = 260;
-                form.ApplyResponsiveLayout();
-                float resizedInventory = form._rightLayout!.RowStyles[1].Height;
-                form.ApplyResponsiveLayout();
-                Check(resizedInventory >= 200 && form._rightLayout.RowStyles[1].Height == resizedInventory,
-                    "Host inventory resize was lost during responsive layout.");
-                Capture(form, "resized-host-inventory");
+                Check(form._rightLayout!.RowStyles[1].Height == 0, "Duplicate inventory space returned.");
+                Capture(form, "single-host-table");
                 form.OpenHostManager();
                 await Task.Delay(100);
                 Check(form._hostManager?.Visible == true, "Host Manager did not open.");
@@ -1489,6 +1486,8 @@ public sealed partial class MainForm : Form
                 form.OpenWallboard();
                 await Task.Delay(200);
                 Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
+                Check(!form._wallboardForm!.ControlsExpanded, "Wallboard controls must start hidden.");
+                form._wallboardForm.SetControlsVisible(true);
                 var canvas = (WallboardCanvas)form._wallboardForm!.Controls.Find("WallboardCanvas", true).Single();
                 foreach (int width in new[] { 900, 1320 })
                 {
@@ -1665,6 +1664,16 @@ public sealed partial class MainForm : Form
         };
         int labelIndex = _grid.Columns["LabelColumn"]?.Index ?? 1;
         _grid.Columns.Insert(Math.Min(labelIndex + 1, _grid.Columns.Count), categoryColumn);
+        foreach (DataGridViewColumn column in _grid.Columns)
+            column.Visible = column.Name is "SiteColumn" or "HostColumn" or "LabelColumn" or "StatusColumn" or "LatencyColumn";
+        _grid.Columns["HostColumn"].HeaderText = "Address";
+        _grid.Columns["LabelColumn"].HeaderText = "Name";
+        _grid.Columns["LabelColumn"].DisplayIndex = 0;
+        _grid.Columns["HostColumn"].DisplayIndex = 1;
+        _grid.Columns["SiteColumn"].DisplayIndex = 2;
+        _grid.Columns["LatencyColumn"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OpenHostManager(); };
+
     }
 
     private void BuildLayout()
@@ -1784,53 +1793,23 @@ public sealed partial class MainForm : Form
         _workspaceSplit.Panel1.Tag = "nav";
         _workspaceSplit.Panel2.Tag = "window";
 
+        // FOCAL: live host results. Compact workspace with secondary actions on demand.
         var sitePanel = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 7,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-            Tag = "nav"
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
+            Margin = Padding.Empty, Tag = "nav"
         };
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-
-        sitePanel.Controls.Add(new Label
-        {
-            Text = "Sites",
-            AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold),
-            Padding = new Padding(4, 8, 0, 0),
-            Tag = "primaryText"
-        }, 0, 0);
+        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        sitePanel.Controls.Add(new Label { Text = "Sites", AutoSize = true,
+            Font = AuroraTheme.LabelFont, Padding = new Padding(8), Tag = "primaryText" }, 0, 0);
         sitePanel.Controls.Add(_siteList, 0, 1);
-        var hostsNav = HostUi.Button("Hosts", OpenHostManager);
-        hostsNav.Dock = DockStyle.Fill;
-        sitePanel.Controls.Add(hostsNav, 0, 2);
-
-        _addSiteButton.Text = "+ Add Site";
-        _organizeButton.Text = "Organize";
-        _renameSiteButton.Text = "Rename Site";
-        _deleteSiteButton.Text = "Delete Site";
-
-        foreach (var button in new[] { _addSiteButton, _organizeButton, _renameSiteButton, _deleteSiteButton })
-        {
-            button.AutoSize = false;
-            button.Dock = DockStyle.Fill;
-            button.MinimumSize = new Size(0, 32);
-            button.Margin = new Padding(0, 3, 0, 3);
-        }
-
-        sitePanel.Controls.Add(_addSiteButton, 0, 3);
-        sitePanel.Controls.Add(_organizeButton, 0, 4);
-        sitePanel.Controls.Add(_renameSiteButton, 0, 5);
-        sitePanel.Controls.Add(_deleteSiteButton, 0, 6);
+        var siteActions = HostUi.Button("Manage sites", ShowSiteActions);
+        siteActions.Dock = DockStyle.Fill;
+        sitePanel.Controls.Add(siteActions, 0, 2);
+        _siteList.ContextMenuStrip = _siteActionsMenu;
+        _siteActionsMenu.Opening += (_, _) => PopulateSiteActions();
 
         var right = new TableLayoutPanel
         {
@@ -1841,95 +1820,26 @@ public sealed partial class MainForm : Form
             Margin = new Padding(0),
             Tag = "window"
         };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _rightLayout = right;
 
-        var stats = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 4,
-            RowCount = 1,
-            Margin = new Padding(0, 0, 0, 10),
-            Tag = "window"
-        };
-
-        for (int i = 0; i < 4; i++)
-            stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-
-        Panel StatCard(string title, Label value, string tag)
-        {
-            var card = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 9, 0),
-                Padding = new Padding(14, 8, 14, 7),
-                Tag = "card"
-            };
-
-            value.Tag = tag;
-            value.Font = new Font("Segoe UI Semibold", 21, FontStyle.Bold);
-            value.Location = new Point(14, 25);
-
-            card.Controls.Add(new Label
-            {
-                Text = title,
-                AutoSize = true,
-                Location = new Point(14, 8),
-                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
-                Tag = "muted"
-            });
-            card.Controls.Add(value);
-            return card;
-        }
-
-        stats.Controls.Add(StatCard("Total hosts", _totalValueLabel, "statTotal"), 0, 0);
-        stats.Controls.Add(StatCard("Online", _onlineValueLabel, "statOnline"), 1, 0);
-        stats.Controls.Add(StatCard("Suspect", _suspectValueLabel, "statSuspect"), 2, 0);
-        var offlineCard = StatCard("Offline", _offlineValueLabel, "statOffline");
-        offlineCard.Margin = new Padding(0);
-        stats.Controls.Add(offlineCard, 3, 0);
-
-        var inputCard = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(14, 10, 14, 12),
-            Margin = new Padding(0, 0, 0, 10),
-            Tag = "card"
-        };
-        inputCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        inputCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
         var hostHeader = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = new Padding(0),
-            Tag = "card"
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            Margin = Padding.Empty, Tag = "window"
         };
         hostHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         hostHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-        _siteHeaderLabel.Font = new Font("Segoe UI Semibold", 10.25f, FontStyle.Bold);
-        _siteHeaderLabel.Padding = new Padding(0, 3, 0, 0);
+        _siteHeaderLabel.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
+        _siteHeaderLabel.Padding = new Padding(0, 8, 0, 0);
         _siteHeaderLabel.Tag = "primaryText";
-
-        _autoSaveLabel.Text = "Saved automatically • Applies live";
-        _autoSaveLabel.Font = new Font("Segoe UI", 8.5f);
-        _autoSaveLabel.Padding = new Padding(0, 4, 0, 0);
-        _autoSaveLabel.Tag = "muted";
-
         hostHeader.Controls.Add(_siteHeaderLabel, 0, 0);
         hostHeader.Controls.Add(BuildHostActions(), 1, 0);
-        inputCard.Controls.Add(hostHeader, 0, 0);
         _ipBox.Visible = false;
         Controls.Add(_ipBox);
-        inputCard.Controls.Add(BuildHostInventory(), 0, 1);
 
         var settingsCard = new TableLayoutPanel
         {
@@ -1954,12 +1864,7 @@ public sealed partial class MainForm : Form
         };
         _settingsFlowPanel = settings;
 
-        var monitoringOptions = HostUi.Button("Monitoring settings", () =>
-        {
-            OpenSettings();
-            _settingsForm?.SelectCategory("Monitoring");
-        });
-        settings.Controls.Add(monitoringOptions);
+        settings.Controls.Add(HostUi.Button("Columns", ShowColumnMenu));
         settings.Controls.Add(_showCommandView);
         settingsCard.Controls.Add(settings, 0, 0);
 
@@ -1977,7 +1882,7 @@ public sealed partial class MainForm : Form
         _startButton.MinimumSize = new Size(132, 34);
         _stopButton.MinimumSize = new Size(76, 34);
         monitorActions.Controls.Add(_startButton);
-        monitorActions.Controls.Add(_stopButton);
+        // A single button toggles the current monitoring session.
         settingsCard.Controls.Add(monitorActions, 1, 0);
 
         _mainSplit.Panel1.Padding = new Padding(0);
@@ -2019,8 +1924,7 @@ public sealed partial class MainForm : Form
         commandPanel.Controls.Add(_commandBox, 0, 1);
         _mainSplit.Panel2.Controls.Add(commandPanel);
 
-        right.Controls.Add(stats, 0, 0);
-        right.Controls.Add(BuildResizableInventory(inputCard), 0, 1);
+        right.Controls.Add(hostHeader, 0, 0);
         right.Controls.Add(settingsCard, 0, 2);
         right.Controls.Add(_mainSplit, 0, 3);
 
@@ -2075,7 +1979,8 @@ public sealed partial class MainForm : Form
                 // A resize can briefly make the splitter reject a valid target.
             }
 
-            _rightLayout.RowStyles[0].Height = shortWindow ? 66 : 76;
+            _rightLayout.RowStyles[0].Height = 56 * DeviceDpi / 96f;
+            _rightLayout.RowStyles[1].Height = 0;
 
             _rightLayout.RowStyles[2].Height = narrow ? 106 : 84;
 
@@ -2098,7 +2003,7 @@ public sealed partial class MainForm : Form
             _rightLayout.RowStyles[2].Height = Math.Max(
                 64,
                 settingsHeight + settingsCard.Padding.Vertical + settingsCard.Margin.Vertical);
-            ApplyInventoryHeight();
+
 
             if (_pendingUpdateManager is null)
             {
@@ -2383,7 +2288,7 @@ public sealed partial class MainForm : Form
 
         var site = FindSite(_selectedSiteName);
 
-        _siteHeaderLabel.Text = $"{_selectedSiteName} • Hosts";
+        _siteHeaderLabel.Text = $"{_selectedSiteName}";
         _ipBox.ReadOnly = false;
         _ipBox.Text = site is null
             ? string.Empty
@@ -3414,7 +3319,7 @@ public sealed partial class MainForm : Form
         _failureThreshold.Enabled = false;
         _recoveryThreshold.Enabled = false;
         _timeoutMs.Enabled = false;
-        _startButton.Enabled = false;
+        _startButton.Enabled = true;
         _stopButton.Enabled = true;
         _trayStopItem.Enabled = true;
 
@@ -3707,7 +3612,7 @@ public sealed partial class MainForm : Form
 
                     if (previousState != HostState.Suspect)
                     {
-                        eventKind = "SUSPECT";
+                        eventKind = "Suspect";
                         eventMessage = $"{DescribeMonitoredHost(host)} has {host.ConsecutiveFailures} failed ping attempt(s).";
                     }
                 }
@@ -3841,7 +3746,7 @@ public sealed partial class MainForm : Form
             .Where(e => !cutoff.HasValue || e.Timestamp >= cutoff.Value)
             .Where(e =>
                 !hideSuspects ||
-                !e.Kind.Equals("SUSPECT", StringComparison.OrdinalIgnoreCase))
+                !e.Kind.Equals("Suspect", StringComparison.OrdinalIgnoreCase))
             .OrderBy(e => e.Timestamp)
             .ToList();
     }
@@ -4917,7 +4822,11 @@ public sealed partial class MainForm : Form
         string? selectedColumn = _grid.CurrentCell?.OwningColumn.Name;
         int firstDisplayedRow = _grid.FirstDisplayedScrollingRowIndex;
         int horizontalOffset = _grid.HorizontalScrollingOffset;
-        var rows = _hosts.Values
+        var configuredHosts = HostSnapshot().ToDictionary(h => BuildHostKey(h.Site, h.Address), StringComparer.OrdinalIgnoreCase);
+        var monitors = _hosts.Values.ToDictionary(h => BuildHostKey(h.Site, h.Address), StringComparer.OrdinalIgnoreCase);
+        foreach (var host in configuredHosts.Values)
+            monitors.TryAdd(BuildHostKey(host.Site, host.Address), new HostMonitor(host.Site, host.Address));
+        var rows = monitors.Values
             .Where(h =>
                 _selectedSiteName is null ||
                 h.Site.Equals(
@@ -4927,19 +4836,17 @@ public sealed partial class MainForm : Form
             {
                 lock (h)
                 {
+                    configuredHosts.TryGetValue(BuildHostKey(h.Site, h.Address), out var saved);
+                    string health = _cts is null ? "Idle" : h.State.ToString();
+                    string statusText = saved?.Options.Enabled == false ? "Disabled" : health +
+                        (saved?.Options.IsSnoozed(DateTimeOffset.UtcNow) == true ? " · Snoozed" : "");
                     return new
                     {
                         Site = h.Site,
                         Host = h.Address,
                         Label = GetNickname(h.Site, h.Address),
                         Category = GetCategory(h.Site, h.Address),
-                        Status = h.State switch
-                        {
-                            HostState.Online => "ONLINE",
-                            HostState.Suspect => "SUSPECT",
-                            HostState.Offline => "OFFLINE",
-                            _ => "UNKNOWN"
-                        },
+                        Status = statusText,
                         Latency = h.LastRoundTripMs.HasValue
                             ? $"{h.LastRoundTripMs} ms"
                             : "—",
@@ -4983,26 +4890,26 @@ public sealed partial class MainForm : Form
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
-            var status = row.Cells["StatusColumn"].Value?.ToString();
+            var status = row.Cells["StatusColumn"].Value?.ToString()?.Split(" · ")[0];
             var cell = row.Cells["StatusColumn"];
 
             cell.Style.Font = _statusCellFont;
             cell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             cell.Style.ForeColor = status switch
             {
-                "OFFLINE" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Danger),
-                "SUSPECT" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning),
-                "ONLINE" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Teal),
+                "Offline" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Danger),
+                "Suspect" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning),
+                "Online" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Teal),
                 _ => AuroraTheme.Palette.Secondary
             };
 
-            if (status == "OFFLINE")
+            if (status == "Offline")
                 row.DefaultCellStyle.BackColor = AuroraTheme.Palette.Surface2;
         }
 
-        int online = rows.Count(h => h.Status == "ONLINE");
-        int suspect = rows.Count(h => h.Status == "SUSPECT");
-        int offline = rows.Count(h => h.Status == "OFFLINE");
+        int online = rows.Count(h => h.Status.StartsWith("Online", StringComparison.Ordinal));
+        int suspect = rows.Count(h => h.Status.StartsWith("Suspect", StringComparison.Ordinal));
+        int offline = rows.Count(h => h.Status.StartsWith("Offline", StringComparison.Ordinal));
 
         int configured = _selectedSiteName is null
             ? _sites.Sum(site => site.Hosts.Count(address => GetHostOptions(site, address).Enabled))
@@ -5010,6 +4917,8 @@ public sealed partial class MainForm : Form
                 ? selectedSite.Hosts.Count(address => GetHostOptions(selectedSite, address).Enabled)
                 : 0);
 
+        _startButton.Text = _cts is null ? "Start monitoring" : "Stop monitoring";
+        _startButton.Enabled = true;
         _totalValueLabel.Text = (_cts is null ? configured : rows.Count).ToString();
         _onlineValueLabel.Text = online.ToString();
         _suspectValueLabel.Text = suspect.ToString();
@@ -5018,7 +4927,7 @@ public sealed partial class MainForm : Form
         string view = _selectedSiteName ?? AllSitesLabel;
 
         _statusLabel.Text = _cts is null
-            ? $"Ready • View: {view} • {configured} configured host(s)"
-            : $"Monitoring • View: {view} • {online} online • {suspect} suspect • {offline} offline";
+            ? $"Ready"
+            : $"{online} online · {suspect} suspect · {offline} offline";
     }
 }
