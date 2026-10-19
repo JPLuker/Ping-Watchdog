@@ -1533,6 +1533,19 @@ public sealed partial class MainForm : Form
                 form._wallboardForm.SetControlsVisible(true);
                 Check(form._wallboardForm.ControlsExpanded, "Wallboard controls did not reopen.");
                 Capture(form._wallboardForm!, "wallboard");
+                canvas.Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                    Enumerable.Range(1, 4).Select(site => new WallboardSiteSnapshot("Branch " + site,
+                        Enumerable.Range(1, site == 4 ? 1 : 8).Select(host => new WallboardHostSnapshot(
+                            "Branch " + site, $"192.0.2.{site * 20 + host}", host == 4 ? "Cloudkey controller" : "Device " + host,
+                            host == 2 ? HostState.Offline : HostState.Online, 12, host == 2 ? DateTime.Now.AddMinutes(-4) : null)).ToArray())).ToArray(),
+                    Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "Last 24 hours", true);
+                using (var dense = new Bitmap(canvas.Width, canvas.Height))
+                {
+                    canvas.DrawToBitmap(dense, canvas.ClientRectangle);
+                    dense.Save(Path.Combine(output, "wallboard-dense.png"));
+                    Check(!canvas.CaptionsOverlap(), "Dense Wallboard captions overlap.");
+                }
+
                 form._wallboardForm!.Close();
                 await Task.Delay(100);
                 Check(form.Visible, "Closing Wallboard did not restore the main window.");

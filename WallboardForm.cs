@@ -996,11 +996,11 @@ internal sealed class WallboardCanvas : Control
     private readonly Font _brandFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
     private readonly Font _subtitleFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
     private readonly Font _clockFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
-    private readonly Font _dateFont = new("Segoe UI", 9.5f);
+    private readonly Font _dateFont = new("Segoe UI", 9.75f);
     private readonly Font _statValueFont = new("Segoe UI Semibold", 25, FontStyle.Bold);
     private readonly Font _statLabelFont = new("Segoe UI", 10);
     private readonly Font _sectionFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
-    private readonly Font _siteFont = new("Segoe UI Semibold", 9.5f, FontStyle.Bold);
+    private readonly Font _siteFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
     private readonly Font _siteSmallFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
     private readonly Font _siteTinyFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
     private readonly Font _hostLabelFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
