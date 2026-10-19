@@ -1333,16 +1333,16 @@ internal sealed class WallboardCanvas : Control
 
         _topologyViewport = rect;
         // Preserve logical text size. Extra space is navigable, never a shrunken bitmap.
-        int virtualWidth = Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
-        int virtualHeight = Math.Max(680, (int)Math.Ceiling(rect.Height / renderScale));
-        if (_topologyVirtualSize.IsEmpty)
-            _panOffset = new Point((virtualWidth - rect.Width) / 2, (virtualHeight - rect.Height) / 2);
+        int virtualWidth = snapshot.Sites.Count <= 1 ? rect.Width : Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
+        int virtualHeight = snapshot.Sites.Count <= 1 ? Math.Max(360, rect.Height) : Math.Max(680, (int)Math.Ceiling(rect.Height / renderScale));
+        if (_topologyVirtualSize != new Size(virtualWidth, virtualHeight))
+            _panOffset = new Point((virtualWidth - rect.Width) / 2, 0);
         _topologyVirtualSize = new Size(virtualWidth, virtualHeight);
         _panOffset = new Point(Math.Clamp(_panOffset.X, 0, Math.Max(0, virtualWidth - rect.Width)),
             Math.Clamp(_panOffset.Y, 0, Math.Max(0, virtualHeight - rect.Height)));
         // TextRenderer uses GDI and does not follow a GDI+ TranslateTransform.
         // Render at native size, then crop at 1:1 so text and hit regions move together.
-        using var bitmap = new Bitmap(virtualWidth, virtualHeight);
+        using var bitmap = new Bitmap(virtualWidth, virtualHeight, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
         using (var contentGraphics = Graphics.FromImage(bitmap))
         {
             contentGraphics.Clear(WallboardStyle.Panel);
@@ -1417,6 +1417,16 @@ internal sealed class WallboardCanvas : Control
         var center = new Point(
             content.X + content.Width / 2,
             content.Y + content.Height / 2);
+
+        // One site needs no synthetic hub or oversized navigation canvas.
+        if (snapshot.Sites.Count == 1)
+        {
+            _captionObstacles.Clear();
+            _hiddenCaptions = 0;
+            _captionObstacles.Add(new Rectangle(center.X - 55, center.Y - 55, 110, 110));
+            DrawSiteNode(g, snapshot.Sites[0], center, content, 0);
+            return;
+        }
 
         // Quiet topology: status and host labels provide the visual emphasis.
 
