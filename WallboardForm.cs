@@ -1335,13 +1335,27 @@ internal sealed class WallboardCanvas : Control
         // Preserve logical text size. Extra space is navigable, never a shrunken bitmap.
         int virtualWidth = Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
         int virtualHeight = Math.Max(680, (int)Math.Ceiling(rect.Height / renderScale));
+        if (_topologyVirtualSize.IsEmpty)
+            _panOffset = new Point((virtualWidth - rect.Width) / 2, (virtualHeight - rect.Height) / 2);
         _topologyVirtualSize = new Size(virtualWidth, virtualHeight);
         _panOffset = new Point(Math.Clamp(_panOffset.X, 0, Math.Max(0, virtualWidth - rect.Width)),
             Math.Clamp(_panOffset.Y, 0, Math.Max(0, virtualHeight - rect.Height)));
+        // TextRenderer uses GDI and does not follow a GDI+ TranslateTransform.
+        // Render at native size, then crop at 1:1 so text and hit regions move together.
+        using var bitmap = new Bitmap(virtualWidth, virtualHeight);
+        using (var contentGraphics = Graphics.FromImage(bitmap))
+        {
+            contentGraphics.Clear(WallboardStyle.Panel);
+            contentGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            contentGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            DrawTopologyCore(contentGraphics, snapshot, new Rectangle(0, 0, virtualWidth, virtualHeight));
+        }
         var state = g.Save();
-        g.SetClip(rect, System.Drawing.Drawing2D.CombineMode.Intersect);
-        g.TranslateTransform(rect.X - _panOffset.X, rect.Y - _panOffset.Y);
-        DrawTopologyCore(g, snapshot, new Rectangle(0, 0, virtualWidth, virtualHeight));
+        using (var clip = WallboardStyle.Rounded(rect, 14))
+        {
+            g.SetClip(clip, System.Drawing.Drawing2D.CombineMode.Intersect);
+            g.DrawImage(bitmap, rect, new Rectangle(_panOffset, rect.Size), GraphicsUnit.Pixel);
+        }
         g.Restore(state);
         if (virtualWidth > rect.Width || virtualHeight > rect.Height)
         {
@@ -1856,13 +1870,14 @@ internal sealed class WallboardCanvas : Control
             ? $"{snapshot.EventWindowLabel} • suspects hidden"
             : $"{snapshot.EventWindowLabel} • suspects shown";
 
+        y += 24;
         var filterSize = g.MeasureString(historyFilter, _tinyFont);
         g.DrawString(
             historyFilter,
             _tinyFont,
             mutedBrush,
-            Math.Max(x, x + width - filterSize.Width),
-            y + 1);
+            x,
+            y);
 
         y += 27;
 
