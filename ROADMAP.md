@@ -1,7 +1,7 @@
 # Ping Watchdog final feature release
 
 Status: implementation in progress; design migration and release acceptance are not complete.
-Current published Windows build: v1.16.1 (unified monitoring layout).
+Current published Windows build: v1.17.1 (fitted Map/List views and monitoring batch export).
 Pre-migration baseline for update acceptance: v1.14.81.
 Design authority: [DESIGN.md](DESIGN.md), Aurora Glass v1.2.
 
@@ -143,4 +143,4 @@ Implemented native topology reflow across site groups and host columns, retainin
 
 Joseph clarified that the shareable export is for ongoing monitoring, not saved output. Export monitoring batch creates a self-contained .bat for the selected enabled targets, repeatedly running ordinary Windows ping commands in one command window. It requires no app install, performs checks sequentially, and writes no result files. The generator validates targets and treats labels as text. A Windows loopback integration test exercises the generated batch in its single-pass test mode.
 
-Validation and release verification for 1.17.0 are pending. Final-release, physical DPI/accessibility and workday acceptance remain separate.
+Windows runs 39480743453 (1.17.0) and 39481434578 (1.17.1) passed the existing monitoring/configuration/updater, published UI/startup, recovery and package gates. The generated batch was executed against loopback in single-pass test mode; malformed shell targets were rejected. Populated 25-host light/dark map and List captures and the dense fullscreen capture were inspected. All test nodes fit without panning; recovered devices leave the active-outage surface. Separate popup component captures were inspected, with visibility, bounds and top-of-stack checks; whole-form DrawToBitmap does not include the overlay in these captures, so physical desktop/compositor acceptance remains pending. Installer, portable ZIP and updater-feed assets were verified in v1.17.1. Issues #2 and #3 are resolved. Final-release, physical DPI/accessibility and workday acceptance remain separate.
