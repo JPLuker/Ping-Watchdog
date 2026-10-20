@@ -1,7 +1,7 @@
 # Ping Watchdog final feature release
 
 Status: implementation in progress; design migration and release acceptance are not complete.
-Current published Windows build: v1.14.84 (appearance foundation).
+Current published Windows build: v1.16.1 (unified monitoring layout).
 Pre-migration baseline for update acceptance: v1.14.81.
 Design authority: [DESIGN.md](DESIGN.md), Aurora Glass v1.2.
 
@@ -132,4 +132,4 @@ Joseph supplied a dashboard reference and requested one shared dashboard/Wallboa
 
 Replaced radial orbit layout with measured branch rows that remain readable and pan at larger sizes. Main-map and outage rows reuse existing host quick actions. Site selection still scopes actual workers. Corrected selection painting, aligned sidebar utility actions, added an explicit empty ping-output state, and requested native dark scrollbar styling where available. Added populated dark/light captures and panel-allocation/address-order regressions.
 
-Windows run 39439444049 passed monitoring/configuration/updater, published UI/startup, recovery and packaging gates. Actual populated light/dark dashboard and fullscreen captures were inspected. That review found table overflow beside ping output and unbounded fullscreen output text; the 1.16.1 correction fits columns, adapts output placement on narrow windows, clips fullscreen output, and adds scrolling for fullscreen results. Its validation remains pending. Physical DPI, screen-reader, workday and remaining supporting-window acceptance remain open.
+Windows run 39439444049 passed monitoring/configuration/updater, published UI/startup, recovery and packaging gates. Actual populated light/dark dashboard and fullscreen captures were inspected. That review found table overflow beside ping output and unbounded fullscreen output text; the 1.16.1 correction fits columns, adapts output placement on narrow windows, clips fullscreen output, and adds scrolling for fullscreen results. Windows run 39440342943 passed the monitoring/configuration/updater, published UI/startup, recovery and packaging gates. The 1060×680 populated dashboard captures in both themes and fullscreen captures were inspected; five default columns fit beside output. v1.16.1 installer, portable package and update-feed assets were verified published. Large maps remain pannable, and fullscreen results scroll; physical DPI/accessibility and workday checks remain pending. Physical DPI, screen-reader, workday and remaining supporting-window acceptance remain open.
