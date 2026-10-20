@@ -1089,14 +1089,14 @@ public sealed partial class MainForm : Form
 
         using (var captionBitmap = new Bitmap(800, 300))
         using (var captionGraphics = Graphics.FromImage(captionBitmap))
-        using (var labelFont = new Font("Segoe UI", 8))
-        using (var addressFont = new Font("Cascadia Mono", 6.8f))
+        using (var labelFont = new Font("Segoe UI", 10.5f))
+        using (var addressFont = new Font("Consolas", 9.75f))
         {
             foreach (string address in new[] { "10.235.80.60", "173.161.54.241", "255.255.255.255", "2001:db8:abcd:1234:5678:90ab:cdef:1234" })
             {
                 var size = WallboardCanvas.MeasureHostNodeCaption(captionGraphics, "Printer", address, labelFont, addressFont);
-                var required = TextRenderer.MeasureText(captionGraphics, address, addressFont, Size.Empty,
-                    TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap };
+                var required = captionGraphics.MeasureString(address, addressFont, int.MaxValue, format);
                 Check(size.Width - 10 >= required.Width);
                 Check(size.Height >= required.Height + 6);
             }
@@ -3009,6 +3009,7 @@ public sealed partial class MainForm : Form
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
         _statusLabel.Text = $"Monitoring {targets.Count} host(s) across {monitoredSiteCount} site(s)";
+        RefreshGrid();
     }
 
     private void StopMonitoring()
@@ -3041,6 +3042,7 @@ public sealed partial class MainForm : Form
             LoadHostEditor();
             _monitorStateLabel.Text = "IDLE";
             _statusLabel.Text = "Monitoring stopped";
+            RefreshGrid();
         }
     }
 
