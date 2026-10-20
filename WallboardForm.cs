@@ -988,7 +988,7 @@ internal sealed class WallboardForm : Form
     }
 }
 
-internal sealed class WallboardCanvas : Control
+internal sealed partial class WallboardCanvas : Control
 {
     private readonly List<Rectangle> _captionObstacles = new();
     private int _hiddenCaptions;
@@ -1044,6 +1044,9 @@ internal sealed class WallboardCanvas : Control
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        var hovered = HitTestHost(e.Location);
+        string tip = hovered == null ? "" : hovered.Site + " · " + hovered.Address + (string.IsNullOrWhiteSpace(hovered.Label) ? "" : " · " + hovered.Label) + " · " + hovered.State;
+        if (tip != _lastHostTip) { _lastHostTip = tip; _hostTip.SetToolTip(this, tip); }
         if (_dragOrigin is Point origin)
         {
             _panOffset = _dragPan;
@@ -1070,6 +1073,7 @@ internal sealed class WallboardCanvas : Control
     }
 
     internal event Action<WallboardHostSnapshot, Point>? HostRightClicked;
+    internal IReadOnlyList<WallboardHostSnapshot> CurrentOutageHosts => _sidebarHitRegions.Select(hit => hit.Host).ToList();
 
     protected override bool IsInputKey(Keys keyData) =>
         (keyData & Keys.KeyCode) is Keys.Left or Keys.Right or Keys.Up or Keys.Down || base.IsInputKey(keyData);
@@ -1114,7 +1118,7 @@ internal sealed class WallboardCanvas : Control
     {
         Name = "WallboardCanvas";
         TabStop = true;
-        AccessibleName = "Host topology. Drag or use arrow keys to pan. Shift and mouse wheel pans horizontally.";
+        AccessibleName = "Host topology. All selected hosts fit in this view. Right-click a host for actions.";
         DoubleBuffered = true;
         ResizeRedraw = true;
         BackColor = WallboardStyle.Background;
@@ -1130,6 +1134,7 @@ internal sealed class WallboardCanvas : Control
     {
         if (disposing)
         {
+            _hostTip.Dispose();
             _brandBitmap.Dispose();
             _brandFont.Dispose();
             _subtitleFont.Dispose();
@@ -1182,8 +1187,9 @@ internal sealed class WallboardCanvas : Control
 
         int bodyTop = statsTop + statsHeight + (Embedded ? 0 : 18);
         int footerHeight = Embedded ? 0 : Presentation.WallboardFooterHeight;
-        int sidebarWidth = Embedded ? Math.Clamp((int)(ClientSize.Width * 0.29), 200, 280) : Math.Clamp((int)(ClientSize.Width * 0.29), 320, 440);
-        int gap = Embedded ? 12 : 16;
+        bool hasOutages = snapshot.Monitoring && snapshot.Sites.SelectMany(site => site.Hosts).Any(host => host.State == HostState.Offline);
+        int sidebarWidth = !hasOutages ? 0 : Embedded ? Math.Clamp((int)(ClientSize.Width * .25), 200, 260) : Math.Clamp((int)(ClientSize.Width * .25), 240, 360);
+        int gap = hasOutages ? (Embedded ? 12 : 16) : 0;
         int availableBodyHeight = Math.Max(
             Embedded ? 100 : 240,
             ClientSize.Height - bodyTop - footerHeight - (Embedded ? 4 : 16));
@@ -1192,7 +1198,7 @@ internal sealed class WallboardCanvas : Control
             ? Math.Clamp((int)(availableBodyHeight * 0.28), 150, 240)
             : 0;
 
-        int upperHeight = Embedded ? availableBodyHeight : Math.Max(210, (int)(availableBodyHeight * .56));
+        int upperHeight = Embedded || !ShowCli ? availableBodyHeight : Math.Max(180, availableBodyHeight - cliHeight - 16);
 
         var mapRect = new Rectangle(
             Embedded ? 0 : 22,
@@ -1207,26 +1213,20 @@ internal sealed class WallboardCanvas : Control
             upperHeight);
 
         DrawPanel(g, mapRect);
-        DrawPanel(g, sidebarRect);
         DrawTopology(g, snapshot, mapRect);
-        var sidebarClip = g.Save();
-        g.SetClip(sidebarRect, System.Drawing.Drawing2D.CombineMode.Intersect);
-        DrawSidebar(g, snapshot, sidebarRect);
-        g.Restore(sidebarClip);
-
-        if (!Embedded)
+        if (hasOutages)
         {
-            int lowerTop = mapRect.Bottom + gap;
-            int lowerHeight = Math.Max(100, ClientSize.Height - lowerTop - footerHeight - 16);
-            int outputWidth = ShowCli ? Math.Clamp((int)(ClientSize.Width * .29), 240, 440) : 0;
-            var resultsRect = new Rectangle(22, lowerTop,
-                ClientSize.Width - 44 - (ShowCli ? outputWidth + gap : 0), lowerHeight);
-            DrawPanel(g, resultsRect);
-            DrawResultsTable(g, snapshot, resultsRect);
-            if (!ShowCli) return;
-            var cliRect = new Rectangle(
-                resultsRect.Right + gap, lowerTop, outputWidth, lowerHeight);
+            DrawPanel(g, sidebarRect);
+            var sidebarClip = g.Save();
+            g.SetClip(sidebarRect, System.Drawing.Drawing2D.CombineMode.Intersect);
+            DrawSidebar(g, snapshot, sidebarRect);
+            g.Restore(sidebarClip);
+        }
 
+        if (!Embedded && ShowCli)
+        {
+            var cliRect = new Rectangle(22, mapRect.Bottom + 16, ClientSize.Width - 44,
+                Math.Max(80, ClientSize.Height - mapRect.Bottom - 16 - footerHeight - 16));
             DrawPanel(g, cliRect);
             var outputClip = g.Save();
             g.SetClip(cliRect, System.Drawing.Drawing2D.CombineMode.Intersect);
@@ -1399,43 +1399,13 @@ internal sealed class WallboardCanvas : Control
         Rectangle rect)
     {
         _topologyViewport = rect;
-        int columns = rect.Width >= 1100 && snapshot.Sites.Count > 1 ? 2 : 1;
-        int largestSite = snapshot.Sites.Select(site => site.Hosts.Count).DefaultIfEmpty(0).Max();
-        int groupHeight = Math.Max(180, largestSite * 52 + 64);
-        int widestCaption = snapshot.Sites.SelectMany(site => site.Hosts).Select(host => {
-            var lines = FormatHostNodeLines(host);
-            return MeasureHostNodeCaption(g, lines.Primary, lines.Secondary, _hostLabelFont, _hostIpFont).Width;
-        }).DefaultIfEmpty(180).Max();
-        int laneWidth = Math.Max(rect.Width / columns, 260 + widestCaption);
-        int virtualWidth = laneWidth * columns;
-        int virtualHeight = Math.Max(rect.Height, (int)Math.Ceiling(snapshot.Sites.Count / (double)columns) * groupHeight);
-        if (_topologyVirtualSize != new Size(virtualWidth, virtualHeight))
-            _panOffset = Point.Empty;
-        _topologyVirtualSize = new Size(virtualWidth, virtualHeight);
-        _panOffset = new Point(Math.Clamp(_panOffset.X, 0, Math.Max(0, virtualWidth - rect.Width)),
-            Math.Clamp(_panOffset.Y, 0, Math.Max(0, virtualHeight - rect.Height)));
-        // TextRenderer uses GDI and does not follow a GDI+ TranslateTransform.
-        // Render at native size, then crop at 1:1 so text and hit regions move together.
-        using var bitmap = new Bitmap(virtualWidth, virtualHeight, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
-        using (var contentGraphics = Graphics.FromImage(bitmap))
-        {
-            contentGraphics.Clear(WallboardStyle.Panel);
-            contentGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            contentGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            DrawTopologyCore(contentGraphics, snapshot, new Rectangle(0, 0, virtualWidth, virtualHeight));
-        }
+        _topologyVirtualSize = rect.Size;
+        _panOffset = Point.Empty;
         var state = g.Save();
-        using (var clip = WallboardStyle.Rounded(rect, 14))
-        {
-            g.SetClip(clip, System.Drawing.Drawing2D.CombineMode.Intersect);
-            g.DrawImage(bitmap, rect, new Rectangle(_panOffset, rect.Size), GraphicsUnit.Pixel);
-        }
+        g.SetClip(rect, System.Drawing.Drawing2D.CombineMode.Intersect);
+        g.TranslateTransform(rect.X, rect.Y);
+        DrawFittedTopology(g, snapshot, new Rectangle(Point.Empty, rect.Size));
         g.Restore(state);
-        if (virtualWidth > rect.Width || virtualHeight > rect.Height)
-        {
-            using var hint = new SolidBrush(WallboardStyle.Muted);
-            g.DrawString("Drag to pan", _tinyFont, hint, rect.X + 16, rect.Bottom - 24);
-        }
     }
 
     internal static double CalculateTopologyRenderScale(
@@ -1822,148 +1792,23 @@ internal sealed class WallboardCanvas : Control
         return new Rectangle(x, y, rect.Width, rect.Height);
     }
 
-    private void DrawSidebar(
-        Graphics g,
-        WallboardSnapshot snapshot,
-        Rectangle rect)
+    private void DrawSidebar(Graphics g, WallboardSnapshot snapshot, Rectangle rect)
     {
-        int x = rect.X + 16;
-        int y = rect.Y + 13;
-        int width = rect.Width - 32;
-
-        using var titleBrush = new SolidBrush(WallboardStyle.Muted);
-        using var primaryBrush = new SolidBrush(WallboardStyle.Text);
-        using var mutedBrush = new SolidBrush(WallboardStyle.Muted);
-        using var dividerPen = new Pen(WallboardStyle.Line);
-
-        g.DrawString("Active outages", _sectionFont, titleBrush, x, y);
-        y += 28;
-
-        var outages = snapshot.Sites
-            .SelectMany(s => s.Hosts)
-            .Where(h => h.State == HostState.Offline)
-            .OrderBy(h => h.OutageStarted)
-            .Take(7)
-            .ToList();
-
-        if (outages.Count == 0)
+        using var text = new SolidBrush(WallboardStyle.Text);
+        using var muted = new SolidBrush(WallboardStyle.Muted);
+        using var format = new StringFormat { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        int x = rect.X + 16, y = rect.Y + 16, width = rect.Width - 32;
+        g.DrawString("Active outages", _sectionFont, text, x, y);
+        y += 32;
+        foreach (var host in snapshot.Sites.SelectMany(site => site.Hosts).Where(host => snapshot.Monitoring && host.State == HostState.Offline))
         {
-            using var okBrush = new SolidBrush(WallboardStyle.Green);
-            g.DrawString(
-                snapshot.Monitoring ? "No active outages" : "Monitoring is idle",
-                _smallFont,
-                okBrush,
-                x,
-                y);
-            y += 31;
-        }
-        else
-        {
-            foreach (var outage in outages)
-            {
-                _sidebarHitRegions.Add((Rectangle.Intersect(rect, new Rectangle(x, y, width, 44)), outage));
-                using var redBrush = new SolidBrush(WallboardStyle.Red);
-                string display = string.IsNullOrWhiteSpace(outage.Label)
-                    ? outage.Address
-                    : outage.Label;
-
-                g.DrawString(display, _siteFont, redBrush, x, y);
-                y += 18;
-
-                string detail = outage.OutageStarted.HasValue
-                    ? $"{outage.Site} • down {FormatElapsed(DateTime.Now - outage.OutageStarted.Value)}"
-                    : outage.Site;
-
-                g.DrawString(detail, _tinyFont, mutedBrush, x, y);
-                y += 26;
-            }
-        }
-
-        g.DrawLine(dividerPen, x, y + 3, x + width, y + 3);
-        y += 20;
-        g.DrawString("Recent outages", _sectionFont, titleBrush, x, y);
-
-        string historyFilter = snapshot.HideSuspectEvents
-            ? $"{snapshot.EventWindowLabel} • suspects hidden"
-            : $"{snapshot.EventWindowLabel} • suspects shown";
-
-        y += 24;
-        var filterSize = g.MeasureString(historyFilter, _tinyFont);
-        g.DrawString(
-            historyFilter,
-            _tinyFont,
-            mutedBrush,
-            x,
-            y);
-
-        y += 27;
-
-        if (snapshot.Events.Count == 0)
-        {
-            g.DrawString(
-                "No events match the saved filters.",
-                _smallFont,
-                mutedBrush,
-                x,
-                y);
-        }
-
-        foreach (var item in snapshot.Events
-            .OrderByDescending(e => e.Timestamp)
-            .Take(10))
-        {
-            var target = snapshot.Sites.SelectMany(site => site.Hosts).FirstOrDefault(host =>
-                host.Site.Equals(item.Site, StringComparison.OrdinalIgnoreCase) &&
-                host.Address.Equals(item.Address, StringComparison.OrdinalIgnoreCase));
-            if (target != null)
-                _sidebarHitRegions.Add((Rectangle.Intersect(rect, new Rectangle(x, y, width, 57)), target));
-            Color kindColor = item.Kind switch
-            {
-                "DOWN" => WallboardStyle.Red,
-                "RECOVERED" => WallboardStyle.Green,
-                "SUSPECT" => WallboardStyle.Yellow,
-                _ => Color.FromArgb(152, 170, 188)
-            };
-
-            using var kindBrush = new SolidBrush(kindColor);
-
-            g.DrawString(
-                DisplayTime.ShortTimestamp(item.Timestamp),
-                _tinyFont,
-                mutedBrush,
-                x,
-                y);
-
-            g.DrawString(
-                item.Kind,
-                _tinyFont,
-                kindBrush,
-                x + 76,
-                y);
-
-            y += 16;
-
-            string host = item.Host;
-            g.DrawString(
-                TrimToWidth(g, host, _smallFont, width),
-                _smallFont,
-                primaryBrush,
-                x,
-                y);
-
-            y += 17;
-
-            g.DrawString(
-                TrimToWidth(g, item.Site, _tinyFont, width),
-                _tinyFont,
-                mutedBrush,
-                x,
-                y);
-
-            y += 24;
-
-            if (y > rect.Bottom - 35)
-                break;
+            if (y + 48 > rect.Bottom - 12) break;
+            _sidebarHitRegions.Add((new Rectangle(x, y, width, 48), host));
+            g.DrawString(string.IsNullOrWhiteSpace(host.Label) ? host.Address : host.Label,
+                _smallFont, text, new RectangleF(x, y, width, 20), format);
+            g.DrawString(host.Site + (host.OutageStarted is DateTime started ? " · " + FormatElapsed(DateTime.Now - started) : ""),
+                _tinyFont, muted, new RectangleF(x, y + 20, width, 20), format);
+            y += 52;
         }
     }
 

@@ -8,6 +8,14 @@ public sealed partial class MainForm
     private readonly WallboardCanvas _monitorCanvas = new() { Dock = DockStyle.Fill, ShowCli = false, Embedded = true };
     private readonly SplitContainer _dashboardSplit = new() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterWidth = 8 };
 
+    private bool _listView;
+    private readonly Label _searchLabel = new() { Text = "Search", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(0, 12, 8, 0) };
+    private readonly Button _columnPickerButton = new AuroraButton { Text = "Columns", AutoSize = true };
+    private readonly Button _mapTab = new AuroraButton { Text = "Map", AutoSize = true };
+    private readonly Button _listTab = new AuroraButton { Text = "List", AutoSize = true };
+    private readonly Button _manageSitesButton = new AuroraButton { Text = "Manage sites", AutoSize = true };
+    private readonly Button _outageHistoryButton = new AuroraButton { Text = "Outage history", AutoSize = true };
+
     private void BuildLayout()
     {
         // FOCAL: host results. Compact, opaque workspace; one primary monitoring action.
@@ -15,7 +23,7 @@ public sealed partial class MainForm
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty, Tag = "window" };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         _rootLayout = root;
         _workspaceSplit.SplitterWidth = 1;
         _workspaceSplit.Panel1MinSize = 180;
@@ -27,23 +35,25 @@ public sealed partial class MainForm
         var navigation = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = Padding.Empty, Tag = "nav" };
         navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         navigation.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var siteHeading = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, Tag = "nav" };
         siteHeading.Controls.Add(new Label { Text = "Sites", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(8, 12, 8, 0) });
         _addSiteButton.Text = "Add site";
+        if (_addSiteButton is AuroraButton add) add.Ghost = true;
         siteHeading.Controls.Add(_addSiteButton);
         navigation.Controls.Add(siteHeading, 0, 0);
         navigation.Controls.Add(_siteList, 0, 1);
-        var manageSites = HostUi.Button("Manage sites", ShowSiteActions);
-        manageSites.Dock = DockStyle.Fill;
-        navigation.Controls.Add(manageSites, 0, 2);
+        _manageSitesButton.Click += (_, _) => ShowSiteActions();
+        _outageHistoryButton.Click += (_, _) => OpenEventHistory();
         _siteList.ContextMenuStrip = _siteActionsMenu;
         _siteActionsMenu.Opening += (_, _) => PopulateSiteActions();
         _siteList.MouseDown += (_, e) => { if (e.Button == MouseButtons.Right) { int index = _siteList.IndexFromPoint(e.Location); if (index >= 0) _siteList.SelectedIndex = index; } };
 
         var utilities = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty, Tag = "nav" };
         _headerActionsPanel = utilities;
+        utilities.Controls.Add(_manageSitesButton);
+        utilities.Controls.Add(_outageHistoryButton);
         utilities.Controls.Add(_wallboardButton);
         utilities.Controls.Add(_settingsButton);
         utilities.Controls.Add(_checkUpdateButton);
@@ -84,10 +94,15 @@ public sealed partial class MainForm
         _hostSearch.Font = AuroraTheme.BodyFont;
         _hostSearch.Margin = new Padding(0, 8, 8, 0);
         _hostSearch.TextChanged += (_, _) => RefreshGrid();
-        toolbar.Controls.Add(new Label { Text = "Search", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(0, 12, 8, 0) });
+        _mapTab.Click += (_, _) => SetWorkspaceView(false);
+        _listTab.Click += (_, _) => SetWorkspaceView(true);
+        toolbar.Controls.Add(_mapTab);
+        toolbar.Controls.Add(_listTab);
+        toolbar.Controls.Add(_searchLabel);
         toolbar.Controls.Add(_hostSearch);
         toolbar.Controls.Add(HostUi.Button("Edit hosts", OpenHostManager));
-        toolbar.Controls.Add(HostUi.Button("Columns", ShowColumnMenu));
+        _columnPickerButton.Click += (_, _) => ShowColumnMenu();
+        toolbar.Controls.Add(_columnPickerButton);
         toolbar.Controls.Add(_showCommandView);
         right.Controls.Add(toolbar, 0, 2);
         _mainSplit.Panel1.Controls.Add(_grid);
@@ -125,8 +140,10 @@ public sealed partial class MainForm
         _ipBox.Visible = false;
         Controls.Add(_ipBox);
         root.Controls.Add(_workspaceSplit, 0, 1);
-        root.Controls.Add(_statusStrip, 0, 2);
+        _statusStrip.Visible = false;
         Controls.Add(root);
+        InitializeUpdateToast();
+        SetWorkspaceView(false);
         ResumeLayout(true);
         ApplyResponsiveLayout();
     }
@@ -136,9 +153,10 @@ public sealed partial class MainForm
         if (_rootLayout is null || _rightLayout is null || _settingsFlowPanel is null || IsDisposed) return;
         float scale = DeviceDpi / 96f;
         _rootLayout.RowStyles[0].Height = 0;
-        _checkUpdateButton.Visible = _showUpdateControlOnHome;
-        _workspaceSplit.Panel1MinSize = (int)(180 * scale);
-        try { _workspaceSplit.SplitterDistance = (int)((ClientSize.Width / scale < 1080 ? 192 : 224) * scale); }
+        _checkUpdateButton.Visible = true;
+        _checkUpdateButton.Text = "Check for updates";
+        _workspaceSplit.Panel1MinSize = (int)(224 * scale);
+        try { _workspaceSplit.SplitterDistance = (int)((ClientSize.Width / scale < 1080 ? 224 : 240) * scale); }
         catch (InvalidOperationException) { }
         _siteList.ItemHeight = (int)(40 * scale);
         SizeNavigationActions();
@@ -151,9 +169,10 @@ public sealed partial class MainForm
 
     private void SizeDashboard()
     {
-        if (_dashboardSplit.Height < 200) return;
+        if (_dashboardSplit.Height < 200 || _dashboardSplit.Panel1Collapsed || _dashboardSplit.Panel2Collapsed) return;
         int height = _dashboardSplit.ClientSize.Height;
-        _dashboardSplit.SplitterDistance = Math.Clamp((int)(height * .52), 100, Math.Max(100, height - 120));
+        int logHeight = Math.Min((int)(144 * DeviceDpi / 96f), height / 4);
+        _dashboardSplit.SplitterDistance = Math.Max(1, height - logHeight - _dashboardSplit.SplitterWidth);
     }
 
     private void SizeNavigationActions()
@@ -162,6 +181,9 @@ public sealed partial class MainForm
         foreach (var button in _headerActionsPanel.Controls.OfType<Button>())
         {
             button.AutoSize = false;
+            button.Margin = Padding.Empty;
+            button.Height = (int)(40 * DeviceDpi / 96f);
+            button.Padding = new Padding(12, 4, 12, 4);
             button.TextAlign = ContentAlignment.MiddleLeft;
             button.Width = Math.Max(button.PreferredSize.Width, _headerActionsPanel.ClientSize.Width - button.Margin.Horizontal);
             if (button is AuroraButton navigation) navigation.Ghost = true;
@@ -170,7 +192,7 @@ public sealed partial class MainForm
 
     private void SizePingLog(bool reset = false)
     {
-        if (_mainSplit.Panel2Collapsed || _mainSplit.Width < 300) return;
+        if (!_listView || _mainSplit.Panel2Collapsed || _mainSplit.Width < 300) return;
         int width = _mainSplit.ClientSize.Width;
         var orientation = width * 96f / DeviceDpi < 720 ? Orientation.Horizontal : Orientation.Vertical;
         if (_mainSplit.Orientation != orientation) _mainSplit.Orientation = orientation;
@@ -186,4 +208,30 @@ public sealed partial class MainForm
         logWidth = Math.Clamp(logWidth, Math.Min(160, width / 3), Math.Max(160, width / 3));
         _mainSplit.SplitterDistance = Math.Max(1, width - logWidth - _mainSplit.SplitterWidth);
     }
+    private void SetWorkspaceView(bool list)
+    {
+        _listView = list;
+        _searchLabel.Visible = list; _hostSearch.Visible = list; _columnPickerButton.Visible = list;
+        _dashboardSplit.Panel2Collapsed = false;
+        _dashboardSplit.Panel1Collapsed = false;
+        _mainSplit.Panel2Collapsed = false;
+        _mainSplit.Panel1Collapsed = false;
+        if (list)
+        {
+            _dashboardSplit.Panel1Collapsed = true;
+            _mainSplit.Panel2Collapsed = !_showCommandView.Checked;
+            SizePingLog(reset: true);
+        }
+        else
+        {
+            _mainSplit.Panel1Collapsed = true;
+            _dashboardSplit.Panel2Collapsed = !_showCommandView.Checked;
+            SizeDashboard();
+        }
+        ((AuroraButton)_mapTab).Selected = !list;
+        ((AuroraButton)_listTab).Selected = list;
+        _mapTab.Invalidate(); _listTab.Invalidate();
+        _monitorCanvas.Invalidate();
+    }
+
 }

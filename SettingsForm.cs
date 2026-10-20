@@ -299,10 +299,8 @@ internal sealed class SettingsForm : Form
 
     private Control BuildAdvancedPage()
     {
-        var page = Page("Advanced", "Developer controls and preference recovery.");
+        var page = Page("Advanced", "Preference recovery.");
         var stack = (FlowLayoutPanel)page.Controls[1];
-        stack.Controls.Add(Section("Developer controls", _showHomeUpdateControl,
-            "Expose the update button in the main window and Wallboard. Manual checks are always available in Updates."));
         stack.Controls.Add(Section("Restore preferences", _resetButton,
             "Stages the default settings for review. Save Settings applies them. Hosts, site organization, and outage history are preserved. Active-session timing stays unchanged."));
         return page;
@@ -355,7 +353,7 @@ internal sealed class SettingsForm : Form
         stack.Controls.Add(_updateButton);
         stack.Controls.Add(new Label
         {
-            Text = "Updates normally run quietly in the background. Manual checks stay available here even when automatic checks are disabled. The developer option exposes the update control in the main app bar and Wallboard toolbar.",
+            Text = "Updates can run in the background. Check for updates is also available in the sidebar.",
             AutoSize = true,
             ForeColor = Color.FromArgb(139, 153, 169),
             Margin = new Padding(0, 12, 0, 0)

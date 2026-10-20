@@ -106,7 +106,7 @@ jobs:
           $sheet.Save("ui-smoke-test/appearance-review.png", [System.Drawing.Imaging.ImageFormat]::Png)
           $sheet.Dispose()
           Write-Output ("APPEARANCE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/appearance-review.png")) + "APPEARANCE_IMAGE_END")
-          foreach ($name in @("workspace-populated-Dark", "workspace-populated-Light")) {
+          foreach ($name in @("workspace-populated-Dark", "workspace-populated-Light", "update-status-Dark", "update-status-Light", "workspace-list-Dark", "workspace-list-Light")) {
             Write-Output ("WORKSPACE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WORKSPACE_IMAGE_END")
           }
           foreach ($name in @("wallboard", "wallboard-controls-hidden", "wallboard-dense")) {
@@ -149,11 +149,12 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Keep Address first and fit all five default columns beside ping output.
-          - Move ping output below the table on narrow windows; show the empty-output state correctly.
-          - Keep fullscreen output inside its panel and make the fullscreen host table scrollable.
-          - Increase site/status text to the readable typography floor and label the search field.
-          - Preserve the unified dashboard/Wallboard layout, site-scoped workers, host quick actions, and saved configuration.
+          - Reflow the topology to fit every selected node without map scrolling.
+          - Make Map and List alternative views instead of duplicating the same hosts.
+          - Show only current outages on screen; resolved events remain in Outage history.
+          - Unify sidebar actions and remove the redundant bottom status bar.
+          - Keep Check for updates as a permanent action with in-app check/download/ready/error status.
+          - Export selected enabled hosts as a continuous Windows batch monitor that writes no result files.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

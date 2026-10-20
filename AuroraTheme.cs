@@ -261,6 +261,7 @@ internal class AuroraButton : Button
 {
     internal bool Primary { get; set; }
     internal bool Ghost { get; set; }
+    internal bool Selected { get; set; }
     private bool _hover, _pressed;
     public AuroraButton()
     {
@@ -318,7 +319,7 @@ internal class AuroraButton : Button
         var bounds = Rectangle.Inflate(ClientRectangle, -inset, -inset);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         using var path = WallboardStyle.Rounded(bounds, bounds.Height / 2);
-        var fillColor = Primary && Enabled ? p.Accent : _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
+        var fillColor = Primary && Enabled ? p.Accent : Selected || _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
         using var fill = new SolidBrush(fillColor);
         e.Graphics.FillPath(fill, path);
         if (Focused && ShowFocusCues)

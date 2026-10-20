@@ -839,7 +839,7 @@ public sealed partial class MainForm : Form
         _deleteSiteButton.Click += (_, _) => DeleteSite();
         _saveConfigButton.Click += (_, _) => SaveConfigFile();
         _loadConfigButton.Click += (_, _) => LoadConfigFile();
-        _checkUpdateButton.Click += async (_, _) => await RunUpdateActionAsync();
+        _checkUpdateButton.Click += async (_, _) => await CheckForUpdatesAsync(userInitiated: true);
         _wallboardButton.Click += (_, _) => OpenWallboard();
         _settingsButton.Click += (_, _) => OpenSettings();
         _moreButton.Click += (_, _) => ShowAppMenu();
@@ -1068,6 +1068,30 @@ public sealed partial class MainForm : Form
         Check(configRoundTrip?.WallboardShowCli == true);
         Check(configRoundTrip?.ShowUpdateControlOnHome == false);
         Check(form.GetConfiguredTargets().Count == 1);
+        var batch = BuildMonitoringBatch(new[] { ("Site", "127.0.0.1", "Router & exit", 1000) }, 2);
+        Check(batch.Contains("goto monitor") && batch.Contains("ping.exe -n 1 -w 1000 \"127.0.0.1\""));
+        Check(!batch.Contains("& exit") && !batch.Contains("powershell", StringComparison.OrdinalIgnoreCase));
+        bool unsafeTargetRejected = false;
+        try { BuildMonitoringBatch(new[] { ("Site", "127.0.0.1 & whoami", "", 1000) }, 2); }
+        catch (ArgumentException) { unsafeTargetRejected = true; }
+        Check(unsafeTargetRejected);
+        string batchFile = Path.Combine(Path.GetTempPath(), "PingWatchdog-" + Guid.NewGuid().ToString("N") + ".bat");
+        try
+        {
+            File.WriteAllText(batchFile, batch, new System.Text.UTF8Encoding(false));
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe")
+            {
+                Arguments = "/d /c call \"" + batchFile + "\" --once",
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true
+            })!;
+            var output = process.StandardOutput.ReadToEndAsync();
+            var error = process.StandardError.ReadToEndAsync();
+            bool exited = process.WaitForExit(10000);
+            if (!exited) process.Kill(true);
+            Check(exited && process.ExitCode == 0 && output.GetAwaiter().GetResult().Contains("127.0.0.1"));
+        }
+        finally { File.Delete(batchFile); }
+
         Check(UpdateRepoUrl.EndsWith("/JPLuker/Ping-Watchdog", StringComparison.Ordinal));
         Check(form._stateEvents.Any(e => e.Kind == "DOWN"));
         Check(form._stateEvents.Any(e => e.Kind == "RECOVERED"));
@@ -1125,16 +1149,10 @@ public sealed partial class MainForm : Form
             canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
             var found = new HashSet<string>();
             // Every host must remain reachable after panning, including at narrow sizes.
-            for (int panY = 0; panY <= canvas.TopologyContentSize.Height; panY += 300)
-            for (int panX = 0; panX <= canvas.TopologyContentSize.Width; panX += 300)
-            {
-                canvas.PanTopology(-100000, -100000);
-                canvas.PanTopology(panX, panY);
-                canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
-                for (int y = 0; y < viewport.Height; y += 4)
-                    for (int x = 0; x < viewport.Width; x += 4)
-                        if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
-            }
+            Check(canvas.AllHostNodesFit && canvas.VisibleHostCount == hitHosts.Length);
+            for (int y = 0; y < viewport.Height; y += 4)
+                for (int x = 0; x < viewport.Width; x += 4)
+                    if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
             Check(found.Count == hitHosts.Length);
             Check(canvas.HitTestHost(Point.Empty) == null);
         }
@@ -1149,11 +1167,12 @@ public sealed partial class MainForm : Form
                 new[] { new WallboardEventSnapshot(DateTime.Now, recovered.Site, "Printer (192.0.2.2)", "RECOVERED", "", recovered.Address) },
                 Array.Empty<WallboardCommandSnapshot>(), "24 hours", true);
             outageCanvas.DrawToBitmap(outageBitmap, new Rectangle(0, 0, 1600, 1000));
-            var sidebarHosts = new HashSet<string>();
-            for (int y = 0; y < 1000; y += 2)
-                for (int x = 1160; x < 1600; x += 2)
-                    if (outageCanvas.HitTestHost(new Point(x, y)) is { } hit) sidebarHosts.Add(hit.Address);
-            Check(sidebarHosts.SetEquals(new[] { active.Address, recovered.Address }));
+            Check(outageCanvas.CurrentOutageHosts.Select(host => host.Address).SequenceEqual(new[] { active.Address }));
+            outageCanvas.Snapshot = outageCanvas.Snapshot with { Sites = new[] {
+                new WallboardSiteSnapshot("Outage site", new[] { active with { State = HostState.Online, OutageStarted = null }, recovered }) } };
+            outageCanvas.DrawToBitmap(outageBitmap, new Rectangle(0, 0, 1600, 1000));
+            Check(outageCanvas.CurrentOutageHosts.Count == 0);
+
         }
 
         foreach (var size in new[] { new Size(900, 650), new Size(1600, 1000), new Size(1920, 1080) })
@@ -1174,6 +1193,7 @@ public sealed partial class MainForm : Form
             canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, size));
             Check(canvas.HasHostCaption("East Chicago", "192.0.2.4"));
             Check(!canvas.CaptionsOverlap());
+            Check(canvas.AllHostNodesFit && canvas.VisibleHostCount == canvas.Snapshot!.Sites.Sum(site => site.Hosts.Count));
         }
 
         var labeledNode = WallboardCanvas.FormatHostNodeLines(
@@ -1267,13 +1287,13 @@ public sealed partial class MainForm : Form
 
         form.ClientSize = new Size(960, 640);
         form.ApplyResponsiveLayout();
-        Check(form._workspaceSplit.SplitterDistance <= 205);
+        Check(form._workspaceSplit.SplitterDistance <= 240);
         Check(form._rootLayout?.RowStyles[0].Height == 0);
         Check(form._settingsFlowPanel?.WrapContents == true);
 
         form.ClientSize = new Size(1320, 840);
         form.ApplyResponsiveLayout();
-        Check(form._workspaceSplit.SplitterDistance >= 210);
+        Check(form._workspaceSplit.SplitterDistance >= 224);
 
 
 
@@ -1288,7 +1308,7 @@ public sealed partial class MainForm : Form
         Check(form._headerActionsPanel?.Controls.Contains(form._settingsButton) == true);
         Check(form._moreButton.Text == "More");
         Check(form._moreButton.Width >= 48);
-        Check(form._moreButton.Padding.Left >= 16);
+        Check(form._moreButton.Padding.Left >= 12);
         Check(form._saveConfigButton.Parent is null);
         Check(form._loadConfigButton.Parent is null);
         Check(form._headerActionsPanel?.WrapContents == false);
@@ -1309,7 +1329,7 @@ public sealed partial class MainForm : Form
         Check(settingsSnapshot.UpdateActionText == "Check for Updates");
 
         form.SetUpdateReadyUi("9.9.9");
-        Check(form._checkUpdateButton.Text == "Restart to Update");
+        Check(form._checkUpdateButton.Text == "Check for updates");
         Check(form._trayUpdateItem.Enabled);
         Check((form._trayUpdateItem.Text ?? string.Empty).Contains("9.9.9", StringComparison.Ordinal));
         form.ClearPendingUpdateUi();
@@ -1399,7 +1419,7 @@ public sealed partial class MainForm : Form
                     var actions = form._headerActionsPanel!;
                     Check(actions.ClientRectangle.Contains(form._wallboardButton.Bounds),
                         "Wallboard navigation is clipped.");
-                    foreach (Control setting in form._settingsFlowPanel!.Controls)
+                    foreach (Control setting in form._settingsFlowPanel!.Controls.Cast<Control>().Where(control => control.Visible))
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
                 }
@@ -1437,6 +1457,7 @@ public sealed partial class MainForm : Form
                     scoped.StopMonitoring();
                     Check(scoped._hostTokens.Count == 0, "Stop left workers active.");
                 }
+                form.SetWorkspaceView(true);
                 WindowsBranding.RunShortcutSmokeTest(output);
                 form.ImportManagedHosts(new() { new(form._sites[0].Name, "192.0.2.254", "Menu test", "", new HostOptions(), "Unknown") }, false);
                 Check(form._grid.Rows.Count > 0, "Saved hosts are absent while idle.");
@@ -1513,6 +1534,7 @@ public sealed partial class MainForm : Form
                         }).ToList() });
                     review.MaximumSize = new Size(1920, 1080);
                     review.Show(form);
+                    review.SetWorkspaceView(true);
                     foreach (var appearance in new[] { AppearanceMode.Dark, AppearanceMode.Light })
                     {
                         AuroraTheme.SetMode(appearance);
@@ -1527,7 +1549,22 @@ public sealed partial class MainForm : Form
                             "Ping log consumed the host table width.");
                         Check(review._mainSplit.Panel1.Width > review._mainSplit.Panel2.Width * 1.8,
                             "Host results lost priority over the log.");
+                        Capture(review, "workspace-list-" + appearance);
+                        review.SetWorkspaceView(false);
+                        await Task.Delay(100);
+                        Check(review._mainSplit.Panel1Collapsed && !review._dashboardSplit.Panel1Collapsed,
+                            "Map and list are displayed together.");
+                        Check(review._statusStrip.Parent == null, "Redundant bottom status bar returned.");
                         Capture(review, "workspace-populated-" + appearance);
+                        Check(review._monitorCanvas.AllHostNodesFit && review._monitorCanvas.VisibleHostCount == 25,
+                            "The selected topology does not fit every node.");
+                        review.SetUpdateStatus("Up to date", true);
+                        Check(review._checkUpdateButton.Text == "Check for updates", "Update action label changed into status.");
+                        Check(review._updateToast?.Visible == true && review._updateToast.Right <= review.ClientSize.Width,
+                            "Internal update status is missing or outside the application.");
+                        Capture(review, "update-status-" + appearance);
+                        review._updateToast!.Visible = false;
+                        review.SetWorkspaceView(true);
                     }
                     review.Close();
                 }
@@ -1664,6 +1701,7 @@ public sealed partial class MainForm : Form
 
         var hostsItem = new ToolStripMenuItem("Hosts...") { ShortcutKeys = Keys.Control | Keys.Shift | Keys.H };
         hostsItem.Click += (_, _) => OpenHostManager();
+        _appMenu.Items.Add("Export monitoring batch…", null, (_, _) => ExportMonitoringBatch());
         _appMenu.Items.Add("Quick monitor…", null, (_, _) => OpenQuickAdd(true));
         _appMenu.Items.Add(hostsItem);
         _appMenu.Items.Add(settingsItem);
@@ -1755,7 +1793,7 @@ public sealed partial class MainForm : Form
             return;
 
         bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-        var bounds = new Rectangle(e.Bounds.X + 2, e.Bounds.Y + 2, e.Bounds.Width - 4, e.Bounds.Height - 4);
+        var bounds = new Rectangle(4, e.Bounds.Y + 4, Math.Max(1, _siteList.ClientSize.Width - 8), Math.Max(1, e.Bounds.Height - 8));
 
         using var background = new SolidBrush(selected
             ? AuroraTheme.Palette.Surface3
@@ -3967,25 +4005,7 @@ public sealed partial class MainForm : Form
             : "Check for Updates";
     }
 
-    private string GetUpdateStatusText()
-    {
-        if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
-            return $"Version {_pendingUpdateVersion ?? string.Empty} is downloaded and ready.";
-
-        if (_updateCheckInProgress)
-            return "Checking GitHub Releases...";
-
-        return _checkUpdateButton.Text switch
-        {
-            "Up to date" => "Ping Watchdog is up to date.",
-            "Unmanaged" => "This copy is not managed by the self-updater.",
-            string value when value.StartsWith("Downloading", StringComparison.Ordinal) =>
-                $"{value} from GitHub Releases.",
-            _ when !_autoCheckUpdates =>
-                "Automatic update checks are disabled. Manual checks remain available.",
-            _ => "Ready to check GitHub Releases."
-        };
-    }
+    private string GetUpdateStatusText() => _updateStatusText;
 
     private async Task RunUpdateActionAsync()
     {
@@ -4101,7 +4121,7 @@ public sealed partial class MainForm : Form
     private void SetUpdateReadyUi(string version)
     {
         _pendingUpdateVersion = version;
-        _checkUpdateButton.Text = "Restart to Update";
+        SetUpdateStatus($"Version {_pendingUpdateVersion} is downloaded and ready.");
         _checkUpdateButton.Enabled = true;
         _checkUpdateButton.BackColor = Color.FromArgb(107, 72, 26);
         _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(190, 132, 47);
@@ -4126,36 +4146,6 @@ public sealed partial class MainForm : Form
         _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(48, 103, 153);
         _checkUpdateButton.ForeColor = Color.White;
         _settingsForm?.RefreshRuntimeState();
-    }
-
-    private void PromptForDownloadedUpdate(string version)
-    {
-        if (IsDisposed || Disposing ||
-            _pendingUpdateManager is null ||
-            _pendingUpdateInfo is null)
-        {
-            return;
-        }
-
-        IWin32Window owner =
-            _wallboardForm is not null && !_wallboardForm.IsDisposed
-                ? _wallboardForm
-                : this;
-
-        bool monitoring = _cts is not null;
-
-        var result = MessageBox.Show(
-            owner,
-            monitoring
-                ? $"Ping Watchdog {version} has been downloaded in the background.\r\n\r\nRestarting now will stop the current monitoring session, save your configuration, install the update, and reopen Ping Watchdog.\r\n\r\nRestart now?"
-                : $"Ping Watchdog {version} has been downloaded in the background.\r\n\r\nRestart now to install it and reopen Ping Watchdog?",
-            "Ping Watchdog Update Ready",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Information,
-            MessageBoxDefaultButton.Button2);
-
-        if (result == DialogResult.Yes)
-            ApplyPendingUpdateAndRestart();
     }
 
     private void RestartToApplyPendingUpdate()
@@ -4202,7 +4192,7 @@ public sealed partial class MainForm : Form
                 StopMonitoring();
 
             _checkUpdateButton.Enabled = false;
-            _checkUpdateButton.Text = "Restarting...";
+            SetUpdateStatus("Restarting…", true, true);
             _trayUpdateItem.Enabled = false;
             _statusLabel.Text = $"Applying update {version}...";
 
@@ -4213,7 +4203,7 @@ public sealed partial class MainForm : Form
         {
             StartupRecovery.CancelExpectedExit();
             _checkUpdateButton.Enabled = true;
-            _checkUpdateButton.Text = "Restart to Update";
+            SetUpdateStatus("Update downloaded and ready.");
             _trayUpdateItem.Enabled = true;
             _statusLabel.Text = "Update restart failed.";
 
@@ -4227,132 +4217,60 @@ public sealed partial class MainForm : Form
 
     private async Task CheckForUpdatesAsync(bool userInitiated)
     {
-        if (!userInitiated && !_autoCheckUpdates)
-            return;
-
-        if (_pendingUpdateManager is not null && _pendingUpdateInfo is not null)
+        if ((!userInitiated && !_autoCheckUpdates) || IsDisposed || Disposing) return;
+        if (_pendingUpdateManager != null && _pendingUpdateInfo != null)
         {
-            if (userInitiated)
-                _statusLabel.Text = $"Update {_pendingUpdateVersion ?? string.Empty} is already downloaded and ready.";
-
+            SetUpdateStatus($"Version {_pendingUpdateVersion} is downloaded and ready.", userInitiated, true);
             return;
         }
-
-        if (_updateCheckInProgress || IsDisposed || Disposing)
-            return;
-
+        if (_updateCheckInProgress) return;
         _updateCheckInProgress = true;
         _checkUpdateButton.Enabled = false;
-        _checkUpdateButton.Text = "Checking...";
-
+        SetUpdateStatus("Checking for updates…", userInitiated, true);
         try
         {
-            var source = new GithubSource(
-                UpdateRepoUrl,
-                accessToken: null,
-                prerelease: false);
-
-            var manager = new UpdateManager(source);
-
+            var manager = new UpdateManager(new GithubSource(UpdateRepoUrl, accessToken: null, prerelease: false));
             if (!manager.IsInstalled)
             {
-                _checkUpdateButton.Text = "Unmanaged";
-
-                if (userInitiated)
-                {
-                    MessageBox.Show(
-                        "This copy of Ping Watchdog is not running from the new self-updating package.\r\n\r\nInstall or use the current Velopack Portable release once; future releases will update automatically from GitHub.",
-                        "Ping Watchdog Updates",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                }
-
+                SetUpdateStatus("Install the current Setup or Portable release to enable automatic updates.", userInitiated, true);
                 return;
             }
-
             var update = await manager.CheckForUpdatesAsync();
-
-            if (update is null)
+            if (update == null)
             {
                 ClearPendingUpdateUi();
-                _checkUpdateButton.Text = "Up to date";
-
-                if (userInitiated)
-                    _statusLabel.Text = "Ping Watchdog is up to date.";
-
+                SetUpdateStatus("Up to date", userInitiated);
                 return;
             }
-
             string version = update.TargetFullRelease.Version.ToString();
-            _checkUpdateButton.Text = "Downloading 0%";
-
-            await manager.DownloadUpdatesAsync(
-                update,
-                progress =>
-                {
-                    if (IsDisposed || Disposing)
-                        return;
-
-                    BeginInvoke(() =>
-                    {
-                        if (!IsDisposed && !Disposing)
-                            _checkUpdateButton.Text = $"Downloading {progress}%";
-                    });
-                });
-
+            SetUpdateStatus($"Downloading version {version}…", userInitiated, true);
+            await manager.DownloadUpdatesAsync(update, progress =>
+            {
+                if (!IsHandleCreated || IsDisposed || Disposing) return;
+                try { BeginInvoke((Action)(() => { if (!IsDisposed && !Disposing && _updateCheckInProgress && _pendingUpdateManager == null) SetUpdateStatus($"Downloading {progress}%", userInitiated, true); })); }
+                catch (InvalidOperationException) { }
+            });
             _pendingUpdateManager = manager;
             _pendingUpdateInfo = update;
             SetUpdateReadyUi(version);
-
-            PromptForDownloadedUpdate(version);
+            SetUpdateStatus($"Version {version} is ready to install.", true, true);
         }
         catch (Exception ex)
         {
-            if (_pendingUpdateManager is null)
-                _checkUpdateButton.Text = "Check Updates";
-
-            if (userInitiated)
-            {
-                MessageBox.Show(
-                    $"Could not check for updates.\r\n\r\n{ex.Message}",
-                    "Ping Watchdog Updates",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-            }
+            SetUpdateStatus("Update check failed: " + ex.Message, userInitiated, true);
         }
         finally
         {
             _updateCheckInProgress = false;
-
-            if (!IsDisposed && !Disposing)
-                _checkUpdateButton.Enabled = true;
-
+            if (!IsDisposed && !Disposing) _checkUpdateButton.Enabled = true;
             _settingsForm?.RefreshRuntimeState();
         }
     }
 
     private void ToggleCommandView()
     {
-        _mainSplit.Panel2Collapsed = !_showCommandView.Checked;
-
-        if (_showCommandView.Checked)
-        {
-            if (!IsHandleCreated)
-            {
-                SizePingLog(reset: true);
-                RebuildCommandView();
-                return;
-            }
-            BeginInvoke(() =>
-            {
-                if (_mainSplit.IsDisposed || _mainSplit.Panel2Collapsed)
-                    return;
-
-                SizePingLog(reset: true);
-
-                RebuildCommandView();
-            });
-        }
+        SetWorkspaceView(_listView);
+        RebuildCommandView();
     }
 
     private void ClearCommandLog()
