@@ -1,6 +1,6 @@
 # DESIGN.md — UI Philosophy & System ("Aurora Glass")
 
-> **For any AI or developer building UI in this project:** read this entire file before writing a single line of UI code. This document overrides your defaults. When this file and your instincts disagree, this file wins. When this file is silent, follow the *spirit* in Part 1 and the decision procedure in Part 21.
+> **For any AI or developer building UI in this project:** read this file before UI work. It is the default look and feel for every project, and it beats generic AI defaults. It is a guideline, not a requirement: a project may deviate for a good reason (see Part 0). When this file is silent, follow the *spirit* in Part 1.
 
 ---
 
@@ -23,9 +23,9 @@
 14. Components
 15. Data & dashboards
 16. Platform adaptation (web, desktop, mobile, games)
-17. Accessibility floors (non-negotiable)
+17. Accessibility floors (firm)
 18. Performance budget
-19. Banned defaults & anti-patterns
+19. Defaults to avoid
 20. Token reference (copy-paste CSS)
 21. AI build procedure & self-review checklist
 22. Extending this document
@@ -35,16 +35,19 @@
 ## 0. How to use this document
 
 **Precedence, highest first:**
-1. Accessibility floors (Part 17). Never broken, not even for looks.
+1. Accessibility floors (Part 17). The one firm part of this file.
 2. Explicit instructions from the person in the current task.
-3. The copy rules (Part 10).
-4. Tokens and component specs (Parts 5–9, 14, 20).
-5. Principles (Part 2).
-6. Your own judgment, constrained by everything above.
+3. The project's own documented deviations (its `CLAUDE.md` → **Deviations**).
+4. This file's defaults.
+5. Your own judgment.
 
-**Rules for AI agents:**
-- Use the tokens in Part 20. Never invent a hex code, radius, shadow, or spacing value inline. If a value you need doesn't exist, use the nearest token and leave a `/* TOKEN-GAP: wanted X */` comment.
-- Before finishing, run the self-review checklist in Part 21 and fix every failure.
+**Product identity:** each project may have its own accent color, display font, and brand details. The structure of this file (roles, scale, spacing, components, copy rules) still applies; the project's values plug into it. A project with a blue accent uses its blue wherever this file says `accent`.
+
+**Deviating:** when a project has a good reason to differ (a gradient card doing a real job, a different radius that suits its look), it can. Note it in the project's Deviations list. Don't ask the person to choose between "the brand and the standard"; the project's choice wins for that project.
+
+**For AI agents:**
+- Prefer the tokens in Part 20 (or the project's own tokens) over one-off values. If you need a value that doesn't exist, add a token rather than hard-coding it.
+- Before finishing, run the checklist in Part 21. Fix what's unintentional; leave documented deviations alone.
 - Do not explain the design in the UI itself. The interface is not a pitch deck.
 
 ---
@@ -112,7 +115,7 @@ Each principle has: **what it means → why → how it shows up → how it fails
 - **Means:** each piece of information has one home, the place where someone actually uses it. It appears elsewhere only if that other screen can't do its job without it.
 - **Why:** repeating data across the header, sidebar, cards, and footer creates noise, makes every screen feel equally busy, and destroys the one-focal-point rule.
 - **Shows up as:**
-  - **One home per fact.** Version number → About. Host count → the Hosts screen. Account details → the avatar menu.
+  - **One home per fact.** Version number → About (except the opt-in developer overlay, VERSIONING.md 4.1). Host count → the Hosts screen. Account details → the avatar menu.
   - **Show what the task needs right now.** A list row shows name + status; details live on the detail view, a hover, or an expandable row.
   - **Progressive disclosure.** Summary first, detail on demand (click, expand, hover, drill-in). Advanced options sit behind "More" or in Settings.
   - **Summaries only when they drive a decision.** A dashboard shows what changed or what needs attention ("3 hosts down"), not an inventory of everything that exists.
@@ -195,6 +198,8 @@ Every screen is built from these layers, bottom to top. Never skip the order, an
 - **~2%** signal/semantic colors, only where state demands it
 
 ### 5.3 The aurora recipe
+**Optional.** The aurora is a style choice, not a required feature or mode. A project may use a plain `--canvas` background instead. When it is used:
+
 Ambient glows are 2–4 large radial gradients, blurred, sitting at the **edges** of the canvas (never centered behind dense text).
 
 - Colors: `#4F7BFF` (blue), `#8B5CF6` (violet), `#2DD4BF` (teal), optional `#F0ABFC` (pink) for warm light-mode moments.
@@ -564,7 +569,7 @@ For each: anatomy → rules → states. All states required: **rest, hover, pres
   5. **Updates**: check automatically, channel (Stable / Beta), "Check now"
   6. **Data & storage**: data folder location, "Open data folder", export, import, "Delete all data"
   7. **Privacy & security**
-  8. **Advanced**: debug, logging level, experimental features, "Reset all settings"
+  8. **Advanced**: debug, logging level, experimental features, "Show version on all screens" (VERSIONING.md Part 4.1), "Reset all settings"
   9. **About**: app name, version, build, license, links, "Copy diagnostic info"
 - More than ~20 settings total → add a search field at the top of the category list.
 
@@ -641,7 +646,7 @@ The **soul** (color roles, radii, pill-first, say-less copy, one focal point) is
 
 ---
 
-## 17. Accessibility floors (non-negotiable)
+## 17. Accessibility floors (firm)
 
 - **Contrast (WCAG 2.2 AA):** body text ≥ 4.5:1; large text (≥ 24px, or ≥ 19px bold) and UI components/icons ≥ 3:1. Test text on glass against worst-case backgrounds.
 - **Minimum text size:** 12px absolute, 13px for anything people must read, 15px+ for body.
@@ -666,12 +671,12 @@ The **soul** (color roles, radii, pill-first, say-less copy, one focal point) is
 
 ---
 
-## 19. Banned defaults & anti-patterns
+## 19. Defaults to avoid
 
-AI tools reach for these by habit. **Do not use them:**
+AI tools reach for these by habit. **Avoid them unless the project has a reason** (and has noted it as a deviation):
 
 **Visual**
-- Purple/blue gradient **fills** on buttons, whole cards, or page backgrounds (ambient glows are fine; fills are not)
+- Purple/blue gradient **fills** on buttons, whole cards, or page backgrounds as decoration (ambient glows are fine; a gradient doing a real job, like standing in for missing artwork, is a fine deviation)
 - Glowing/neon drop shadows on buttons
 - Outlined-everything layouts: every card with a visible 1px border and no shadow
 - Hard full-width horizontal dividers between every section
@@ -1033,7 +1038,7 @@ body {
 - [ ] Works in both light and dark?
 
 **Anti-patterns**
-- [ ] Nothing from Part 19 present?
+- [ ] Nothing from Part 19 present, other than documented deviations?
 
 ---
 
@@ -1042,9 +1047,13 @@ body {
 - New component? Add it to Part 14 with anatomy, rules, and states, using existing tokens.
 - New token needed? Add it to Part 20 **and** its table in the relevant Part. Search the codebase for `TOKEN-GAP` comments periodically and resolve them here.
 - New reference image? Add a row to Part 3: what to take, what to leave.
-- Changing a core value (accent, radius scale, font)? Change it here first, then in code. This file is the source of truth.
+- Changing a default for every project (accent, radius scale, font)? Change it here, then in code.
+- Changing it for one project? Don't change this file. Record it in that project's Deviations list.
 
 **Changelog**
+- v1.5 — Reframed as guidelines: per-project identity and deviations allowed; accessibility stays firm.
+- v1.4 — Added the version overlay toggle to Settings → Advanced.
+- v1.3 — Marked the aurora background as optional (Part 5.3).
 - v1.2 — Added P12 "The main UI is for doing; Settings is for configuring" and Part 14.19 Settings organization.
 - v1.1 — Added P11 "Not every piece of data needs to be everywhere" (one home per fact, progressive disclosure), table column default, checklist section.
 - v1.0 — Initial Aurora Glass system: layer model, glass tiers, pill-first shape language, concentric radii, say-less copy rules, platform adaptation, tokens.

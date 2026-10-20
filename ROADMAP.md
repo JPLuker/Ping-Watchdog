@@ -1,151 +1,63 @@
-# Ping Watchdog final feature release
+# Ping Watchdog roadmap to maintenance
 
-Status: implementation in progress; design migration and release acceptance are not complete.
-Current published Windows build: v1.17.1 (fitted Map/List views and monitoring batch export).
-Pre-migration baseline for update acceptance: v1.14.81.
-Design authority: [DESIGN.md](DESIGN.md), Aurora Glass v1.2.
+Current published Windows build: **v1.17.3**.
+Proposed final feature release: **v1.18.0**, subject to acceptance and intervening version bumps.
+Current stage: standards audit complete; implementation gaps and manual acceptance remain open.
 
-## Release goal
+The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
-Finish the standalone Windows monitoring application, then enter maintenance mode. Preserve its working monitoring and management capabilities. No cross-promotion, external-product links, upgrade prompts, or promotional copy in the app, documentation, or release notes. The final version number will be set after the candidate passes acceptance; it is not a reason to declare unfinished work complete.
+## Source of truth
 
-New monitoring features are frozen. The remaining product work is design consistency, usability, accessibility, correctness, documentation, and packaging. This roadmap does not authorize a new framework, a web rewrite, new tools, or changes to the Linux frontend.
+- [Maintenance checklist #4](https://github.com/JPLuker/Ping-Watchdog/issues/4): current execution and handoff.
+- [RELEASE-AUDIT.md](RELEASE-AUDIT.md): verified evidence, concrete gaps, decisions and pending tests.
+- [DESIGN.md](DESIGN.md): Aurora Glass v1.5 defaults; [AGENTS.md](AGENTS.md) records intentional deviations.
+- [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md): earlier implementation/validation checkpoints. Historical panning, controls-toggle and old layout descriptions are not current requirements.
 
-## 1. Design foundation
+## 1. Standards audit — complete
 
-- [x] Adopt the supplied DESIGN.md as the required visual and interaction standard.
-- [x] Update contributor instructions and supersede the previous Wallboard design reference.
-- [ ] Audit every Windows screen and record remaining gaps against DESIGN.md Part 21.
-- [ ] Implement centralized native color, spacing, radius, typography, motion, and material tokens matching DESIGN.md. Convert CSS pixels to native logical units consistently; do not confuse point sizes with pixel sizes.
-- [ ] Add persisted System / Light / Dark appearance, defaulting to the OS. Apply changes to open windows and handle an OS theme change while running.
-- [ ] Build reusable buttons, inputs, search, status indicators, panels, context menus, and focus/validation states before restyling individual forms. Support rest, hover, pressed, focus, disabled, selected, loading, empty, and error states where applicable.
-- [ ] Keep native window controls and standard keyboard behavior. Use system sans and one technical monospace family with documented fallbacks.
-- [ ] Establish contrast-checked token pairings for both themes. Verify semantic colors on their actual backgrounds; the palette alone is not proof of contrast compliance. Record token gaps rather than scattering arbitrary values.
-- [ ] Use native Mica/Acrylic only where supported and readable. Provide an opaque surface fallback for unsupported systems, reduced transparency, and expensive/large content. Dense tables, forms, and logs remain opaque.
+- [x] Read the ten current InternalDesignGuidelines documents.
+- [x] Inspect Windows source, release workflow, package metadata and repository structure.
+- [x] Separate existing CI/render evidence from source findings and unperformed human acceptance.
+- [x] Record approved design deviations and preserve the proprietary license.
+- [x] Open the maintenance checklist and establish implementation order.
 
-Acceptance: one token source and shared component set; both themes render correctly; appearance persists; native fallbacks work. No screen is declared migrated by changing colors alone.
+## 2. Data protection and essential access — next
 
-## 2. Main monitoring view and host management
+- [ ] Atomic config saves, recoverable originals, visible errors and damaged-file protection.
+- [ ] Reject newer unsupported formats before applying/rewriting; test migration/backup retention.
+- [ ] Keyboard and accessible topology/outage host actions; full identity/state independent of color.
+- [ ] Readable font floor, long addresses/IPv6 and constrained-height behavior.
 
-- [ ] Rework the monitoring view around targets, the start/stop action, and live host results. Pick one focal element per state and remove repeated branding, redundant summaries, and explanatory filler.
-- [ ] Use compact density consistently. Keep essential monitoring state visible without repeating inventory totals throughout the screen.
-- [ ] Default host tables to the 3–5 columns needed for scanning. Keep additional fields accessible through details or column selection; do not drop saved host data or editing capabilities.
-- [ ] Preserve full IP addresses and hostnames. Provide accessible full-value details for truncated labels. Use readable text, stable row updates, explicit status words, units, and numeric alignment.
-- [ ] Migrate Hosts, Quick Add, Quick Monitor, category/label editing, and site organization to the shared components. Preserve search, bulk edits, import preview, temporary-host behavior, live editing, and clear save/discard/cancel handling.
-- [ ] Keep ping output discoverable and expandable, with host/time context, failure text, copy/export where appropriate, and bounded rendering for large logs.
+## 3. Supporting UI and data controls
 
-Acceptance: idle, empty, monitoring, suspect, offline, recovery, snoozed, disabled, and invalid-input states are usable. Editing/navigation does not interrupt unrelated monitoring or discard drafts.
+- [ ] Complete Settings/Hosts/History/Organization/dialog/About/updater/recovery review in both themes.
+- [ ] Preserve staged save/discard/cancel, Ctrl+S, dialog ownership, focus, keyboard and independent recovery.
+- [ ] Complete backup/restore, portable storage, open-data-folder and deliberate data deletion.
 
-## 3. Wallboard
+## 4. Release and security hardening
 
-- [ ] Rebuild its hierarchy using the same tokens and components, with topology/current outages as the task focus, restrained floating controls, and secondary information on demand.
-- [ ] Remove decorative and duplicated information; retain meaningful host, site, state, clock, and outage context. No explanatory subtitles or visible shortcut legend by default.
-- [ ] Replace the existing tiny-text scaling strategy. Preserve minimum readable font sizes using a larger/scrollable or navigable layout when the topology cannot fit. Do not solve density by hiding captions or shrinking all text below the design floor.
-- [ ] Retain host/site identity, collision prevention, complete addresses, right-click host actions, outage-row actions, snooze, history filters, saved clock format, ping log access, multi-display behavior, and Esc to exit.
-- [ ] Make host actions reachable by keyboard as well as mouse; a painted node and its color alone are not an accessible control.
-- [ ] Verify long labels, IPv6, hostnames, dense sites, many sites, and empty/unknown states in both themes and with ping output shown/hidden.
+- [ ] Immutable Windows Actions, tag-driven version-checked releases, dependency governance.
+- [ ] Checksums, complete asset checks, unsigned notice and clear downloads.
+- [ ] Verify normal/recovery updater integrity, package-specific behavior, daily checks and managed controls.
+- [ ] Verify dependency vulnerabilities/licenses and owner-managed repository security settings.
 
-Acceptance: no overlapping or vanished captions, readable minimum text, no clipped controls, correct action target from topology and outage history, no monitoring interruption when entering/leaving Wallboard.
+## 5. Public readiness
 
-## 4. Supporting windows and copy
+- [ ] Current README/quick start/changelog/screenshots.
+- [ ] Privacy/network disclosure, SECURITY.md, issue templates, support and maintenance policy.
+- [ ] Truthful accessible landing page with tested Windows downloads.
+- [ ] Final confirmation of the existing proprietary license and required notices.
 
-- [ ] Migrate Settings, History, Organization, import/export prompts, label/category dialogs, confirmations, About, update progress, and recovery UI to the common system. Recovery must remain independently launchable if the main UI fails.
-- [ ] Keep Settings grouped by user task; show pending/saved/error state clearly and preserve Ctrl+S and unsaved-change protection.
-- [ ] Give each fact one home. Remove redundant subtitles, all-caps headings, slogans, decorative illustrations, repeated version information, and unnecessary notifications.
-- [ ] Keep longer text only where it enables a decision: ambiguous settings, errors, destructive consequences, and on-demand help.
-- [ ] Test dialog ownership, keyboard focus, tab order, Escape, menu dismissal/reopening, disabled-state explanations, and monitor placement.
+## 6. Candidate acceptance and final release
 
-Acceptance: shared appearance across ordinary and failure flows; clear saving; no misleading or promotional copy; no loss of existing history/filter/export behavior.
+- [ ] Human install/run of the exact candidate; fresh installer and portable tests.
+- [ ] Upgrade from v1.14.81 and latest iterative build, preserving all data and snoozes; test failure/retry.
+- [ ] Physical scaling, large text, keyboard, screen reader, contrast and mixed-DPI checks.
+- [ ] Full-workday monitoring trial after the last substantive change.
+- [ ] Fix blocking defects; publish accepted candidate, verify packages/update discovery and announce maintenance mode.
 
-## 5. Release-candidate validation
+Passing iterative builds continue to publish for Joseph to test. A source audit, screenshots, version number or empty bug list does not establish final acceptance. Documentation-only changes need no binary release.
 
-- [ ] Run existing configuration, notification, history, updater, host-management, caption/collision, published UI, startup, and recovery tests. Extend coverage only for material new behavior such as appearance persistence and accessible host selection.
-- [ ] Render and inspect actual Windows screens in both themes at narrow, normal, and wide viewports (approximately 900, 1320, and 1800 logical pixels where supported) and constrained heights. Record actual captured dimensions.
-- [ ] Check Windows scaling at 100%, 125%, 150%, and 200%, large system text, keyboard-only use, screen-reader names/status, high contrast, reduced motion, reduced transparency, and mixed-DPI monitor moves. Record unavailable physical-desktop checks as pending rather than passed.
-- [ ] Verify contrast on actual surface/material combinations, minimum text sizes, visible focus, control hit targets, and status meanings without color.
-- [ ] Exercise fresh installer, portable extraction, update from v1.14.81, and update failure/retry. Preserve hosts, groups, labels, categories, preferences, history, per-host policies, and unexpired snoozes.
-- [ ] Check controlled failure/recovery thresholds, missed-reply behavior, snooze expiration, monitoring disable/enable, all-hosts startup/default override, and stale results after editing/removing a host.
-- [ ] Run a full workday trial after the last substantive UI or monitoring change. Include network interruptions, repeated menu use, opening/closing dialogs, and entering/leaving Wallboard. Investigate crashes, growing memory/CPU use, lost data, and missing notifications.
+## Scope
 
-Acceptance: automated gates green; actual visual review recorded; no release-blocking crash, data loss, incorrect alerting, unreadable/clipped essential UI, broken updater, or inaccessible essential action. A version number, screenshots alone, or an empty issues list does not satisfy this gate.
-
-## 6. Documentation, final release, and maintenance
-
-- [ ] Rewrite README and README-FIRST instructions around the actual interface, including Hosts saving, snooze, appearance, backup/import/export, and updates. Remove outdated control names.
-- [ ] Capture current screenshots after design acceptance; document supported Windows/package behavior and known limitations honestly. Do not imply a signed build if it remains unsigned.
-- [ ] Publish final feature-release notes and a maintenance policy. Keep the repository and issue reporting available.
-- [ ] Publish the installer, portable build, and update feed only after candidate acceptance. Verify the published assets and update discovery.
-- [ ] Enter maintenance mode: address crashes, data loss, incorrect monitoring/notifications, security, compatibility, installation/updating, and material accessibility defects. No routine feature expansion or rolling redesign.
-
-## Linux boundary
-
-Linux remains separately labeled beta. Its existing packaging, updater, tray/notification, and real-desktop acceptance work stays in linux/ROADMAP.md and the dedicated Linux development track. A Windows final release does not certify Linux or authorize untested changes to shared presentation definitions.
-
-## Execution order and reporting
-
-Work in reviewable stages: foundation, main/Hosts, Wallboard, supporting windows, candidate validation, release. Preserve existing behavior at every stage. Each implementation reports the affected screens, reused components, actual checks and captures, and remaining gaps. Do not claim visual verification from source review or automated layout assertions alone.
-
-This is a full design migration, not the previously proposed single cleanup pass. Do not promise a release date before the migration is rendered, reviewed, and tested.
-
-## Implementation checkpoint — 2026-10-17
-
-The appearance foundation now includes centralized light/dark palettes, native font tokens, persisted System / Light / Dark selection in Settings, live updates of registered windows, shared pill buttons and context-menu colors, and opaque dense-content surfaces. Palette text-pair contrast and preference compatibility have automated coverage. This is partial stage 1 implementation, not completion of the design migration.
-
-Current source-review gaps (rendering acceptance remains separate):
-
-| Surface | Remaining design work |
-| --- | --- |
-| Main monitoring window | Reduce repeated summaries, consolidate task hierarchy, migrate remaining fixed dimensions and fonts, and verify constrained-height layout. |
-| Hosts and Quick Add | Reduce default column density without removing editing fields; unify input/focus/error states and readable row sizing. |
-| Wallboard | Replace bitmap/text shrinking with readable navigation; migrate topology and outage typography, keyboard host access, and secondary information hierarchy. |
-| Settings | Complete shared input styling and spacing; review explanatory copy, pending/saved feedback, and keyboard navigation. |
-| Supporting and recovery windows | Audit History, Organization, import/export, editing, About, updater, and independently launched recovery against both themes. Automatic window theming alone does not establish compliance. |
-| Shared foundation | Complete component states, semantic contrast on actual surfaces, typography adoption, and native material/fallback acceptance. |
-
-Windows builds 82 and 83 were withheld by existing tests: first a clipped Wallboard button, then a compact More button shrinking below its explicit width. Shared sizing was corrected to measure labels and padding while preserving explicit sizes. Windows build 84 passed the configuration/monitoring/updater self-tests, published startup and UI smoke tests, and independent recovery tests. Its installer, portable package and update feed were published as v1.14.84.
-
-Actual Windows captures of Main, Hosts and Settings in Light and Dark were inspected through the CI appearance review sheet. They show the shared palette and pill controls working, but also legacy selection colors, dense Hosts columns, uneven spacing, and native input borders still needing refinement. The reduced review sheet is not evidence of minimum-size typography or all DPI configurations. Wallboard captures and all remaining screen/state combinations still require the broader design review. Physical scaling, screen-reader, mixed-monitor, installation/update and workday checks remain pending.
-
-## Screenshot cleanup — 2026-10-17
-
-Synced DESIGN.md with InternalDesignGuidelines v1.2. The current cleanup removes redundant Wallboard branding and its permanent shortcut legend, adds a collapsible controls bar (F10), moves main timing fields to Settings → Monitoring, and corrects the main logo/action backgrounds. Existing monitoring and quick actions remain available.
-
-The next version is 1.15.0 in PingWatchdog.csproj. On 2026-10-20 Joseph explicitly requested an updater-accessible release after every implementation build. Passing Windows builds therefore publish installer, portable package, and update feed automatically again. Each subsequent implementation push must increment the project version and update release notes. Iterative releases do not mean final design acceptance or maintenance mode; the remaining release-policy audit and final acceptance stay open.
-
-## Workspace rebuild — 2026-10-20
-
-Implemented a single idle/live host table with five default columns and a Columns menu, simpler site navigation, and a single Start/Stop action. Removed the duplicate inventory and repeated statistics. Wallboard controls start collapsed, topology text retains readable sizing with panning, and single-site placement and caption rendering were corrected.
-
-Windows run 39309561449 passed configuration/monitoring/updater tests, published startup and UI smoke tests, independent recovery tests, and packaging. Main/Hosts/Settings review captures were inspected during implementation. The latest Wallboard captures still require final visual review. Physical DPI, accessibility, installation/update acceptance, and the workday trial remain pending.
-
-## Dedicated monitoring workspace — 2026-10-20
-
-Rebuilt the main window around a compact site sidebar, one selected-site heading and Start/Stop action, a searchable host table, and optional ping output. Removed the duplicate app-brand header and stacked toolbar cards. Settings, Wallboard and utility actions are in sidebar navigation. Search only filters displayed rows; it does not change monitoring scope.
-
-Selecting a site now scopes actual enabled monitoring workers. Switching sites while running cancels old workers and adds the selected targets; All sites monitors all enabled hosts. Wallboard topology, history and output follow the selection. Added a published Windows regression for actual worker cancellation/replacement and search/configuration separation. Simplified topology captions and use one renderer for measurement and drawing.
-
-This is an iterative release, not final design acceptance. Remaining supporting-window polish, physical DPI/accessibility and full-workday testing remain open.
-
-## Unified monitoring layout — 2026-10-20
-
-Joseph supplied a dashboard reference and requested one shared dashboard/Wallboard layout. The implementation now uses the same site-to-host map and outage renderer in the normal workspace and fullscreen, with address-first results below and optional ping output beside them. The normal workspace retains site navigation, search and editing; fullscreen removes the editing/navigation chrome and adds a clock. No extra diagnostic modules or reference-only metrics were introduced.
-
-Replaced radial orbit layout with measured branch rows that remain readable and pan at larger sizes. Main-map and outage rows reuse existing host quick actions. Site selection still scopes actual workers. Corrected selection painting, aligned sidebar utility actions, added an explicit empty ping-output state, and requested native dark scrollbar styling where available. Added populated dark/light captures and panel-allocation/address-order regressions.
-
-Windows run 39439444049 passed monitoring/configuration/updater, published UI/startup, recovery and packaging gates. Actual populated light/dark dashboard and fullscreen captures were inspected. That review found table overflow beside ping output and unbounded fullscreen output text; the 1.16.1 correction fits columns, adapts output placement on narrow windows, clips fullscreen output, and adds scrolling for fullscreen results. Windows run 39440342943 passed the monitoring/configuration/updater, published UI/startup, recovery and packaging gates. The 1060×680 populated dashboard captures in both themes and fullscreen captures were inspected; five default columns fit beside output. v1.16.1 installer, portable package and update-feed assets were verified published. Large maps remain pannable, and fullscreen results scroll; physical DPI/accessibility and workday checks remain pending. Physical DPI, screen-reader, workday and remaining supporting-window acceptance remain open.
-
-
-## Issues and fitted monitoring view — 2026-10-20
-
-Requested follow-up: fit every selected topology node without scrolling; make Map and List alternative views (#2); show only current outages, with resolved events retained in the history window (#3); unify sidebar actions; keep Check for updates permanent and show check/download/ready/error status inside the app; remove the redundant bottom status bar.
-
-Implemented native topology reflow across site groups and host columns, retaining the existing font floor rather than shrinking a bitmap. Dense groups use compact address labels with full names/site/status on hover. The sidebar has a unified action section, a history action, and a permanent update check. The old developer-only update-control setting is retired from Settings while old config fields remain compatible.
-
-Joseph clarified that the shareable export is for ongoing monitoring, not saved output. Export monitoring batch creates a self-contained .bat for the selected enabled targets, repeatedly running ordinary Windows ping commands in one command window. It requires no app install, performs checks sequentially, and writes no result files. The generator validates targets and treats labels as text. A Windows loopback integration test exercises the generated batch in its single-pass test mode.
-
-Windows runs 39480743453 (1.17.0) and 39481434578 (1.17.1) passed the existing monitoring/configuration/updater, published UI/startup, recovery and package gates. The generated batch was executed against loopback in single-pass test mode; malformed shell targets were rejected. Populated 25-host light/dark map and List captures and the dense fullscreen capture were inspected. All test nodes fit without panning; recovered devices leave the active-outage surface. Separate popup component captures were inspected, with visibility, bounds and top-of-stack checks; whole-form DrawToBitmap does not include the overlay in these captures, so physical desktop/compositor acceptance remains pending. Installer, portable ZIP and updater-feed assets were verified in v1.17.1. Issues #2 and #3 are resolved. Final-release, physical DPI/accessibility and workday acceptance remain separate.
-
-
-## Connected topology refinement — 2026-10-20
-
-Refine the current fitted topology rather than restoring the old renderer. A shared Monitor trunk connects every selected site; each site branches into its fitted host columns. Connection gutters are reserved before packing so lines stay outside host text. Site groups use balanced rows instead of an unrestricted strip of narrow columns. Existing theme tokens, native font floor, quick actions and no-scroll fitting remain in place. Removed the Show/Hide controls feature and its F10 shortcut from Wallboard at Joseph’s request. The normal toolbar remains directly available and still wraps to fit. Windows run 39483113901 passed monitoring/configuration/updater checks, published startup and UI exercises, recovery and packaging. Populated light/dark topology and dense fullscreen captures were inspected, plus the 900px Wallboard toolbar with actions visible and no controls toggle. Existing node-fit, caption-overlap and host-hit checks passed. v1.17.3 installer, portable package and updater-feed assets were verified published. Physical DPI/accessibility and workday acceptance remain open.
+Windows only in this chat. Linux remains a separate beta track under linux/ROADMAP.md. Do not change shared presentation to force a Windows design migration onto Linux. No cross-promotion, upgrade prompts or new diagnostic modules. Maintenance covers crashes, data loss, incorrect monitoring/notifications, security, compatibility, installation/updating and material accessibility defects.
