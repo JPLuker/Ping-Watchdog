@@ -149,13 +149,11 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Unified the dashboard and Wallboard around a live site-to-host map, outages, host results, and optional ping output.
-          - The dashboard retains site navigation and editing; fullscreen presents the same monitoring information with a clock and controls hidden by default.
-          - Address is now the first column in both views.
-          - Replaced crowded radial maps with readable site-to-host branches; larger maps pan without shrinking text.
-          - Moved ping output beside the host table and constrained its width.
-          - Corrected site selection backgrounds, aligned sidebar actions, and added native dark scrollbar theming where supported.
-          - Added populated light/dark workspace captures and layout regression checks.
+          - Keep Address first and fit all five default columns beside ping output.
+          - Move ping output below the table on narrow windows; show the empty-output state correctly.
+          - Keep fullscreen output inside its panel and make the fullscreen host table scrollable.
+          - Increase site/status text to the readable typography floor and label the search field.
+          - Preserve the unified dashboard/Wallboard layout, site-scoped workers, host quick actions, and saved configuration.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

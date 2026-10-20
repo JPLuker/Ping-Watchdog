@@ -1023,6 +1023,8 @@ internal sealed class WallboardCanvas : Control
     private Point _panOffset;
     private Point? _dragOrigin;
     private Point _dragPan;
+    private Rectangle _resultsViewport;
+    private int _resultScrollOffset;
 
     internal void PanTopology(int dx, int dy)
     {
@@ -1056,6 +1058,13 @@ internal sealed class WallboardCanvas : Control
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
+        if (_resultsViewport.Contains(e.Location))
+        {
+            int count = Snapshot?.Sites.Sum(site => site.Hosts.Count) ?? 0;
+            _resultScrollOffset = Math.Clamp(_resultScrollOffset - Math.Sign(e.Delta) * 3, 0, Math.Max(0, count - 1));
+            Invalidate();
+            return;
+        }
         if ((ModifierKeys & Keys.Shift) != 0) PanTopology(-e.Delta, 0);
         else PanTopology(0, -e.Delta);
     }
@@ -1219,7 +1228,10 @@ internal sealed class WallboardCanvas : Control
                 resultsRect.Right + gap, lowerTop, outputWidth, lowerHeight);
 
             DrawPanel(g, cliRect);
+            var outputClip = g.Save();
+            g.SetClip(cliRect, System.Drawing.Drawing2D.CombineMode.Intersect);
             DrawCli(g, snapshot, cliRect);
+            g.Restore(outputClip);
         }
 
         // Shortcuts remain available without a permanent legend.
@@ -1227,6 +1239,7 @@ internal sealed class WallboardCanvas : Control
 
     private void DrawResultsTable(Graphics g, WallboardSnapshot snapshot, Rectangle rect)
     {
+        _resultsViewport = rect;
         var clip = g.Save();
         g.SetClip(rect, System.Drawing.Drawing2D.CombineMode.Intersect);
         using var text = new SolidBrush(WallboardStyle.Text);
@@ -1239,9 +1252,12 @@ internal sealed class WallboardCanvas : Control
             g.DrawString(headings[c], _tinyFont, muted,
                 new RectangleF(x + width * fractions[c], y, width * (fractions[c + 1] - fractions[c]), 24), format);
         y += 32;
-        foreach (var host in snapshot.Sites.SelectMany(site => site.Hosts))
+        var hosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
+        _resultScrollOffset = Math.Clamp(_resultScrollOffset, 0, Math.Max(0, hosts.Count - 1));
+        int visible = 0;
+        foreach (var host in hosts.Skip(_resultScrollOffset))
         {
-            if (y + 32 > rect.Bottom - 12) break;
+            if (y + 32 > rect.Bottom - 36) break;
             string[] values = { host.Address, host.Label, host.Site,
                 snapshot.Monitoring ? host.State.ToString() : "Stopped", host.LatencyMs is long ms ? $"{ms} ms" : "—" };
             for (int c = 0; c < values.Length; c++)
@@ -1249,7 +1265,10 @@ internal sealed class WallboardCanvas : Control
                     new RectangleF(x + width * fractions[c], y, width * (fractions[c + 1] - fractions[c]) - 8, 24), format);
             _sidebarHitRegions.Add((new Rectangle(x, y, width, 32), host));
             y += 32;
+            visible++;
         }
+        if (hosts.Count > visible)
+            g.DrawString($"{_resultScrollOffset + 1}–{_resultScrollOffset + visible} of {hosts.Count} · Scroll for more", _tinyFont, muted, rect.X + 16, rect.Bottom - 28);
         g.Restore(clip);
     }
 
@@ -1270,7 +1289,7 @@ internal sealed class WallboardCanvas : Control
             $"{hosts.Count(h => h.State == HostState.Offline)} offline";
         if (Embedded)
         {
-            g.DrawString(snapshot.Monitoring ? summary : "Stopped", _sectionFont, brandBrush, 0, 8);
+            g.DrawString(snapshot.Monitoring ? summary : "Sites and hosts", _sectionFont, brandBrush, 0, 8);
             return;
         }
         g.DrawString(summary, _sectionFont, brandBrush, 24, 32);

@@ -703,7 +703,7 @@ public sealed partial class MainForm : Form
     private readonly ToolStripMenuItem _trayUpdateItem;
     private readonly Icon _appIcon;
     private readonly Bitmap _brandBitmap;
-    private readonly Font _siteItemFont = new("Segoe UI Semibold", 9.5f);
+    private readonly Font _siteItemFont = new("Segoe UI Semibold", 10.5f);
     private readonly Font _statusCellFont = new("Segoe UI", 10.5f, FontStyle.Bold);
 
     private TableLayoutPanel? _rootLayout;
@@ -1521,6 +1521,8 @@ public sealed partial class MainForm : Form
                         await Task.Delay(150);
                         Check(review._grid.Rows.Count == 25, "Populated workspace lost hosts.");
                         Check(review._grid.Columns["HostColumn"].DisplayIndex == 0, "Address must be the first column.");
+                        Check(review._grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).Sum(c => c.Width) < review._grid.ClientSize.Width,
+                            "Default host columns overflow beside ping output.");
                         Check(review._mainSplit.Panel2.Width <= review._mainSplit.Width / 3 + 4,
                             "Ping log consumed the host table width.");
                         Check(review._mainSplit.Panel1.Width > review._mainSplit.Panel2.Width * 1.8,
@@ -1734,6 +1736,13 @@ public sealed partial class MainForm : Form
         _grid.Columns["HostColumn"].DefaultCellStyle.Font = new Font("Consolas", 11.25f);
         _grid.Columns["SiteColumn"].DisplayIndex = 2;
         _grid.Columns["LatencyColumn"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        foreach (var name in new[] { "Host", "Label", "Site", "Status", "Latency" })
+        {
+            var column = _grid.Columns[name + "Column"];
+            column.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            column.MinimumWidth = name switch { "Host" => 140, "Label" => 96, "Site" => 80, "Status" => 76, _ => 64 };
+            column.FillWeight = name switch { "Host" => 30, "Label" => 24, "Site" => 19, "Status" => 16, _ => 13 };
+        }
         _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OpenHostManager(); };
 
     }

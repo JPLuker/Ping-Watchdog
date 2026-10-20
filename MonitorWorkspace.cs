@@ -84,6 +84,7 @@ public sealed partial class MainForm
         _hostSearch.Font = AuroraTheme.BodyFont;
         _hostSearch.Margin = new Padding(0, 8, 8, 0);
         _hostSearch.TextChanged += (_, _) => RefreshGrid();
+        toolbar.Controls.Add(new Label { Text = "Search", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(0, 12, 8, 0) });
         toolbar.Controls.Add(_hostSearch);
         toolbar.Controls.Add(HostUi.Button("Edit hosts", OpenHostManager));
         toolbar.Controls.Add(HostUi.Button("Columns", ShowColumnMenu));
@@ -102,12 +103,13 @@ public sealed partial class MainForm
         var output = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Tag = "card" };
         output.Controls.Add(_commandBox);
         output.Controls.Add(_emptyLog);
+        _emptyLog.BringToFront();
         log.Controls.Add(output, 0, 1);
         _commandBox.TextChanged += (_, _) =>
         {
             _emptyLog.Visible = _commandBox.TextLength == 0;
             _clearLogButton.Enabled = _commandBox.TextLength > 0;
-            if (_emptyLog.Visible) _emptyLog.BringToFront();
+            if (_commandBox.TextLength == 0) _emptyLog.BringToFront();
         };
         _clearLogButton.Enabled = false;
         _mainSplit.Panel2.Controls.Add(log);
@@ -170,6 +172,16 @@ public sealed partial class MainForm
     {
         if (_mainSplit.Panel2Collapsed || _mainSplit.Width < 300) return;
         int width = _mainSplit.ClientSize.Width;
+        var orientation = width * 96f / DeviceDpi < 720 ? Orientation.Horizontal : Orientation.Vertical;
+        if (_mainSplit.Orientation != orientation) _mainSplit.Orientation = orientation;
+        if (orientation == Orientation.Horizontal)
+        {
+            int height = _mainSplit.ClientSize.Height;
+            if (height < 120) return;
+            int outputHeight = Math.Min((int)(96 * DeviceDpi / 96f), height / 3);
+            _mainSplit.SplitterDistance = Math.Max(1, height - outputHeight - _mainSplit.SplitterWidth);
+            return;
+        }
         int logWidth = reset ? (int)(240 * DeviceDpi / 96f) : _mainSplit.Panel2.Width;
         logWidth = Math.Clamp(logWidth, Math.Min(160, width / 3), Math.Max(160, width / 3));
         _mainSplit.SplitterDistance = Math.Max(1, width - logWidth - _mainSplit.SplitterWidth);
