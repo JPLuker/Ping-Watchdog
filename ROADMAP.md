@@ -70,3 +70,12 @@ Iterations v1.18.0–v1.18.2 add keyboard selection and context actions for topo
 Joseph clarified snooze semantics: pause the host's probes, hide it from active outages and live command output for the hour, then resume automatically. The worker is cancelled without restarting unrelated hosts; late results are rejected, saved snoozes are honored, and an all-snoozed session stays alive for expiry. Historical events remain available. Menus now say Snooze host / Resume monitoring.
 
 New regression coverage exercises worker cancellation, late-result isolation, expiry, manual resume, saved snoozes, all-snoozed sessions, keyboard and accessible action targets, stale host removal and snoozed outage filtering. Windows runs 39487281012 and 39488095116 passed storage/snooze/accessibility regressions, published startup/UI, independent recovery and package/publication gates. An intermediate v1.18.1 run passed its tests/packaging but GitHub rejected publication with HTTP 403; the final v1.18.2 release published successfully and was verified as latest with installer, portable and update feeds. Rendered light/dark Main/Hosts/Settings and dense topology were inspected; the final sparse-map focus capture was inspected. Physical screen-reader/DPI acceptance remains open. The final-release target moves to a later minor because this behavior/accessibility iteration uses 1.18.0; maintenance acceptance remains open.
+
+
+## Settings persistence and navigation — 2026-10-20
+
+Candidate v1.18.3 persists configuration and user preferences before applying Settings to the live session. Failure keeps the draft, Save changes and unsaved-close protection intact, with an inline error and an on-demand Details action. Preference reads no longer replace damaged/unsupported files with defaults; saves validate originals and use rolling atomic backups. If config commit fails after preferences were written, the previous preferences are restored where possible, with explicit failure reporting if restoration also fails.
+
+Settings category navigation now uses shared selected/focus styling, Display is renamed Appearance, and redundant page subtitles are removed. Native Enter/Escape behavior complements Ctrl+S and staged save/discard/cancel.
+
+Coverage includes locked destinations, real config-commit failure and preference restoration, malformed/newer preference preservation, failed-save draft retention and successful retry, plus both-theme save-error captures at a constrained width. Windows validation/publication pending.

@@ -126,6 +126,7 @@ public sealed partial class MainForm
 
     private void ReportStorageProblem(string message, bool protectOriginal = false)
     {
+        if (_configWriteBlocked && !protectOriginal && _storageWarning != null) return;
         _configWriteBlocked |= protectOriginal;
         _storageWarning = message;
         ShowStorageWarning();
@@ -135,6 +136,6 @@ public sealed partial class MainForm
     {
         if (_storageWarningShown || _storageWarning == null || !IsHandleCreated || !Visible) return;
         _storageWarningShown = true;
-        MessageBox.Show(this, _storageWarning, "Saved configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        MessageBox.Show(this, _storageWarning, "Saved data", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 }

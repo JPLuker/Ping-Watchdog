@@ -4,6 +4,7 @@ namespace PingWatchdog;
 
 internal sealed class UserPreferences
 {
+    public int FormatVersion { get; set; } = 1;
     public bool ShowUpdateControlOnHome { get; set; }
     public bool RestoreLastSiteOnStartup { get; set; }
     public bool StartMonitoringOnLaunch { get; set; }
@@ -12,49 +13,39 @@ internal sealed class UserPreferences
 
 internal static class UserPreferenceStore
 {
-    internal static UserPreferences Load(string path, bool fallbackShowUpdateControl)
+    internal static UserPreferences Read(string path)
     {
-        try
+        string json = File.ReadAllText(path);
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("Preferences must be a JSON object.");
+        if (document.RootElement.TryGetProperty("FormatVersion", out var version) &&
+            (version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out int value) || value != 1))
+            throw new InvalidDataException("These preferences use an unsupported format. Restore a backup or update Ping Watchdog.");
+        return JsonSerializer.Deserialize<UserPreferences>(json)
+            ?? throw new InvalidDataException("Preferences are empty.");
+    }
+
+    internal static UserPreferences Load(string path, bool fallbackShowUpdateControl, Action<string>? reportError = null)
+    {
+        if (File.Exists(path))
         {
-            if (File.Exists(path))
+            try { return Read(path); }
+            catch (Exception ex)
             {
-                var loaded = JsonSerializer.Deserialize<UserPreferences>(File.ReadAllText(path));
-                if (loaded is not null)
-                    return loaded;
+                reportError?.Invoke("Preferences could not be opened. Defaults are being used for this session; the original file has been kept. Restore a backup before saving preferences.\r\n\r\n" + ex.Message);
             }
         }
-        catch
-        {
-            // A damaged preference file must never prevent monitoring.
-        }
-
-        var fallback = new UserPreferences
-        {
-            ShowUpdateControlOnHome = fallbackShowUpdateControl
-        };
-        Save(path, fallback);
-        return fallback;
+        // Reading must not overwrite a damaged or unsupported file with defaults.
+        return new UserPreferences { ShowUpdateControlOnHome = fallbackShowUpdateControl };
     }
 
     internal static void Save(string path, UserPreferences preferences)
     {
-        try
-        {
-            string? directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-
-            string temp = path + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(preferences, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            }));
-            File.Move(temp, path, overwrite: true);
-        }
-        catch
-        {
-            // UI preferences are best-effort and must not block monitoring.
-        }
+        if (preferences.FormatVersion != 1)
+            throw new InvalidDataException("The preference format is unsupported.");
+        if (File.Exists(path)) Read(path);
+        SafeConfigStore.WriteAtomic(path, JsonSerializer.Serialize(preferences, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     internal static void RunTests()
@@ -99,26 +90,12 @@ public sealed partial class MainForm
 
         var preferences = UserPreferenceStore.Load(
             UserPreferencesPath,
-            _showUpdateControlOnHome);
+            _showUpdateControlOnHome,
+            message => ReportStorageProblem(message));
         _showUpdateControlOnHome = preferences.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = preferences.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = preferences.StartMonitoringOnLaunch;
         AuroraTheme.SetMode(preferences.Appearance);
     }
 
-    private void SaveUserPreferences()
-    {
-        if (!_persistSites)
-            return;
-
-        UserPreferenceStore.Save(
-            UserPreferencesPath,
-            new UserPreferences
-            {
-                ShowUpdateControlOnHome = _showUpdateControlOnHome,
-                RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
-                StartMonitoringOnLaunch = _startMonitoringOnLaunch,
-                Appearance = AuroraTheme.Mode
-            });
-    }
 }

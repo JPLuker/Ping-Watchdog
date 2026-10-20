@@ -1011,6 +1011,8 @@ public sealed partial class MainForm : Form
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
         SafeConfigStore.RunTests();
+        SettingsPersistence.RunTests();
+        SettingsForm.RunSaveFailureTests(form.GetAppSettingsSnapshot());
         RunSnoozeRegressionTests();
         var snoozedSiteHosts = new[]
         {
@@ -1705,6 +1707,8 @@ public sealed partial class MainForm : Form
                     Capture(form, "appearance-main-" + appearance);
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
                     Capture(form._hostManager!, "appearance-hosts-" + appearance);
+                    SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
+                        Path.Combine(output, "settings-save-error-" + appearance + ".png"));
                     form._settingsForm!.Close(); form._hostManager!.Close();
                 }
                 AuroraTheme.SetMode(appearanceBefore);
@@ -4084,6 +4088,7 @@ public sealed partial class MainForm : Form
 
     private void ApplyAppSettings(AppSettingsSnapshot settings)
     {
+        PersistAppSettings(settings);
         bool wasAutoCheck = _autoCheckUpdates;
 
         _autoCheckUpdates = settings.AutoCheckUpdates;
@@ -4094,7 +4099,6 @@ public sealed partial class MainForm : Form
         _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = settings.StartMonitoringOnLaunch;
         AuroraTheme.SetMode(settings.Appearance);
-        SaveUserPreferences();
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
         DisplayTime.Use12HourTime = settings.Use12HourTime;
@@ -4135,7 +4139,6 @@ public sealed partial class MainForm : Form
         }
 
         ApplyResponsiveLayout();
-        SaveSites();
         _eventHistoryForm?.RefreshNow();
         _settingsForm?.RefreshRuntimeState();
         RefreshGrid();

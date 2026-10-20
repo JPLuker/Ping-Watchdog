@@ -15,7 +15,10 @@ internal sealed class SettingsForm : Form
         Dock = DockStyle.Fill,
         BorderStyle = BorderStyle.None,
         IntegralHeight = false,
-        Font = new Font("Segoe UI Semibold", 10)
+        Font = AuroraTheme.LabelFont,
+        DrawMode = DrawMode.OwnerDrawFixed,
+        ItemHeight = 36,
+        AccessibleName = "Settings categories"
     };
 
     private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, AccessibleName = "Appearance" };
@@ -23,6 +26,8 @@ internal sealed class SettingsForm : Form
     private readonly Panel _content = new() { Dock = DockStyle.Fill };
     private readonly Button _saveButton = new AuroraButton() { Text = "Save changes", AutoSize = true };
     private readonly Button _closeButton = new AuroraButton() { Text = "Close", AutoSize = true };
+    private readonly Button _saveDetails = new AuroraButton() { Text = "Details", AutoSize = true, Visible = false };
+    private string? _saveError;
 
     private readonly CheckBox _minimizeToTray = new() { Text = "Minimize to notification area", AutoSize = true };
     private readonly CheckBox _restoreLastSite = new() { Text = "Restore the last selected site on startup", AutoSize = true };
@@ -94,7 +99,8 @@ internal sealed class SettingsForm : Form
         ApplyTheme();
         Shown += (_, _) => AuroraTheme.Register(this);
 
-        _nav.Items.AddRange(new object[] { "General", "Display", "Monitoring", "Notifications", "History", "Updates", "Advanced" });
+        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Advanced" });
+        _nav.DrawItem += DrawCategory;
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
 
@@ -105,6 +111,9 @@ internal sealed class SettingsForm : Form
             number.ValueChanged += (_, _) => UpdateDirtyState();
         _historyRange.SelectedIndexChanged += (_, _) => UpdateDirtyState();
         KeyPreview = true;
+        AcceptButton = _saveButton;
+        CancelButton = _closeButton;
+        _saveDetails.Click += (_, _) => MessageBox.Show(this, _saveError ?? "No save error.", "Settings could not be saved", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         KeyDown += (_, e) => { if (e.Control && e.KeyCode == Keys.S) { SaveSettings(); e.SuppressKeyPress = true; } };
         FormClosing += (_, e) =>
         {
@@ -223,7 +232,7 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(_content, 1, 1);
 
         _pages["General"] = BuildGeneralPage();
-        _pages["Display"] = BuildDisplayPage();
+        _pages["Appearance"] = BuildDisplayPage();
         _pages["Notifications"] = BuildNotificationsPage();
         _pages["Advanced"] = BuildAdvancedPage();
         _pages["Monitoring"] = BuildMonitoringPage();
@@ -247,6 +256,7 @@ internal sealed class SettingsForm : Form
         };
         footer.Controls.Add(_closeButton);
         footer.Controls.Add(_saveButton);
+        footer.Controls.Add(_saveDetails);
         footer.Controls.Add(_saveStatus);
         root.Controls.Add(footer, 0, 2);
         root.SetColumnSpan(footer, 2);
@@ -277,7 +287,7 @@ internal sealed class SettingsForm : Form
 
     private Control BuildDisplayPage()
     {
-        var page = Page("Display", "Clock format and ping-log visibility.");
+        var page = Page("Appearance", "Clock format and ping-log visibility.");
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Appearance", _appearance, "System follows Windows. Changes apply when saved."));
         stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
@@ -302,7 +312,7 @@ internal sealed class SettingsForm : Form
         var page = Page("Advanced", "Preference recovery.");
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Restore preferences", _resetButton,
-            "Stages the default settings for review. Save Settings applies them. Hosts, site organization, and outage history are preserved. Active-session timing stays unchanged."));
+            "Stages the default settings for review. Save changes applies them. Hosts, site organization, and outage history are preserved. Active-session timing stays unchanged."));
         return page;
     }
 
@@ -369,7 +379,7 @@ internal sealed class SettingsForm : Form
             RowCount = 2,
             BackColor = Color.FromArgb(10, 14, 20)
         };
-        page.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var head = new FlowLayoutPanel
@@ -385,12 +395,6 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold),
             ForeColor = Color.White
-        });
-        head.Controls.Add(new Label
-        {
-            Text = subtitle,
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 153, 169)
         });
 
         var stack = new FlowLayoutPanel
@@ -434,7 +438,7 @@ internal sealed class SettingsForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Padding = new Padding(14),
+            Padding = new Padding(AuroraTheme.Space4),
             Margin = new Padding(0, 0, 0, 12),
             BackColor = Color.FromArgb(18, 25, 34)
         };
@@ -533,6 +537,7 @@ internal sealed class SettingsForm : Form
     private void LoadSettings()
     {
         _loading = true;
+        _saveError = null;
         try
         {
             var s = _provider();
@@ -575,18 +580,103 @@ internal sealed class SettingsForm : Form
     {
         if (_loading) return;
         bool dirty = HasChanges();
+        if (!dirty) _saveError = null;
         _saveButton.Enabled = dirty;
-        _saveStatus.Text = dirty ? "Unsaved changes" : "Saved";
+        _saveStatus.Text = _saveError != null ? "Could not save" : dirty ? "Unsaved changes" : "Saved";
+        _saveStatus.AccessibleName = _saveStatus.Text;
+        _saveStatus.AccessibleDescription = _saveError;
+        _saveDetails.Visible = _saveError != null;
     }
-    private void SaveSettings()
+    private bool SaveSettings()
     {
-        if (_loading || !HasChanges()) return;
-        try { _apply(ReadSettings(_provider())); LoadSettings(); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Settings could not be saved"); }
+        if (_loading || !HasChanges()) return true;
+        try
+        {
+            _apply(ReadSettings(_provider()));
+            LoadSettings();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _saveError = ex.Message;
+            UpdateDirtyState();
+            return false;
+        }
     }
+
+    private void DrawCategory(object? sender, DrawItemEventArgs e)
+    {
+        using var background = new SolidBrush(AuroraTheme.Palette.Surface);
+        e.Graphics.FillRectangle(background, e.Bounds);
+        if (e.Index < 0 || e.Index >= _nav.Items.Count) return;
+        bool selected = (e.State & DrawItemState.Selected) != 0;
+        var bounds = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 2, Math.Max(1, e.Bounds.Width - 8), Math.Max(1, e.Bounds.Height - 4));
+        using var shape = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusMedium);
+        if (selected)
+        {
+            using var fill = new SolidBrush(AuroraTheme.Palette.Surface3);
+            e.Graphics.FillPath(fill, shape);
+        }
+        TextRenderer.DrawText(e.Graphics, _nav.Items[e.Index].ToString(), AuroraTheme.LabelFont,
+            new Rectangle(bounds.X + 12, bounds.Y, Math.Max(1, bounds.Width - 24), bounds.Height),
+            selected ? AuroraTheme.Palette.Text : AuroraTheme.Palette.Secondary,
+            TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        if ((e.State & DrawItemState.Focus) != 0 && _nav.Focused)
+        {
+            using var focus = new Pen(AuroraTheme.Palette.Accent, 2);
+            e.Graphics.DrawPath(focus, shape);
+        }
+    }
+
+    internal static void RunSaveFailureTests(AppSettingsSnapshot initial)
+    {
+        var current = initial;
+        bool fail = true;
+        using var form = new SettingsForm(() => current, settings =>
+        {
+            if (fail) throw new IOException("Test: destination is locked.");
+            current = settings;
+        }, () => Task.CompletedTask, () => { });
+        form.LoadSettings();
+        form._autoStart.Checked = !initial.StartMonitoringOnLaunch;
+        if (form.SaveSettings() || !form.HasChanges() || !form._saveButton.Enabled || form._saveStatus.Text == "Saved" ||
+            current.StartMonitoringOnLaunch != initial.StartMonitoringOnLaunch || form._saveError == null)
+            throw new InvalidOperationException("A failed Settings save lost its draft or reported success.");
+        fail = false;
+        if (!form.SaveSettings() || form.HasChanges() || form._saveStatus.Text != "Saved" ||
+            current.StartMonitoringOnLaunch == initial.StartMonitoringOnLaunch)
+            throw new InvalidOperationException("Settings save retry did not commit the draft.");
+        form._autoStart.Checked = initial.StartMonitoringOnLaunch;
+        form.LoadSettings(); // Discarding a draft reloads the actual committed values.
+        if (form.HasChanges() || form._autoStart.Checked != current.StartMonitoringOnLaunch)
+            throw new InvalidOperationException("Settings discard did not restore committed values.");
+    }
+
+    internal static void CaptureSaveFailureReview(AppSettingsSnapshot initial, Form owner, string path)
+    {
+        using var review = new SettingsForm(() => initial, _ => throw new IOException(
+            "The settings file is locked. Close the other application and try Save changes again."),
+            () => Task.CompletedTask, () => { });
+        review.Width = 760;
+        review.Show(owner);
+        review._autoStart.Checked = !initial.StartMonitoringOnLaunch;
+        review.SaveSettings();
+        review.PerformLayout();
+        foreach (var button in new[] { review._saveButton, review._saveDetails, review._closeButton })
+            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds))
+                throw new InvalidOperationException("Settings save-error controls are clipped.");
+        using (var bitmap = new Bitmap(review.Width, review.Height))
+        {
+            review.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            bitmap.Save(path);
+        }
+        review.LoadSettings();
+        review.Close();
+    }
+
     private void RestoreDefaults()
     {
-        if (MessageBox.Show(this, "Stage the default settings? Review them, then click Save Settings to apply.",
+        if (MessageBox.Show(this, "Stage the default settings? Review them, then click Save changes to apply.",
             "Restore defaults", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         if (!_provider().MonitoringActive)
         { _interval.Value = 2; _timeout.Value = 1000; _downAfter.Value = 3; _recoverAfter.Value = 2; }

@@ -108,3 +108,12 @@ Joseph requested snooze to pause monitoring for the hour rather than only muting
 Windows runs 39487281012 and 39488095116 passed snooze/accessibility regressions, published startup/UI, independent recovery, packaging and publication. Tests cover cancelled workers, unrelated-worker stability, late command/event/result rejection, saved snoozes, automatic expiry/manual resume, all-paused sessions, aggregate site health, correct keyboard/accessibility action targets, stale child/removal safety and snoozed outage filtering. The intermediate v1.18.1 publication failed with GitHub HTTP 403 after all test/package steps passed; final v1.18.2 publication succeeded. Installer, portable, full/delta packages and feeds were verified; GitHub latest points to v1.18.2.
 
 Inspected actual light/dark Main/Hosts/Settings review captures, dense topology/state markers and the corrected compact focus outline. Captured workspace image dimensions: 1040×736, 1040×736; Wallboard images: 1044×788, 900×788, 1044×735. Render assertions and accessible-object API checks do not certify actual Narrator behavior, mixed DPI, large text or other physical-desktop acceptance.
+
+
+## Settings save feedback and preference preservation
+
+Candidate v1.18.3 addresses A4's incorrect Saved state and the preference-corruption part of D6. PersistAppSettings stages the settings-only config values and preferences, validates both originals, writes them before changing runtime settings, and restores previous preferences if the subsequent config write fails. This is not a crash-atomic transaction across two files; rollback failure is reported explicitly. General inventory-save feedback and full backup/restore remain separate.
+
+Settings keeps its baseline/draft after failure and exposes Could not save with Details; retry commits and reloads the successful baseline. New tests check that a failed callback does not change the committed provider value, retains the draft, and never reports Saved. Filesystem tests cover locked config files, a real commit failure after preference write, rollback, corrupt/newer preference protection and retry. Main preference loading reports fallback use without overwriting the original.
+
+Category navigation, short page headings, Appearance naming and native Enter/Escape are refined without changing the accepted monitoring layout. Windows execution, actual capture inspection and publication pending.
