@@ -1,8 +1,8 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.6**.
+Current published Windows build: **v1.18.9**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
-Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Remaining supporting UI/data/release work and manual acceptance remain open.
+Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Remaining supporting UI, portable storage/deletion, release work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
@@ -34,7 +34,9 @@ The accepted dashboard and connected topology remain the visual baseline. Featur
 - [x] Preserve staged Settings save/discard/cancel and Ctrl+S with visible persistence failure feedback (v1.18.4).
 - [x] Add Settings > About, bundled license review, report-issue access and reviewable diagnostic copying (v1.18.6).
 - [ ] Complete dialog ownership, focus, keyboard and independent recovery acceptance across remaining supporting windows.
-- [ ] Complete backup/restore, portable storage, open-data-folder and deliberate data deletion.
+- [x] Complete backup/restore including preferences and history, explicit replacement policy and journaled interruption recovery (v1.18.9; see DATA-RECOVERY.md).
+- [x] Open the current data folder from Settings (v1.18.9).
+- [ ] Complete portable folder-local storage and deliberate full data deletion.
 
 ## 4. Release and security hardening
 
@@ -94,3 +96,18 @@ Automated checks cover the bundled license, report fields, exact copying and cli
 The first v1.18.5 review exposed full-width support buttons from the Settings page fitter. v1.18.6 groups them inside a compact action container; both versions passed their build gates and were published, with v1.18.6 the final reviewed update.
 
 This is the support-information batch, not acceptance of every supporting dialog, third-party notices, actual screen-reader/DPI behavior or the final maintenance release.
+
+
+## Complete backup and restore — 2026-10-20
+
+v1.18.9 adds Settings > Data and storage, complete-backup creation, explicit replacement restore and Open data folder. DATA-RECOVERY.md defines included/excluded data, replacement and retention behavior. A complete backup covers all saved sites/folders and host metadata, enabled state and snoozes, saved preferences and outage history. Temporary monitoring sessions, command output, binaries and startup reports are excluded. Settings drafts are not exported.
+
+Backups are validated before file replacement. Restore requires stopped monitoring, defaults its confirmation to No, respects Settings save/discard/cancel, replaces rather than merges, and restarts the application. Four destinations are updated: authoritative config, preferences, history and the legacy inventory. Closing after a successful restore suppresses autosave of the previous in-memory setup.
+
+A flushed recovery journal stores exact original bytes and missing-file state before writes begin. Renaming that journal is the commit point. Failures attempt rollback; an interrupted transaction is rolled back at the very start of the next MainForm construction, before UI handlers, data loading or autosave. Failure to finish recovery retains the pending record and prevents normal startup. Successful originals and rollback records are retained for recovery, without automatic cleanup yet. This is journaled recovery across multiple files, not a claim that the filesystem atomically replaces four files together or that physical power-loss behavior was tested.
+
+Tests exercise round-trip labels/categories/snooze/preferences/history, original byte preservation including damaged bytes, missing-original deletion on rollback, a commit failure after two writes, simulated interrupted-restore recovery, locked-file refusal, malformed/incomplete/newer backup refusal and live-data-folder export protection. A MainForm regression ensures a protected startup configuration cannot be exported as a fallback complete backup.
+
+Windows run 39497671069 passed self-tests, published startup/UI, independent recovery, packaging and publication. Actual light/dark Data and storage captures were inspected. Installer, portable, full/delta packages and both update feeds were verified. v1.18.7's fixture escaping was corrected before the working v1.18.8 build; v1.18.8 published successfully, then v1.18.9 corrected the storage category mnemonic rendering and protected legacy-config fallback export.
+
+Actual installed/portable restart-and-restore acceptance, multi-instance usage, physical power loss and final workday/DPI/screen-reader trials remain open. The portable ZIP still uses AppData; folder-local storage and deliberate full deletion are separate tasks.
