@@ -11,6 +11,8 @@ public sealed partial class MainForm
     private DataBackup CreateDataBackup()
     {
         // Refuse to silently replace unreadable saved data with a session fallback.
+        if (_configWriteBlocked)
+            throw new InvalidOperationException("Saved configuration is protected because it could not be opened. Keep the original files and restore a known-good backup first.");
         if (File.Exists(_autoConfigPath)) SafeConfigStore.Read(_autoConfigPath);
         var settings = GetAppSettingsSnapshot();
         var preferences = File.Exists(UserPreferencesPath)

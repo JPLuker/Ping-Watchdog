@@ -1015,6 +1015,13 @@ public sealed partial class MainForm : Form
         SafeConfigStore.RunTests();
         SettingsPersistence.RunTests();
         DataBackupStore.RunTests();
+        form._configWriteBlocked = true;
+        bool protectedBackupRefused = false;
+        try { form.CreateDataBackup(); }
+        catch (InvalidOperationException) { protectedBackupRefused = true; }
+        finally { form._configWriteBlocked = false; }
+        if (!protectedBackupRefused)
+            throw new InvalidOperationException("A protected startup configuration was exported as a fallback backup.");
         SettingsForm.RunSaveFailureTests(form.GetAppSettingsSnapshot());
         SupportInfo.RunTests();
         RunSnoozeRegressionTests();

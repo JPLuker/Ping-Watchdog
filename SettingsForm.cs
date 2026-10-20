@@ -101,7 +101,7 @@ internal sealed class SettingsForm : Form
         ApplyTheme();
         Shown += (_, _) => AuroraTheme.Register(this);
 
-        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Data & storage", "Advanced", "About" });
+        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Data and storage", "Advanced", "About" });
         _nav.DrawItem += DrawCategory;
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
@@ -241,7 +241,7 @@ internal sealed class SettingsForm : Form
         _pages["History"] = BuildHistoryPage();
         _pages["Updates"] = BuildUpdatesPage();
         _pages["About"] = BuildAboutPage();
-        _pages["Data & storage"] = BuildDataPage();
+        _pages["Data and storage"] = BuildDataPage();
 
         foreach (var page in _pages.Values)
         {
@@ -377,7 +377,7 @@ internal sealed class SettingsForm : Form
     private Control BuildDataPage()
     {
         // FOCAL: the existing staged Settings save action. Data operations stay secondary.
-        var page = Page("Data & storage", "");
+        var page = Page("Data and storage", "");
         var stack = (FlowLayoutPanel)page.Controls[1];
         var backup = new AuroraButton { Text = "Create backup…", AutoSize = true, Enabled = _backupAction != null };
         var restore = new AuroraButton { Text = "Restore backup…", AutoSize = true, Enabled = _restoreAction != null };
@@ -396,7 +396,7 @@ internal sealed class SettingsForm : Form
 
     internal async Task CaptureDataReview(string output, string appearance)
     {
-        SelectCategory("Data & storage");
+        SelectCategory("Data and storage");
         await Task.Delay(75);
         using var bitmap = new Bitmap(Width, Height);
         DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));

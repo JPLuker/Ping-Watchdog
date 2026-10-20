@@ -160,7 +160,8 @@ jobs:
 
           - Add complete backups for sites, host settings, snoozes, saved preferences and outage history.
           - Validate incomplete and unsupported backups before replacement; retain originals and recover interrupted restores before startup autosave.
-          - Add Data & storage settings with backup, restore and open-data-folder actions.
+          - Add Data and storage settings with backup, restore and open-data-folder actions.
+          - Refuse fallback backups when startup protected an unreadable saved configuration.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
