@@ -229,9 +229,9 @@ internal static class DataBackupStore
             string validJson = JsonSerializer.Serialize(rejected, JsonOptions);
             foreach (string invalid in new[]
             {
-                validJson.Replace("\\"FormatVersion\\": 1", "\\"FormatVersion\\": 999"),
-                validJson.Replace("\\"Preferences\\": {", "\\"IgnoredPreferences\\": {"),
-                validJson.Replace("\\"History\\": [", "\\"IgnoredHistory\\": [")
+                validJson.Replace("\"FormatVersion\": 1", "\"FormatVersion\": 999"),
+                validJson.Replace("\"Preferences\": {", "\"IgnoredPreferences\": {"),
+                validJson.Replace("\"History\": [", "\"IgnoredHistory\": [")
             })
             {
                 File.WriteAllText(file, invalid);
