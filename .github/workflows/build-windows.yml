@@ -109,7 +109,7 @@ jobs:
           foreach ($name in @("workspace-populated-Dark", "workspace-populated-Light", "update-status-Dark", "update-status-Light", "workspace-list-Dark", "workspace-list-Light", "update-popup-Dark", "update-popup-Light")) {
             Write-Output ("WORKSPACE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WORKSPACE_IMAGE_END")
           }
-          foreach ($name in @("wallboard", "wallboard-controls-hidden", "wallboard-dense")) {
+          foreach ($name in @("wallboard", "wallboard-narrow", "wallboard-dense")) {
             Write-Output ("WALLBOARD_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WALLBOARD_IMAGE_END")
           }
 
@@ -152,6 +152,7 @@ jobs:
           - Connect the fitted topology through a shared monitor-to-site backbone.
           - Route site-to-host branches through dedicated gaps around labels.
           - Balance site groups across rows while keeping the current style and no-scroll layout.
+          - Remove Show/Hide controls from Wallboard; actions stay directly available.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

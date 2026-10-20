@@ -1581,13 +1581,12 @@ public sealed partial class MainForm : Form
                 form.OpenWallboard();
                 await Task.Delay(200);
                 Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
-                Check(!form._wallboardForm!.ControlsExpanded, "Wallboard controls must start hidden.");
-                form._wallboardForm.SetControlsVisible(true);
                 var canvas = (WallboardCanvas)form._wallboardForm!.Controls.Find("WallboardCanvas", true).Single();
                 foreach (int width in new[] { 900, 1320 })
                 {
                     form._wallboardForm.ClientSize = new Size(width, 900);
                     await Task.Delay(100);
+                    if (width == 900) Capture(form._wallboardForm, "wallboard-narrow");
                     var actionBar = form._wallboardForm.Controls.Find("WallboardActions", true).Single();
                     Check(actionBar.Parent!.Height <= actionBar.Bottom + 8,
                         "Wallboard toolbar reserves empty vertical space.");
@@ -1608,15 +1607,11 @@ public sealed partial class MainForm : Form
                     "Wallboard must open the shared Hosts manager.");
                 form._hostManager!.Close();
                 await CheckHostMenu(canvas);
-                form._wallboardForm!.SetControlsVisible(false);
-                await Task.Delay(100);
-                Check(!form._wallboardForm.ControlsExpanded, "Wallboard controls did not collapse.");
-                var collapsedActions = form._wallboardForm.Controls.Find("WallboardActions", true).Single();
-                Check(collapsedActions.Controls.Cast<Control>().Count(c => c.Visible) == 1,
-                    "Hidden toolbar still exposes actions.");
-                Capture(form._wallboardForm, "wallboard-controls-hidden");
-                form._wallboardForm.SetControlsVisible(true);
-                Check(form._wallboardForm.ControlsExpanded, "Wallboard controls did not reopen.");
+                var visibleActions = form._wallboardForm!.Controls.Find("WallboardActions", true).Single();
+                Check(visibleActions.Controls.OfType<Button>().All(button => !button.Text.Contains("controls", StringComparison.OrdinalIgnoreCase)),
+                    "Wallboard still exposes the removed controls toggle.");
+                Check(visibleActions.Controls.OfType<Button>().Any(button => button.Visible && button.Text == "Exit Wallboard"),
+                    "Wallboard exit must remain directly available.");
                 Capture(form._wallboardForm!, "wallboard");
                 canvas.Snapshot = new WallboardSnapshot(true, DateTime.Now,
                     Enumerable.Range(1, 4).Select(site => new WallboardSiteSnapshot("Branch " + site,

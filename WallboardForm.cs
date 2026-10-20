@@ -57,21 +57,6 @@ internal sealed class WallboardForm : Form
     private readonly NumericUpDown _downAfter = Number(2, 20, 3, 1, 72);
     private readonly NumericUpDown _recoverAfter = Number(1, 20, 2, 1, 72);
 
-    private readonly Button _toolbarToggle = ToolbarButton("Hide controls", 104);
-    private FlowLayoutPanel? _toolbarActions;
-    private bool _controlsVisible = true;
-    internal bool ControlsExpanded => _controlsVisible;
-    internal void SetControlsVisible(bool visible)
-    {
-        _controlsVisible = visible;
-        if (_toolbarActions == null) return;
-        _toolbarActions.SuspendLayout();
-        foreach (Control control in _toolbarActions.Controls)
-            if (control != _toolbarToggle) control.Visible = visible && (control != _updateButton || _controlProvider().ShowUpdateControl) && (control != _screenButton || Screen.AllScreens.Length > 1);
-        _toolbarToggle.Text = visible ? "Hide controls" : "Show controls";
-        _toolbarActions.ResumeLayout(true);
-    }
-
     private readonly Button _monitorButton = ToolbarButton("Start Monitoring", 112);
     private readonly Button _operationsButton = ToolbarButton("Sites", 66);
     private readonly Button _hostsButton = ToolbarButton("Hosts", 66);
@@ -176,7 +161,6 @@ internal sealed class WallboardForm : Form
             _drawer.Width = Math.Clamp(ClientSize.Width / 3, 360, 440);
             RefreshSnapshot();
             RefreshControlState(force: true);
-            SetControlsVisible(false);
             _timer.Start();
             Activate();
         };
@@ -264,10 +248,6 @@ internal sealed class WallboardForm : Form
             Margin = Padding.Empty,
             BackColor = Color.Transparent
         };
-        _toolbarActions = actions;
-        _toolbarToggle.AccessibleName = "Show or hide Wallboard controls";
-        _toolbarToggle.Click += (_, _) => SetControlsVisible(!_controlsVisible);
-        actions.Controls.Add(_toolbarToggle);
         foreach (var button in new[] { _monitorButton, _operationsButton, _hostsButton, _cliButton,
             _historyButton, _settingsButton, _updateButton, _screenButton, _mainButton })
             actions.Controls.Add(button);
@@ -721,12 +701,6 @@ internal sealed class WallboardForm : Form
             _canvas.PanTopology(e.KeyCode == Keys.Left ? -80 : e.KeyCode == Keys.Right ? 80 : 0,
                 e.KeyCode == Keys.Up ? -80 : e.KeyCode == Keys.Down ? 80 : 0);
         }
-        else if (e.KeyCode == Keys.F10)
-        {
-            e.Handled = true;
-            e.SuppressKeyPress = true;
-            SetControlsVisible(!_controlsVisible);
-        }
         else if (e.KeyCode is Keys.Escape or Keys.F11)
         {
             e.Handled = true;
@@ -852,8 +826,8 @@ internal sealed class WallboardForm : Form
     
 
             _updateButton.Text = state.UpdateActionText;
-            _updateButton.Visible = _controlsVisible && state.ShowUpdateControl;
-            _screenButton.Visible = _controlsVisible && Screen.AllScreens.Length > 1;
+            _updateButton.Visible = true;
+            _screenButton.Visible = Screen.AllScreens.Length > 1;
             _updateStatusLabel.Text = $"{state.Version}\r\n{state.UpdateStatus}";
 
             RefreshSiteCombo(state);
