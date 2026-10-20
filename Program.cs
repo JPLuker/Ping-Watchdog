@@ -4328,6 +4328,12 @@ public sealed partial class MainForm : Form
 
         if (_showCommandView.Checked)
         {
+            if (!IsHandleCreated)
+            {
+                SizePingLog(reset: true);
+                RebuildCommandView();
+                return;
+            }
             BeginInvoke(() =>
             {
                 if (_mainSplit.IsDisposed || _mainSplit.Panel2Collapsed)
