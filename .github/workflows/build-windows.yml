@@ -106,6 +106,9 @@ jobs:
           $sheet.Save("ui-smoke-test/appearance-review.png", [System.Drawing.Imaging.ImageFormat]::Png)
           $sheet.Dispose()
           Write-Output ("APPEARANCE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/appearance-review.png")) + "APPEARANCE_IMAGE_END")
+          foreach ($name in @("workspace-populated-Dark", "workspace-populated-Light")) {
+            Write-Output ("WORKSPACE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WORKSPACE_IMAGE_END")
+          }
           foreach ($name in @("wallboard", "wallboard-controls-hidden", "wallboard-dense")) {
             Write-Output ("WALLBOARD_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WALLBOARD_IMAGE_END")
           }
@@ -146,11 +149,13 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Fixed selected-site monitoring: only the selected site's enabled hosts are probed; All sites probes every enabled host.
-          - Switching sites while monitoring cancels workers outside the new selection. Wallboard and output follow the same scope.
-          - Rebuilt the main workspace with compact site navigation, a selected-site heading, one Start/Stop action, and searchable host results.
-          - Removed the oversized repeated app header and stacked toolbar cards; utilities now live at the foot of the sidebar.
-          - Simplified topology labels and unified their measurement and rendering.
+          - Unified the dashboard and Wallboard around a live site-to-host map, outages, host results, and optional ping output.
+          - The dashboard retains site navigation and editing; fullscreen presents the same monitoring information with a clock and controls hidden by default.
+          - Address is now the first column in both views.
+          - Replaced crowded radial maps with readable site-to-host branches; larger maps pan without shrinking text.
+          - Moved ping output beside the host table and constrained its width.
+          - Corrected site selection backgrounds, aligned sidebar actions, and added native dark scrollbar theming where supported.
+          - Added populated light/dark workspace captures and layout regression checks.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

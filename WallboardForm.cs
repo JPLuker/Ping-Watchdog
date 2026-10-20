@@ -1062,6 +1062,20 @@ internal sealed class WallboardCanvas : Control
 
     internal event Action<WallboardHostSnapshot, Point>? HostRightClicked;
 
+    protected override bool IsInputKey(Keys keyData) =>
+        (keyData & Keys.KeyCode) is Keys.Left or Keys.Right or Keys.Up or Keys.Down || base.IsInputKey(keyData);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.KeyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down)
+        {
+            PanTopology(e.KeyCode == Keys.Left ? -80 : e.KeyCode == Keys.Right ? 80 : 0,
+                e.KeyCode == Keys.Up ? -80 : e.KeyCode == Keys.Down ? 80 : 0);
+            e.Handled = true;
+        }
+        base.OnKeyDown(e);
+    }
+
     internal WallboardHostSnapshot? HitTestHost(Point location)
     {
         var sidebar = _sidebarHitRegions.LastOrDefault(hit => hit.Bounds.Contains(location)).Host;
@@ -1083,6 +1097,8 @@ internal sealed class WallboardCanvas : Control
 
     public WallboardSnapshot? Snapshot { get; set; }
     public bool ShowCli { get; set; } = true;
+    // The dashboard and full-screen presentation use the same data and renderer.
+    public bool Embedded { get; set; }
     internal Rectangle BrandLogoBounds => new(22, 12, 58, 58);
 
     public WallboardCanvas()
@@ -1150,31 +1166,29 @@ internal sealed class WallboardCanvas : Control
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
-        const int headerBandHeight = 112;
+        int headerBandHeight = Embedded ? 40 : 112;
         int statsTop = headerBandHeight;
         int statsHeight = 0;
 
 
-        int bodyTop = statsTop + statsHeight + 18;
-        int footerHeight = Presentation.WallboardFooterHeight;
-        int sidebarWidth = Math.Clamp((int)(ClientSize.Width * 0.29), 320, 440);
-        int gap = 16;
+        int bodyTop = statsTop + statsHeight + (Embedded ? 0 : 18);
+        int footerHeight = Embedded ? 0 : Presentation.WallboardFooterHeight;
+        int sidebarWidth = Embedded ? Math.Clamp((int)(ClientSize.Width * 0.29), 200, 280) : Math.Clamp((int)(ClientSize.Width * 0.29), 320, 440);
+        int gap = Embedded ? 12 : 16;
         int availableBodyHeight = Math.Max(
-            240,
-            ClientSize.Height - bodyTop - footerHeight - 16);
+            Embedded ? 100 : 240,
+            ClientSize.Height - bodyTop - footerHeight - (Embedded ? 4 : 16));
 
         int cliHeight = ShowCli
             ? Math.Clamp((int)(availableBodyHeight * 0.28), 150, 240)
             : 0;
 
-        int upperHeight = ShowCli
-            ? Math.Max(210, availableBodyHeight - cliHeight - gap)
-            : availableBodyHeight;
+        int upperHeight = Embedded ? availableBodyHeight : Math.Max(210, (int)(availableBodyHeight * .56));
 
         var mapRect = new Rectangle(
-            22,
+            Embedded ? 0 : 22,
             bodyTop,
-            Math.Max(300, ClientSize.Width - sidebarWidth - gap - 44),
+            Math.Max(Embedded ? 160 : 300, ClientSize.Width - sidebarWidth - gap - (Embedded ? 0 : 44)),
             upperHeight);
 
         var sidebarRect = new Rectangle(
@@ -1186,21 +1200,57 @@ internal sealed class WallboardCanvas : Control
         DrawPanel(g, mapRect);
         DrawPanel(g, sidebarRect);
         DrawTopology(g, snapshot, mapRect);
+        var sidebarClip = g.Save();
+        g.SetClip(sidebarRect, System.Drawing.Drawing2D.CombineMode.Intersect);
         DrawSidebar(g, snapshot, sidebarRect);
+        g.Restore(sidebarClip);
 
-        if (ShowCli)
+        if (!Embedded)
         {
+            int lowerTop = mapRect.Bottom + gap;
+            int lowerHeight = Math.Max(100, ClientSize.Height - lowerTop - footerHeight - 16);
+            int outputWidth = ShowCli ? Math.Clamp((int)(ClientSize.Width * .29), 240, 440) : 0;
+            var resultsRect = new Rectangle(22, lowerTop,
+                ClientSize.Width - 44 - (ShowCli ? outputWidth + gap : 0), lowerHeight);
+            DrawPanel(g, resultsRect);
+            DrawResultsTable(g, snapshot, resultsRect);
+            if (!ShowCli) return;
             var cliRect = new Rectangle(
-                22,
-                mapRect.Bottom + gap,
-                Math.Max(300, ClientSize.Width - 44),
-                cliHeight);
+                resultsRect.Right + gap, lowerTop, outputWidth, lowerHeight);
 
             DrawPanel(g, cliRect);
             DrawCli(g, snapshot, cliRect);
         }
 
         // Shortcuts remain available without a permanent legend.
+    }
+
+    private void DrawResultsTable(Graphics g, WallboardSnapshot snapshot, Rectangle rect)
+    {
+        var clip = g.Save();
+        g.SetClip(rect, System.Drawing.Drawing2D.CombineMode.Intersect);
+        using var text = new SolidBrush(WallboardStyle.Text);
+        using var muted = new SolidBrush(WallboardStyle.Muted);
+        using var format = new StringFormat { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        float[] fractions = { 0, .28f, .54f, .73f, .89f, 1 };
+        string[] headings = { "Address", "Name", "Site", "Status", "Latency" };
+        int x = rect.X + 16, width = rect.Width - 32, y = rect.Y + 16;
+        for (int c = 0; c < headings.Length; c++)
+            g.DrawString(headings[c], _tinyFont, muted,
+                new RectangleF(x + width * fractions[c], y, width * (fractions[c + 1] - fractions[c]), 24), format);
+        y += 32;
+        foreach (var host in snapshot.Sites.SelectMany(site => site.Hosts))
+        {
+            if (y + 32 > rect.Bottom - 12) break;
+            string[] values = { host.Address, host.Label, host.Site,
+                snapshot.Monitoring ? host.State.ToString() : "Stopped", host.LatencyMs is long ms ? $"{ms} ms" : "—" };
+            for (int c = 0; c < values.Length; c++)
+                g.DrawString(values[c], c == 0 ? _hostIpFont : _smallFont, text,
+                    new RectangleF(x + width * fractions[c], y, width * (fractions[c + 1] - fractions[c]) - 8, 24), format);
+            _sidebarHitRegions.Add((new Rectangle(x, y, width, 32), host));
+            y += 32;
+        }
+        g.Restore(clip);
     }
 
     private void DrawBackground(Graphics g)
@@ -1218,6 +1268,11 @@ internal sealed class WallboardCanvas : Control
         string summary = $"{hosts.Count(h => h.State == HostState.Online)} online · " +
             $"{hosts.Count(h => h.State == HostState.Suspect)} suspect · " +
             $"{hosts.Count(h => h.State == HostState.Offline)} offline";
+        if (Embedded)
+        {
+            g.DrawString(snapshot.Monitoring ? summary : "Stopped", _sectionFont, brandBrush, 0, 8);
+            return;
+        }
         g.DrawString(summary, _sectionFont, brandBrush, 24, 32);
         string clock = DisplayTime.Clock(snapshot.CapturedAt);
         string date = snapshot.CapturedAt.ToString("dddd, MMMM d, yyyy");
@@ -1324,19 +1379,19 @@ internal sealed class WallboardCanvas : Control
         WallboardSnapshot snapshot,
         Rectangle rect)
     {
-        int visibleHosts = snapshot.Sites.Sum(site =>
-            Math.Min(site.Hosts.Count, Presentation.VisibleTopologyHosts));
-        double renderScale = CalculateTopologyRenderScale(
-            rect,
-            snapshot.Sites.Count,
-            visibleHosts);
-
         _topologyViewport = rect;
-        // Preserve logical text size. Extra space is navigable, never a shrunken bitmap.
-        int virtualWidth = snapshot.Sites.Count <= 1 ? rect.Width : Math.Max(rect.Width, (int)Math.Ceiling(rect.Width / renderScale));
-        int virtualHeight = snapshot.Sites.Count <= 1 ? Math.Max(360, rect.Height) : Math.Max(680, (int)Math.Ceiling(rect.Height / renderScale));
+        int columns = rect.Width >= 1100 && snapshot.Sites.Count > 1 ? 2 : 1;
+        int largestSite = snapshot.Sites.Select(site => site.Hosts.Count).DefaultIfEmpty(0).Max();
+        int groupHeight = Math.Max(180, largestSite * 52 + 64);
+        int widestCaption = snapshot.Sites.SelectMany(site => site.Hosts).Select(host => {
+            var lines = FormatHostNodeLines(host);
+            return MeasureHostNodeCaption(g, lines.Primary, lines.Secondary, _hostLabelFont, _hostIpFont).Width;
+        }).DefaultIfEmpty(180).Max();
+        int laneWidth = Math.Max(rect.Width / columns, 260 + widestCaption);
+        int virtualWidth = laneWidth * columns;
+        int virtualHeight = Math.Max(rect.Height, (int)Math.Ceiling(snapshot.Sites.Count / (double)columns) * groupHeight);
         if (_topologyVirtualSize != new Size(virtualWidth, virtualHeight))
-            _panOffset = new Point((virtualWidth - rect.Width) / 2, 0);
+            _panOffset = Point.Empty;
         _topologyVirtualSize = new Size(virtualWidth, virtualHeight);
         _panOffset = new Point(Math.Clamp(_panOffset.X, 0, Math.Max(0, virtualWidth - rect.Width)),
             Math.Clamp(_panOffset.Y, 0, Math.Max(0, virtualHeight - rect.Height)));
@@ -1393,110 +1448,51 @@ internal sealed class WallboardCanvas : Control
         WallboardSnapshot snapshot,
         Rectangle rect)
     {
-        using var titleBrush = new SolidBrush(WallboardStyle.Muted);
-        g.DrawString("Sites and hosts", _sectionFont, titleBrush, rect.X + 16, rect.Y + 13);
-
-        var content = new Rectangle(
-            rect.X + 18,
-            rect.Y + 42,
-            rect.Width - 36,
-            rect.Height - 58);
-
-        if (snapshot.Sites.Count == 0)
-        {
-            using var emptyBrush = new SolidBrush(WallboardStyle.Muted);
-            DrawCenteredText(
-                g,
-                "No sites configured",
-                _siteFont,
-                emptyBrush,
-                content);
-            return;
-        }
-
-        var center = new Point(
-            content.X + content.Width / 2,
-            content.Y + content.Height / 2);
-
-        // One site needs no synthetic hub or oversized navigation canvas.
-        if (snapshot.Sites.Count == 1)
-        {
-            _captionObstacles.Clear();
-            _hiddenCaptions = 0;
-            _captionObstacles.Add(new Rectangle(center.X - 55, center.Y - 55, 110, 110));
-            DrawSiteNode(g, snapshot.Sites[0], center, content, 0);
-            return;
-        }
-
-        // Quiet topology: status and host labels provide the visual emphasis.
-
-        int coreRadius = Math.Clamp(
-            Math.Min(content.Width, content.Height) / 11,
-            38,
-            58);
-
-        var sitePoints = CalculateSitePoints(
-            snapshot.Sites.Count,
-            content,
-            center,
-            coreRadius);
-
-        // Site orbits must leave room for captions at the top and bottom,
-        // rather than forcing edge hosts to compete with their neighbours.
-        for (int i = 0; i < sitePoints.Count; i++)
-        {
-            var site = snapshot.Sites[i];
-            int orbit = site.Hosts.Count > 7 ? 112 : 68;
-            int captionHalfHeight = site.Hosts.Take(Presentation.VisibleTopologyHosts).Select(host =>
-            {
-                var lines = FormatHostNodeLines(host);
-                return MeasureHostNodeCaption(g, lines.Primary, lines.Secondary, _hostLabelFont, _hostIpFont).Height / 2;
-            }).DefaultIfEmpty(0).Max();
-            int margin = orbit + captionHalfHeight + 16;
-            sitePoints[i] = new Point(sitePoints[i].X,
-                Math.Clamp(sitePoints[i].Y, content.Top + margin, Math.Max(content.Top + margin, content.Bottom - margin)));
-        }
-
         _captionObstacles.Clear();
         _hiddenCaptions = 0;
-        _captionObstacles.Add(new Rectangle(center.X - coreRadius - 10, center.Y - coreRadius - 10,
-            (coreRadius + 10) * 2, (coreRadius + 10) * 2));
-
-        for (int i = 0; i < snapshot.Sites.Count; i++)
+        if (snapshot.Sites.Count == 0)
         {
-            var sitePoint = sitePoints[i];
-            _captionObstacles.Add(new Rectangle(sitePoint.X - 55, sitePoint.Y - 55, 110, 110));
-            int count = Math.Min(snapshot.Sites[i].Hosts.Count, Presentation.VisibleTopologyHosts);
-            for (int h = 0; h < count; h++)
+            using var empty = new SolidBrush(WallboardStyle.Muted);
+            g.DrawString("No hosts", _sectionFont, empty, 16, 16);
+            return;
+        }
+        int columns = _topologyViewport.Width >= 1100 && snapshot.Sites.Count > 1 ? 2 : 1;
+        int laneWidth = rect.Width / columns;
+        int groupHeight = Math.Max(180, snapshot.Sites.Max(site => site.Hosts.Count) * 52 + 64);
+        using var text = new SolidBrush(WallboardStyle.Text);
+        using var muted = new SolidBrush(WallboardStyle.Muted);
+        using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        for (int index = 0; index < snapshot.Sites.Count; index++)
+        {
+            var site = snapshot.Sites[index];
+            int x = (index % columns) * laneWidth;
+            int y = (index / columns) * groupHeight;
+            int rootY = y + 40 + Math.Max(0, site.Hosts.Count - 1) * 26;
+            var root = new Point(x + 184, rootY);
+            using var siteDot = new SolidBrush(StateColor(AggregateSiteState(site), 255));
+            g.FillEllipse(siteDot, root.X - 6, root.Y - 6, 12, 12);
+            g.DrawString(site.Name, _siteFont, text, new RectangleF(x + 16, rootY - 20, 150, 24), format);
+            g.DrawString($"{site.Hosts.Count(h => h.State == HostState.Online)}/{site.Hosts.Count} online", _tinyFont, muted, x + 16, rootY + 4);
+            for (int h = 0; h < site.Hosts.Count; h++)
             {
-                var node = Presentation.HostPoint(h, count, new UiPoint(sitePoint.X, sitePoint.Y), 68);
-                _captionObstacles.Add(new Rectangle((int)node.X - 8, (int)node.Y - 8, 16, 16));
+                var host = site.Hosts[h];
+                var point = new Point(x + 240, y + 40 + h * 52);
+                using var connector = new Pen(StateColor(host.State, 90), 1.5f);
+                g.DrawBezier(connector, root, new Point(root.X + 32, root.Y), new Point(point.X - 32, point.Y), point);
+                using var dot = new SolidBrush(StateColor(host.State, 255));
+                g.FillEllipse(dot, point.X - 4, point.Y - 4, 8, 8);
+                var lines = FormatHostNodeLines(host);
+                var size = MeasureHostNodeCaption(g, lines.Primary, lines.Secondary, _hostLabelFont, _hostIpFont);
+                var caption = new Rectangle(point.X + 12, point.Y - size.Height / 2, size.Width, size.Height);
+                _hostHitRegions.Add((new Rectangle(point.X - 8, point.Y - 8, 16, 16), host));
+                _hostHitRegions.Add((caption, host));
+                _hostCaptionRegions.Add((caption, host));
+                int primaryHeight = (int)Math.Ceiling(_hostLabelFont.GetHeight(g));
+                g.DrawString(lines.Primary, _hostLabelFont, text, new RectangleF(caption.X + 4, caption.Y + 4, caption.Width - 8, primaryHeight + 2), format);
+                if (lines.Secondary is not null)
+                    g.DrawString(lines.Secondary, _hostIpFont, muted, caption.X + 4, caption.Y + 4 + primaryHeight, StringFormat.GenericTypographic);
             }
         }
-
-        for (int i = 0; i < snapshot.Sites.Count; i++)
-        {
-            var site = snapshot.Sites[i];
-            var point = sitePoints[i];
-            var status = AggregateSiteState(site);
-
-            DrawConnection(g, center, point, status, i);
-        }
-
-        DrawCore(g, center, coreRadius, snapshot.Monitoring);
-
-        for (int i = 0; i < snapshot.Sites.Count; i++)
-        {
-            DrawSiteNode(
-                g,
-                snapshot.Sites[i],
-                sitePoints[i],
-                content,
-                i);
-        }
-        // Dense layouts are rendered on a larger virtual canvas and scaled to fit.
-        // Any caption that still cannot be placed is silently omitted; the host node
-        // itself remains visible and Operations/Hosts retains the full details.
     }
 
     private static List<Point> CalculateSitePoints(
@@ -2072,7 +2068,7 @@ internal sealed class WallboardCanvas : Control
             HostState.Online => p.Teal, HostState.Suspect => p.Warning,
             HostState.Offline => p.Danger, _ => p.Secondary
         };
-        return Color.FromArgb(alpha, p.StatusText(value));
+        return Color.FromArgb(alpha, value);
     }
 
     private static void DrawCenteredText(

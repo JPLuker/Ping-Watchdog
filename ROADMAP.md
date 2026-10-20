@@ -125,3 +125,11 @@ Rebuilt the main window around a compact site sidebar, one selected-site heading
 Selecting a site now scopes actual enabled monitoring workers. Switching sites while running cancels old workers and adds the selected targets; All sites monitors all enabled hosts. Wallboard topology, history and output follow the selection. Added a published Windows regression for actual worker cancellation/replacement and search/configuration separation. Simplified topology captions and use one renderer for measurement and drawing.
 
 This is an iterative release, not final design acceptance. Remaining supporting-window polish, physical DPI/accessibility and full-workday testing remain open.
+
+## Unified monitoring layout — 2026-10-20
+
+Joseph supplied a dashboard reference and requested one shared dashboard/Wallboard layout. The implementation now uses the same site-to-host map and outage renderer in the normal workspace and fullscreen, with address-first results below and optional ping output beside them. The normal workspace retains site navigation, search and editing; fullscreen removes the editing/navigation chrome and adds a clock. No extra diagnostic modules or reference-only metrics were introduced.
+
+Replaced radial orbit layout with measured branch rows that remain readable and pan at larger sizes. Main-map and outage rows reuse existing host quick actions. Site selection still scopes actual workers. Corrected selection painting, aligned sidebar utility actions, added an explicit empty ping-output state, and requested native dark scrollbar styling where available. Added populated dark/light captures and panel-allocation/address-order regressions.
+
+Windows build, rendered review and release verification are pending for this checkpoint. Physical DPI, screen-reader, workday and remaining supporting-window acceptance remain open.

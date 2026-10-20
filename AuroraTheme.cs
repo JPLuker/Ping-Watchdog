@@ -97,6 +97,22 @@ internal static class AuroraTheme
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+    private static extern int SetWindowTheme(IntPtr hwnd, string? subAppName, string? subIdList);
+
+    private static void ThemeScrollbars(Control control)
+    {
+        if (!control.IsHandleCreated) return;
+        try
+        {
+            string? theme = SystemInformation.HighContrast ? null : Palette.Dark ? "DarkMode_Explorer" : "Explorer";
+            SetWindowTheme(control.Handle, theme, null);
+            foreach (var bar in control.Controls.OfType<ScrollBar>())
+                if (bar.IsHandleCreated) SetWindowTheme(bar.Handle, theme, null);
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+    }
 
     internal static void Apply(Form form)
     {
@@ -193,6 +209,7 @@ internal static class AuroraTheme
                 break;
         }
         if (control.ContextMenuStrip != null) ApplyMenu(control.ContextMenuStrip);
+        if (control is DataGridView or RichTextBox or ListBox) ThemeScrollbars(control);
         // Grid editors and up/down internals manage their own layout and fonts.
         if (control is not DataGridView && control is not NumericUpDown)
             foreach (Control child in control.Controls) ApplyControl(child);
@@ -243,6 +260,7 @@ internal sealed class AuroraMenuColors : ProfessionalColorTable
 internal class AuroraButton : Button
 {
     internal bool Primary { get; set; }
+    internal bool Ghost { get; set; }
     private bool _hover, _pressed;
     public AuroraButton()
     {
@@ -300,7 +318,7 @@ internal class AuroraButton : Button
         var bounds = Rectangle.Inflate(ClientRectangle, -inset, -inset);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         using var path = WallboardStyle.Rounded(bounds, bounds.Height / 2);
-        var fillColor = Primary && Enabled ? p.Accent : _pressed || (_hover && Enabled) ? p.Surface3 : p.Surface2;
+        var fillColor = Primary && Enabled ? p.Accent : _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
         using var fill = new SolidBrush(fillColor);
         e.Graphics.FillPath(fill, path);
         if (Focused && ShowFocusCues)
@@ -312,8 +330,9 @@ internal class AuroraButton : Button
         var ink = !Enabled ? p.Muted : Primary ? p.OnAccent : p.Text;
         var textBounds = bounds;
         if (_pressed) textBounds.Offset(0, 1);
+        if (TextAlign is ContentAlignment.MiddleLeft) textBounds.X += Padding.Left;
         TextRenderer.DrawText(e.Graphics, Text, Font, textBounds, ink,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
+            (TextAlign is ContentAlignment.MiddleLeft ? TextFormatFlags.Left : TextFormatFlags.HorizontalCenter) | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
             (ShowKeyboardCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix));
     }
 }

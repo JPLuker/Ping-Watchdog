@@ -1286,9 +1286,9 @@ public sealed partial class MainForm : Form
         Check(form._moreButton.Parent is not null);
         Check(form._headerActionsPanel?.Controls.Contains(form._checkUpdateButton) == true);
         Check(form._headerActionsPanel?.Controls.Contains(form._settingsButton) == true);
-        Check(form._moreButton.Text == "⋯");
+        Check(form._moreButton.Text == "More");
         Check(form._moreButton.Width >= 48);
-        Check(form._moreButton.Padding == Padding.Empty);
+        Check(form._moreButton.Padding.Left >= 16);
         Check(form._saveConfigButton.Parent is null);
         Check(form._loadConfigButton.Parent is null);
         Check(form._headerActionsPanel?.WrapContents == false);
@@ -1502,6 +1502,34 @@ public sealed partial class MainForm : Form
                 Capture(form._settingsForm!, "settings");
                 form._settingsForm!.Close();
 
+                using (var review = new MainForm(false, true, false))
+                {
+                    review._minimizeToTray = false;
+                    review.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, ShowCommandView = true,
+                        Sites = Enumerable.Range(1, 5).Select(site => new SiteDefinition {
+                            Name = "Branch " + site,
+                            Hosts = Enumerable.Range(1, 5).Select(host => $"192.0.2.{site * 10 + host}").ToList(),
+                            Labels = new() { [$"192.0.2.{site * 10 + 2}"] = "Printer", [$"192.0.2.{site * 10 + 3}"] = "Cloudkey" }
+                        }).ToList() });
+                    review.MaximumSize = new Size(1920, 1080);
+                    review.Show(form);
+                    foreach (var appearance in new[] { AppearanceMode.Dark, AppearanceMode.Light })
+                    {
+                        AuroraTheme.SetMode(appearance);
+                        review.ClientSize = new Size(1060, 680);
+                        review.ApplyResponsiveLayout();
+                        await Task.Delay(150);
+                        Check(review._grid.Rows.Count == 25, "Populated workspace lost hosts.");
+                        Check(review._grid.Columns["HostColumn"].DisplayIndex == 0, "Address must be the first column.");
+                        Check(review._mainSplit.Panel2.Width <= review._mainSplit.Width / 3 + 4,
+                            "Ping log consumed the host table width.");
+                        Check(review._mainSplit.Panel1.Width > review._mainSplit.Panel2.Width * 1.8,
+                            "Host results lost priority over the log.");
+                        Capture(review, "workspace-populated-" + appearance);
+                    }
+                    review.Close();
+                }
+
                 form.OpenWallboard();
                 await Task.Delay(200);
                 Check(form._wallboardForm?.Visible == true, "Wallboard did not open.");
@@ -1701,8 +1729,9 @@ public sealed partial class MainForm : Form
             column.Visible = column.Name is "SiteColumn" or "HostColumn" or "LabelColumn" or "StatusColumn" or "LatencyColumn";
         _grid.Columns["HostColumn"].HeaderText = "Address";
         _grid.Columns["LabelColumn"].HeaderText = "Name";
-        _grid.Columns["LabelColumn"].DisplayIndex = 0;
-        _grid.Columns["HostColumn"].DisplayIndex = 1;
+        _grid.Columns["HostColumn"].DisplayIndex = 0;
+        _grid.Columns["LabelColumn"].DisplayIndex = 1;
+        _grid.Columns["HostColumn"].DefaultCellStyle.Font = new Font("Consolas", 11.25f);
         _grid.Columns["SiteColumn"].DisplayIndex = 2;
         _grid.Columns["LatencyColumn"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
         _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OpenHostManager(); };
@@ -1711,7 +1740,7 @@ public sealed partial class MainForm : Form
 
     private void DrawSiteItem(object? sender, DrawItemEventArgs e)
     {
-        e.DrawBackground();
+        using (var canvas = new SolidBrush(AuroraTheme.Palette.Surface)) e.Graphics.FillRectangle(canvas, e.Bounds);
 
         if (e.Index < 0 || e.Index >= _siteList.Items.Count)
             return;
@@ -1739,7 +1768,11 @@ public sealed partial class MainForm : Form
             textBrush.Color,
             TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
 
-        e.DrawFocusRectangle();
+        if ((e.State & DrawItemState.Focus) != 0 && ShowFocusCues)
+        {
+            using var focus = new Pen(AuroraTheme.Palette.Accent, 2);
+            e.Graphics.DrawPath(focus, rowPath);
+        }
     }
 
     private void LoadSites()
@@ -4300,16 +4333,7 @@ public sealed partial class MainForm : Form
                 if (_mainSplit.IsDisposed || _mainSplit.Panel2Collapsed)
                     return;
 
-                int height = _mainSplit.ClientSize.Height;
-
-                if (height > 150)
-                {
-                    int desired = (int)(height * (ClientSize.Height < 720 ? 0.52 : 0.60));
-                    _mainSplit.SplitterDistance = Math.Clamp(
-                        desired,
-                        Math.Min(80, height - 1),
-                        Math.Max(81, height - 70));
-                }
+                SizePingLog(reset: true);
 
                 RebuildCommandView();
             });
@@ -4486,6 +4510,8 @@ public sealed partial class MainForm : Form
 
     private void RefreshGrid()
     {
+        _monitorCanvas.Snapshot = BuildWallboardSnapshot();
+        _monitorCanvas.Invalidate();
         var selection = GetSelectedHostIdentity();
         string? selectedColumn = _grid.CurrentCell?.OwningColumn.Name;
         int firstDisplayedRow = _grid.FirstDisplayedScrollingRowIndex;
@@ -4515,7 +4541,7 @@ public sealed partial class MainForm : Form
                         Label = GetNickname(h.Site, h.Address),
                         Category = GetCategory(h.Site, h.Address),
                         Status = statusText,
-                        Latency = h.LastRoundTripMs.HasValue
+                        Latency = _cts is not null && h.LastRoundTripMs.HasValue
                             ? $"{h.LastRoundTripMs} ms"
                             : "—",
                         Failures = h.ConsecutiveFailures,
