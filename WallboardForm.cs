@@ -1869,14 +1869,15 @@ internal sealed partial class WallboardCanvas : Control
 
     internal static HostState AggregateSiteState(WallboardSiteSnapshot site)
     {
-        int total = site.Hosts.Count;
+        var activeHosts = site.Hosts.Where(host => !IsHostSnoozed(host)).ToList();
+        int total = activeHosts.Count;
 
         if (total == 0)
             return HostState.Unknown;
 
-        int online = site.Hosts.Count(h => h.State == HostState.Online);
-        int offline = site.Hosts.Count(h => h.State == HostState.Offline);
-        int suspect = site.Hosts.Count(h => h.State == HostState.Suspect);
+        int online = activeHosts.Count(h => h.State == HostState.Online);
+        int offline = activeHosts.Count(h => h.State == HostState.Offline);
+        int suspect = activeHosts.Count(h => h.State == HostState.Suspect);
 
         if (offline > 0)
         {

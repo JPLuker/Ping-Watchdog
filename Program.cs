@@ -1012,6 +1012,17 @@ public sealed partial class MainForm : Form
         UserPreferenceStore.RunTests();
         SafeConfigStore.RunTests();
         RunSnoozeRegressionTests();
+        var snoozedSiteHosts = new[]
+        {
+            new WallboardHostSnapshot("Snooze health", "192.0.2.1", "", HostState.Online, 1, null),
+            new WallboardHostSnapshot("Snooze health", "192.0.2.2", "", HostState.Online, 1, null),
+            new WallboardHostSnapshot("Snooze health", "192.0.2.3", "", HostState.Offline, null, DateTime.Now),
+            new WallboardHostSnapshot("Snooze health", "192.0.2.4", "", HostState.Offline, null, DateTime.Now, DateTimeOffset.UtcNow.AddHours(1)),
+            new WallboardHostSnapshot("Snooze health", "192.0.2.5", "", HostState.Unknown, null, null, DateTimeOffset.UtcNow.AddHours(1))
+        };
+        if (WallboardCanvas.AggregateSiteState(new WallboardSiteSnapshot("Snooze health", snoozedSiteHosts)) != HostState.Suspect ||
+            WallboardCanvas.AggregateSiteState(new WallboardSiteSnapshot("Snooze health", snoozedSiteHosts.Skip(3).ToArray())) != HostState.Unknown)
+            throw new InvalidOperationException("Snoozed hosts distorted aggregate site health.");
         int originalSiteCount = form._sites.Count;
         bool newerFormatRejected = false;
         try { form.ApplyConfig(new WatchdogConfig { FormatVersion = 999 }); }

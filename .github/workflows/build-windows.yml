@@ -154,6 +154,7 @@ jobs:
           - Expose individual host identities and states to Windows accessibility tools.
           - Distinguish host states by marker shape and raise small supporting-window text to the reading floor.
           - Keep keyboard focus and accessible bounds close to each host label on sparse maps.
+          - Exclude snoozed hosts from aggregate site-health calculations.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
