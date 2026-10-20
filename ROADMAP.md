@@ -110,4 +110,10 @@ Actual Windows captures of Main, Hosts and Settings in Light and Dark were inspe
 
 Synced DESIGN.md with InternalDesignGuidelines v1.2. The current cleanup removes redundant Wallboard branding and its permanent shortcut legend, adds a collapsible controls bar (F10), moves main timing fields to Settings → Monitoring, and corrects the main logo/action backgrounds. Existing monitoring and quick actions remain available.
 
-The next version is 1.15.0 in PingWatchdog.csproj. Pushes build validation artifacts; automatic public publishing is held until human testing and the new release requirements are met. Tag-based publishing, checksum manifests, asset naming, changelog-based notes, and the remaining release-policy audit must be completed before re-enabling publication. v1.14.84 remains the published build.
+The next version is 1.15.0 in PingWatchdog.csproj. On 2026-10-20 Joseph explicitly requested an updater-accessible release after every implementation build. Passing Windows builds therefore publish installer, portable package, and update feed automatically again. Each subsequent implementation push must increment the project version and update release notes. Iterative releases do not mean final design acceptance or maintenance mode; the remaining release-policy audit and final acceptance stay open.
+
+## Workspace rebuild — 2026-10-20
+
+Implemented a single idle/live host table with five default columns and a Columns menu, simpler site navigation, and a single Start/Stop action. Removed the duplicate inventory and repeated statistics. Wallboard controls start collapsed, topology text retains readable sizing with panning, and single-site placement and caption rendering were corrected.
+
+Windows run 39309561449 passed configuration/monitoring/updater tests, published startup and UI smoke tests, independent recovery tests, and packaging. Main/Hosts/Settings review captures were inspected during implementation. The latest Wallboard captures still require final visual review. Physical DPI, accessibility, installation/update acceptance, and the workday trial remain pending.

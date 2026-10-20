@@ -146,13 +146,15 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Added a collapsible Wallboard toolbar, available through Show controls or F10.
-          - Removed the repeated Wallboard heading, subtitle, and shortcut footer.
-          - Moved main-window timing controls into Settings → Monitoring.
-          - Removed the main header tagline and corrected logo/action backgrounds.
-          - Preserved monitoring, host actions, and existing keyboard shortcuts.
+          - Consolidated inventory and live results into one host table, including idle hosts.
+          - Simplified site navigation and added a Columns menu with five default columns.
+          - Combined monitoring into a single Start/Stop action.
+          - Collapsed Wallboard controls by default; Show controls or F10 restores them.
+          - Kept topology text readable with panning for larger layouts and improved single-site placement.
+          - Corrected caption rendering and separated the outage-history filter from its heading.
+          - Preserved monitoring, host actions, saved configuration, and existing keyboard shortcuts.
 
-          Internal validation build. Public release acceptance is pending.
+          Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
           "@ | Set-Content release-notes.md
 
@@ -176,9 +178,8 @@ jobs:
           path: Releases/*
           if-no-files-found: error
 
-      # Hold public releases while the new design and release-policy acceptance are incomplete.
+      # Publish passing builds for user testing; final-release acceptance is tracked separately.
       - name: Publish release to GitHub
-        if: ${{ false }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
