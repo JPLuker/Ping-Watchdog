@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.2**.
+Current published Windows build: **v1.18.4**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
 Current stage: standards audit, first config-safety batch, host keyboard/accessibility implementation and snooze correction complete. Supporting UI/data/release work and manual acceptance remain open.
 
@@ -74,8 +74,8 @@ New regression coverage exercises worker cancellation, late-result isolation, ex
 
 ## Settings persistence and navigation — 2026-10-20
 
-Candidate v1.18.3 persists configuration and user preferences before applying Settings to the live session. Failure keeps the draft, Save changes and unsaved-close protection intact, with an inline error and an on-demand Details action. Preference reads no longer replace damaged/unsupported files with defaults; saves validate originals and use rolling atomic backups. If config commit fails after preferences were written, the previous preferences are restored where possible, with explicit failure reporting if restoration also fails.
+v1.18.4 persists configuration and user preferences before applying Settings to the live session. Failure keeps the draft, Save changes and unsaved-close protection intact, with an inline error and an on-demand Details action. Preference reads no longer replace damaged/unsupported files with defaults; saves validate originals and use rolling atomic backups. If config commit fails after preferences were written, the previous preferences are restored where possible, with explicit failure reporting if restoration also fails.
 
 Settings category navigation now uses shared selected/focus styling, Display is renamed Appearance, and redundant page subtitles are removed. Native Enter/Escape behavior complements Ctrl+S and staged save/discard/cancel.
 
-Coverage includes locked destinations, real config-commit failure and preference restoration, malformed/newer preference preservation, failed-save draft retention and successful retry, plus both-theme save-error captures at a constrained width. Windows validation/publication pending.
+Coverage includes locked destinations, real config-commit failure and preference restoration, malformed/newer preference preservation, failed-save draft retention and successful retry, plus both-theme save-error captures at a constrained width. Windows run 39490797950 passed persistence/retry regressions, published startup/UI, recovery, packaging and publication. Normal 900×650 and save-error 760×650 Settings captures were inspected in both themes; error controls fit. v1.18.3 was withheld after the new UI review ran before Shown initialized its draft; the corrected test waits for initialization and keeps the bounds checks. v1.18.4 installer, portable, full/delta packages and feeds were verified.
