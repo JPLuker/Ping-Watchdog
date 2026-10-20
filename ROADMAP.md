@@ -1,8 +1,8 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.17.4** (v1.18.0 in validation).
+Current published Windows build: **v1.18.2**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
-Current stage: standards audit and first configuration-safety batch complete. Essential accessibility, remaining data/UI work and manual acceptance remain open.
+Current stage: standards audit, first config-safety batch, host keyboard/accessibility implementation and snooze correction complete. Supporting UI/data/release work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
@@ -25,7 +25,7 @@ The accepted dashboard and connected topology remain the visual baseline. Featur
 
 - [x] Atomic config saves, three rolling backups, visible write errors and damaged config/site-list protection (v1.17.4). Preferences/history and Settings save feedback remain separate.
 - [x] Reject newer unsupported configs before applying/rewriting; test original preservation and backup retention (v1.17.4). No schema migration was introduced; future migrations still need their own acceptance.
-- [ ] Keyboard and accessible topology/outage host actions; full identity/state independent of color.
+- [x] Keyboard and accessible topology/outage host actions; full identity/state in accessible names and keyboard details, with distinct marker shapes (v1.18.2). Real screen-reader acceptance remains pending.
 - [ ] Readable font floor, long addresses/IPv6 and constrained-height behavior.
 
 ## 3. Supporting UI and data controls
@@ -65,8 +65,8 @@ Windows only in this chat. Linux remains a separate beta track under linux/ROADM
 
 ## Host access and snooze correction — 2026-10-20
 
-Candidate v1.18.0 adds keyboard selection and context actions for topology/outage hosts, per-host accessible objects, visible focus and state-specific marker shapes. Native themed controls below the reading floor are normalized, including independent recovery text.
+Iterations v1.18.0–v1.18.2 add keyboard selection and context actions for topology/outage hosts, per-host accessible objects, visible focus and state-specific marker shapes. Native themed controls below the reading floor are normalized, including independent recovery text.
 
 Joseph clarified snooze semantics: pause the host's probes, hide it from active outages and live command output for the hour, then resume automatically. The worker is cancelled without restarting unrelated hosts; late results are rejected, saved snoozes are honored, and an all-snoozed session stays alive for expiry. Historical events remain available. Menus now say Snooze host / Resume monitoring.
 
-New regression coverage exercises worker cancellation, late-result isolation, expiry, manual resume, saved snoozes, all-snoozed sessions, keyboard and accessible action targets, stale host removal and snoozed outage filtering. Windows validation/publication pending. The final-release target moves to a later minor because this behavior/accessibility iteration uses 1.18.0; maintenance acceptance remains open.
+New regression coverage exercises worker cancellation, late-result isolation, expiry, manual resume, saved snoozes, all-snoozed sessions, keyboard and accessible action targets, stale host removal and snoozed outage filtering. Windows runs 39487281012 and 39488095116 passed storage/snooze/accessibility regressions, published startup/UI, independent recovery and package/publication gates. An intermediate v1.18.1 run passed its tests/packaging but GitHub rejected publication with HTTP 403; the final v1.18.2 release published successfully and was verified as latest with installer, portable and update feeds. Rendered light/dark Main/Hosts/Settings and dense topology were inspected; the final sparse-map focus capture was inspected. Physical screen-reader/DPI acceptance remains open. The final-release target moves to a later minor because this behavior/accessibility iteration uses 1.18.0; maintenance acceptance remains open.
