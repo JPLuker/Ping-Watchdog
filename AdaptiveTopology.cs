@@ -19,22 +19,25 @@ internal sealed partial class WallboardCanvas
         }
         float scale = DeviceDpi / 96f, gap = 16 * scale, padding = 12 * scale;
         float line = _hostIpFont.GetHeight(g);
+        // Reserve the shared trunk and row gutters before packing the host captions.
+        float hubHeight = 40 * scale, trunkWidth = 20 * scale, rowGutter = 24 * scale;
+        var content = new RectangleF(trunkWidth, hubHeight, Math.Max(1, bounds.Width - trunkWidth), Math.Max(1, bounds.Height - hubHeight));
         float heading = _siteFont.GetHeight(g) + 16 * scale;
         int bestGroups = 1;
         double bestScore = -1;
         int[] bestColumns = new int[sites.Count];
-        for (int groupColumns = 1; groupColumns <= sites.Count; groupColumns++)
+        for (int groupColumns = 1; groupColumns <= (int)Math.Ceiling(Math.Sqrt(sites.Count)); groupColumns++)
         {
             int groupRows = (int)Math.Ceiling(sites.Count / (double)groupColumns);
-            float groupWidth = (bounds.Width - gap * (groupColumns - 1)) / groupColumns;
-            float groupHeight = (bounds.Height - gap * (groupRows - 1)) / groupRows;
+            float groupWidth = (content.Width - gap * (groupColumns - 1)) / groupColumns;
+            float groupHeight = (content.Height - rowGutter * groupRows) / groupRows;
             if (groupWidth < 80 * scale || groupHeight <= heading) continue;
             double score = double.MaxValue;
             var columns = new int[sites.Count];
             for (int i = 0; i < sites.Count; i++)
             {
                 double nodeScore = -1;
-                float addressWidth = sites[i].Hosts.Select(host => g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max() + 24 * scale;
+                float addressWidth = sites[i].Hosts.Select(host => g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max() + 40 * scale;
                 for (int c = 1; c <= sites[i].Hosts.Count; c++)
                 {
                     int rows = (int)Math.Ceiling(sites[i].Hosts.Count / (double)c);
@@ -47,15 +50,35 @@ internal sealed partial class WallboardCanvas
             if (score > bestScore) { bestScore = score; bestGroups = groupColumns; bestColumns = columns; }
         }
         int rowsOfGroups = (int)Math.Ceiling(sites.Count / (double)bestGroups);
-        float blockWidth = (bounds.Width - gap * (bestGroups - 1)) / bestGroups;
-        float blockHeight = (bounds.Height - gap * (rowsOfGroups - 1)) / rowsOfGroups;
+        float blockWidth = (content.Width - gap * (bestGroups - 1)) / bestGroups;
+        float blockHeight = (content.Height - rowGutter * rowsOfGroups) / rowsOfGroups;
         using var text = new SolidBrush(WallboardStyle.Text);
         using var muted = new SolidBrush(WallboardStyle.Muted);
         using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        using var trunk = new Pen(Color.FromArgb(110, WallboardStyle.Accent), Math.Max(1, scale));
+        float trunkX = 8 * scale, hubY = 16 * scale;
+        using var hubBrush = new SolidBrush(WallboardStyle.Accent);
+        g.FillEllipse(hubBrush, trunkX - 5 * scale, hubY - 5 * scale, 10 * scale, 10 * scale);
+        g.DrawString("Monitor", _siteFont, text, trunkX + 14 * scale, hubY - line / 2);
+        float lastBusY = content.Y + (rowsOfGroups - 1) * (blockHeight + rowGutter) + 4 * scale;
+        g.DrawLine(trunk, trunkX, hubY + 5 * scale, trunkX, lastBusY);
+        // Edges occupy gutters, never the heading or address rectangles.
+        for (int row = 0; row < rowsOfGroups; row++)
+        {
+            int count = Math.Min(bestGroups, sites.Count - row * bestGroups);
+            float busY = content.Y + row * (blockHeight + rowGutter) + 4 * scale;
+            float lastRootX = content.X + (count - 1) * (blockWidth + gap) + padding + 4 * scale;
+            g.DrawLine(trunk, trunkX, busY, lastRootX, busY);
+            for (int column = 0; column < count; column++)
+            {
+                float rootX = content.X + column * (blockWidth + gap) + padding + 4 * scale;
+                g.DrawLine(trunk, rootX, busY, rootX, busY + rowGutter - 4 * scale + padding);
+            }
+        }
         for (int i = 0; i < sites.Count; i++)
         {
             var site = sites[i];
-            float x = i % bestGroups * (blockWidth + gap), y = i / bestGroups * (blockHeight + gap);
+            float x = content.X + i % bestGroups * (blockWidth + gap), y = content.Y + rowGutter + i / bestGroups * (blockHeight + rowGutter);
             int columns = Math.Max(1, bestColumns[i]);
             int hostRows = (int)Math.Ceiling(site.Hosts.Count / (double)columns);
             float cellWidth = Math.Max(1, (blockWidth - padding * 2) / columns);
@@ -65,6 +88,17 @@ internal sealed partial class WallboardCanvas
             g.FillEllipse(siteBrush, rootX - 4 * scale, rootY - 4 * scale, 8 * scale, 8 * scale);
             g.DrawString(site.Name, _siteFont, text,
                 new RectangleF(rootX + 12 * scale, y + 2 * scale, Math.Max(1, blockWidth - padding * 3), heading - 2 * scale), format);
+            using var branch = new Pen(StateColor(AggregateSiteState(site), 80), Math.Max(1, scale));
+            float railY = y + heading - 3 * scale;
+            float lastColumnX = x + padding + (columns - 1) * cellWidth + 4 * scale;
+            g.DrawLine(branch, rootX, rootY + 4 * scale, rootX, railY);
+            g.DrawLine(branch, rootX, railY, lastColumnX, railY);
+            for (int column = 0; column < columns; column++)
+            {
+                int count = (site.Hosts.Count - column + columns - 1) / columns;
+                float branchX = x + padding + column * cellWidth + 4 * scale;
+                g.DrawLine(branch, branchX, railY, branchX, y + heading + (count - .5f) * cellHeight);
+            }
             for (int n = 0; n < site.Hosts.Count; n++)
             {
                 var host = site.Hosts[n];
@@ -72,15 +106,15 @@ internal sealed partial class WallboardCanvas
                 float top = y + heading + n / columns * cellHeight;
                 float cy = top + cellHeight / 2;
                 float radius = Math.Max(1.5f, Math.Min(4 * scale, cellHeight / 4));
-                var point = new PointF(left + 4 * scale, cy);
+                var point = new PointF(left + 12 * scale, cy);
                 using var connection = new Pen(StateColor(host.State, 60), 1);
-                g.DrawBezier(connection, new PointF(rootX, rootY + 4 * scale), new PointF(rootX, cy), new PointF(point.X - 8 * scale, cy), point);
+                g.DrawLine(connection, left + 4 * scale, cy, point.X, cy);
                 using var dot = new SolidBrush(StateColor(host.State, 255));
                 g.FillEllipse(dot, point.X - radius, point.Y - radius, radius * 2, radius * 2);
                 var cell = Rectangle.Intersect(bounds, Rectangle.Round(new RectangleF(left, top, Math.Max(1, cellWidth - 4 * scale), Math.Max(1, cellHeight - 2 * scale))));
                 _hostHitRegions.Add((cell, host));
                 _hostCaptionRegions.Add((cell, host));
-                float tx = left + 16 * scale, tw = Math.Max(1, cellWidth - 20 * scale);
+                float tx = left + 24 * scale, tw = Math.Max(1, cellWidth - 28 * scale);
                 bool twoLines = cellHeight >= line * 2 + 8 * scale && !string.IsNullOrWhiteSpace(host.Label);
                 if (twoLines)
                     g.DrawString(host.Label, _hostLabelFont, text, new RectangleF(tx, cy - line, tw, line + 2), format);

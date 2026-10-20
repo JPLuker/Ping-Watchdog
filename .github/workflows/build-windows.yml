@@ -149,12 +149,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Reflow the topology to fit every selected node without map scrolling.
-          - Make Map and List alternative views instead of duplicating the same hosts.
-          - Show only current outages on screen; resolved events remain in Outage history.
-          - Unify sidebar actions and remove the redundant bottom status bar.
-          - Keep Check for updates as a permanent action with in-app check/download/ready/error status.
-          - Export selected enabled hosts as a continuous Windows batch monitor that writes no result files.
+          - Connect the fitted topology through a shared monitor-to-site backbone.
+          - Route site-to-host branches through dedicated gaps around labels.
+          - Balance site groups across rows while keeping the current style and no-scroll layout.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
