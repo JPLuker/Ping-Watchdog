@@ -1013,6 +1013,7 @@ public sealed partial class MainForm : Form
         SafeConfigStore.RunTests();
         SettingsPersistence.RunTests();
         SettingsForm.RunSaveFailureTests(form.GetAppSettingsSnapshot());
+        SupportInfo.RunTests();
         RunSnoozeRegressionTests();
         var snoozedSiteHosts = new[]
         {
@@ -1709,6 +1710,7 @@ public sealed partial class MainForm : Form
                     Capture(form._hostManager!, "appearance-hosts-" + appearance);
                     await SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
                         Path.Combine(output, "settings-save-error-" + appearance + ".png"));
+                    await form._settingsForm!.CaptureAboutReview(output, appearance.ToString());
                     form._settingsForm!.Close(); form._hostManager!.Close();
                 }
                 AuroraTheme.SetMode(appearanceBefore);
@@ -1798,11 +1800,8 @@ public sealed partial class MainForm : Form
 
     private void ShowAboutDialog()
     {
-        MessageBox.Show(
-            $"Ping Watchdog {GetDisplayVersion()}\r\n\r\nMulti-site ICMP availability monitoring for Windows.\r\n\r\nUpdates are checked automatically on startup and every six hours.\r\n\r\nCopyright © 2026 Joseph Luker. All rights reserved.",
-            "About Ping Watchdog",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
+        OpenSettings();
+        _settingsForm?.SelectCategory("About");
     }
 
     private void BuildGrid()

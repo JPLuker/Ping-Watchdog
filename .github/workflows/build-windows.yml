@@ -112,6 +112,9 @@ jobs:
           foreach ($name in @("appearance-settings-Light", "appearance-settings-Dark", "settings-save-error-Light", "settings-save-error-Dark")) {
             Write-Output ("SETTINGS_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SETTINGS_IMAGE_END")
           }
+          foreach ($name in @("support-about-Light", "support-about-Dark", "support-diagnostics-Light", "support-diagnostics-Dark")) {
+            Write-Output ("SUPPORT_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SUPPORT_IMAGE_END")
+          }
           foreach ($name in @("wallboard", "wallboard-narrow", "wallboard-dense")) {
             Write-Output ("WALLBOARD_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WALLBOARD_IMAGE_END")
           }
@@ -152,10 +155,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Keep Settings drafts open after a failed save and show error details with a retry.
-          - Save settings before applying them to the running session.
-          - Protect damaged or newer preference files instead of replacing them with defaults.
-          - Use consistent Settings category navigation and remove repeated page subtitles.
+          - Add Settings > About as the single home for version and license details.
+          - Review system diagnostics and storage paths before copying; no host inventory or history contents are included.
+          - Open the issue-report page from About and show clipboard or browser failures clearly.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

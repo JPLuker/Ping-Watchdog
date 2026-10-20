@@ -99,7 +99,7 @@ internal sealed class SettingsForm : Form
         ApplyTheme();
         Shown += (_, _) => AuroraTheme.Register(this);
 
-        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Advanced" });
+        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Advanced", "About" });
         _nav.DrawItem += DrawCategory;
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
@@ -238,6 +238,7 @@ internal sealed class SettingsForm : Form
         _pages["Monitoring"] = BuildMonitoringPage();
         _pages["History"] = BuildHistoryPage();
         _pages["Updates"] = BuildUpdatesPage();
+        _pages["About"] = BuildAboutPage();
 
         foreach (var page in _pages.Values)
         {
@@ -352,7 +353,6 @@ internal sealed class SettingsForm : Form
     {
         var page = Page("Updates", "GitHub release checks and installed-version status.");
         var stack = (FlowLayoutPanel)page.Controls[1];
-        stack.Controls.Add(LabeledValue("Installed version", _versionValue));
         stack.Controls.Add(LabeledValue("Update status", _updateStatus));
         _autoUpdates.Margin = new Padding(0, 12, 0, 10);
         stack.Controls.Add(_autoUpdates);
@@ -369,6 +369,62 @@ internal sealed class SettingsForm : Form
             Margin = new Padding(0, 12, 0, 0)
         });
         return page;
+    }
+
+    private Control BuildAboutPage()
+    {
+        var page = Page("About", "");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        stack.Controls.Add(LabeledValue("Ping Watchdog", _versionValue));
+        stack.Controls.Add(new Label
+        {
+            Text = "Copyright © 2026 Joseph Luker. All rights reserved.",
+            AutoSize = true, Margin = new Padding(0, 0, 0, 12)
+        });
+        var license = new AuroraButton { Text = "View license", AutoSize = true };
+        var issue = new AuroraButton { Text = "Report an issue…", AutoSize = true };
+        var diagnostics = new AuroraButton { Text = "Review diagnostic info…", AutoSize = true };
+        var status = new Label { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
+        license.Click += (_, _) =>
+        {
+            try { using var review = SupportInfo.CreateReview("License", SupportInfo.ReadLicense(), false); review.ShowDialog(this); }
+            catch (Exception ex) { status.Text = "Could not open the license: " + ex.Message; }
+        };
+        issue.Click += (_, _) =>
+        {
+            try { SupportInfo.OpenIssue(); status.Text = "Issue page opened in your browser."; }
+            catch (Exception ex) { status.Text = "Could not open your browser. Visit " + SupportInfo.IssueUrl + "\r\n" + ex.Message; }
+        };
+        diagnostics.Click += (_, _) =>
+        {
+            using var review = SupportInfo.CreateReview("Diagnostic information", SupportInfo.CreateDiagnostics(_provider().Version), true);
+            review.ShowDialog(this);
+        };
+        stack.Controls.Add(license);
+        stack.Controls.Add(issue);
+        stack.Controls.Add(diagnostics);
+        stack.Controls.Add(status);
+        return page;
+    }
+
+    internal async Task CaptureAboutReview(string output, string appearance)
+    {
+        SelectCategory("About");
+        await Task.Delay(75);
+        using (var bitmap = new Bitmap(Width, Height))
+        {
+            DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            bitmap.Save(Path.Combine(output, "support-about-" + appearance + ".png"));
+        }
+        using var review = SupportInfo.CreateReview("Diagnostic information", SupportInfo.CreateDiagnostics(_provider().Version), true);
+        review.Show(this);
+        await Task.Delay(75);
+        using (var bitmap = new Bitmap(review.Width, review.Height))
+        {
+            review.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            bitmap.Save(Path.Combine(output, "support-diagnostics-" + appearance + ".png"));
+        }
+        review.Close();
     }
 
     private Control Page(string title, string subtitle)

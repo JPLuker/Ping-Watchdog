@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PingWatchdog</AssemblyName>
     <RootNamespace>PingWatchdog</RootNamespace>
-    <Version>1.18.4</Version>
+    <Version>1.18.5</Version>
     <Product>Ping Watchdog</Product>
     <Authors>Joseph Luker</Authors>
     <Company>Joseph Luker</Company>
@@ -27,6 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="LICENSE" LogicalName="PingWatchdog.License" />
     <EmbeddedResource Include="Assets/WatchdogLogo.png" LogicalName="PingWatchdog.Brand.Logo" />
     <EmbeddedResource Include="Assets/WatchdogIcon.ico" LogicalName="PingWatchdog.Brand.Icon" />
     <Compile Remove="linux/**/*.cs" />
