@@ -87,7 +87,7 @@ No new monitoring features, framework changes, broad dashboard redesign or Linux
 2. A1/A2 essential host accessibility, then A3-A7 supporting-window consistency.
 3. Remaining D3-D5 data controls, R1-R7 release/security/updater work.
 4. P1-P3 docs, support, license confirmation and public page.
-5. Manual candidate acceptance, defect fixes, and final v1.18.0 publication when accepted.
+5. Manual candidate acceptance, defect fixes, and final v1.19.0 publication when accepted.
 
 The release number remains tentative. If interim feature-bearing releases use 1.18.x, select a later compatible minor for the final candidate rather than reusing/downgrading a version.
 
@@ -119,3 +119,16 @@ Settings keeps its baseline/draft after failure and exposes Could not save with 
 Category navigation, short page headings, Appearance naming and native Enter/Escape are refined without changing the accepted monitoring layout. Windows run 39490797950 passed storage and draft/retry tests, published startup/UI, independent recovery, packaging and publication. Actual normal 900×650 and constrained save-error 760×650 captures were inspected in Light and Dark; controls fit. The first v1.18.3 UI attempt was withheld because the review helper edited before Shown initialized its baseline; the corrected helper yields for initialization and retains visibility/bounds checks. v1.18.4 installer, portable and updater assets were verified published.
 
 This completes the Settings save-feedback item and preference-corruption protection, not the full supporting-window migration, high-contrast/physical-DPI review, diagnostic-retention policy or complete-data backup/restore.
+
+
+## About and reviewable support information — 2026-10-20
+
+v1.18.6 makes Settings > About the single home for installed version and license access; the existing About menu opens that page. The license viewer reads the exact embedded proprietary LICENSE. Report an issue opens the repository issue chooser in the system browser, with visible failure feedback.
+
+Diagnostic information is generated from an explicit allowlist of assembly build identity, Windows/.NET/architecture and data/recovery locations. It does not read inventory, settings contents, history or recovery reports. An owned review window shows exactly what Copy diagnostic info copies and warns that paths can include the Windows username. No automatic upload occurs. Clipboard errors remain visible, with selection/Ctrl+C available; Escape closes the review. Existing staged Settings edits are preserved when opening About.
+
+Automated checks cover the bundled license, report fields, exact copying and clipboard failure. Both-theme About and diagnostic captures were inspected. Windows run 39492663542 passed self-tests, published startup/UI, independent recovery, packaging and publication. Installer, portable package and full/delta/feed assets were verified for v1.18.6.
+
+The first v1.18.5 review exposed full-width support buttons from the Settings page fitter. v1.18.6 groups them inside a compact action container; both versions passed their build gates and were published, with v1.18.6 the final reviewed update.
+
+This is the support-information batch, not acceptance of every supporting dialog, third-party notices, actual screen-reader/DPI behavior or the final maintenance release.

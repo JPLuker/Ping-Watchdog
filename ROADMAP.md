@@ -1,8 +1,8 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.4**.
+Current published Windows build: **v1.18.6**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
-Current stage: standards audit, first config-safety batch, host keyboard/accessibility implementation and snooze correction complete. Supporting UI/data/release work and manual acceptance remain open.
+Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Remaining supporting UI/data/release work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
@@ -31,7 +31,9 @@ The accepted dashboard and connected topology remain the visual baseline. Featur
 ## 3. Supporting UI and data controls
 
 - [ ] Complete Settings/Hosts/History/Organization/dialog/About/updater/recovery review in both themes.
-- [ ] Preserve staged save/discard/cancel, Ctrl+S, dialog ownership, focus, keyboard and independent recovery.
+- [x] Preserve staged Settings save/discard/cancel and Ctrl+S with visible persistence failure feedback (v1.18.4).
+- [x] Add Settings > About, bundled license review, report-issue access and reviewable diagnostic copying (v1.18.6).
+- [ ] Complete dialog ownership, focus, keyboard and independent recovery acceptance across remaining supporting windows.
 - [ ] Complete backup/restore, portable storage, open-data-folder and deliberate data deletion.
 
 ## 4. Release and security hardening
@@ -79,3 +81,16 @@ v1.18.4 persists configuration and user preferences before applying Settings to 
 Settings category navigation now uses shared selected/focus styling, Display is renamed Appearance, and redundant page subtitles are removed. Native Enter/Escape behavior complements Ctrl+S and staged save/discard/cancel.
 
 Coverage includes locked destinations, real config-commit failure and preference restoration, malformed/newer preference preservation, failed-save draft retention and successful retry, plus both-theme save-error captures at a constrained width. Windows run 39490797950 passed persistence/retry regressions, published startup/UI, recovery, packaging and publication. Normal 900×650 and save-error 760×650 Settings captures were inspected in both themes; error controls fit. v1.18.3 was withheld after the new UI review ran before Shown initialized its draft; the corrected test waits for initialization and keeps the bounds checks. v1.18.4 installer, portable, full/delta packages and feeds were verified.
+
+
+## About and reviewable support information — 2026-10-20
+
+v1.18.6 makes Settings > About the single home for installed version and license access; the existing About menu opens that page. The license viewer reads the exact embedded proprietary LICENSE. Report an issue opens the repository issue chooser in the system browser, with visible failure feedback.
+
+Diagnostic information is generated from an explicit allowlist of assembly build identity, Windows/.NET/architecture and data/recovery locations. It does not read inventory, settings contents, history or recovery reports. An owned review window shows exactly what Copy diagnostic info copies and warns that paths can include the Windows username. No automatic upload occurs. Clipboard errors remain visible, with selection/Ctrl+C available; Escape closes the review. Existing staged Settings edits are preserved when opening About.
+
+Automated checks cover the bundled license, report fields, exact copying and clipboard failure. Both-theme About and diagnostic captures were inspected. Windows run 39492663542 passed self-tests, published startup/UI, independent recovery, packaging and publication. Installer, portable package and full/delta/feed assets were verified for v1.18.6.
+
+The first v1.18.5 review exposed full-width support buttons from the Settings page fitter. v1.18.6 groups them inside a compact action container; both versions passed their build gates and were published, with v1.18.6 the final reviewed update.
+
+This is the support-information batch, not acceptance of every supporting dialog, third-party notices, actual screen-reader/DPI behavior or the final maintenance release.
