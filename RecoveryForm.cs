@@ -45,7 +45,7 @@ internal sealed class RecoveryForm : Form
     internal readonly TextBox Details = new()
     {
         Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
-        Dock = DockStyle.Fill, Font = new Font("Consolas", 9)
+        Dock = DockStyle.Fill, Font = new Font("Consolas", 9.75f)
     };
     private readonly Button _retry = new() { Text = "Retry startup", AutoSize = true };
     private bool _busy;
@@ -60,7 +60,7 @@ internal sealed class RecoveryForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(760, 490);
         MinimumSize = new Size(660, 430);
-        Font = new Font("Segoe UI", 9);
+        Font = new Font("Segoe UI", 9.75f);
         AutoScaleMode = AutoScaleMode.Dpi;
         Details.Text = report;
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(18) };

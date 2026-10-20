@@ -695,11 +695,10 @@ internal sealed class WallboardForm : Form
 
     private void OnWallboardKeyDown(object? sender, KeyEventArgs e)
     {
-        if (!_drawer.Visible && e.KeyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down)
+        if (_canvas.Focused && _canvas.HandleHostKey(e.KeyData))
         {
-            e.Handled = true; e.SuppressKeyPress = true;
-            _canvas.PanTopology(e.KeyCode == Keys.Left ? -80 : e.KeyCode == Keys.Right ? 80 : 0,
-                e.KeyCode == Keys.Up ? -80 : e.KeyCode == Keys.Down ? 80 : 0);
+            e.Handled = true;
+            e.SuppressKeyPress = true;
         }
         else if (e.KeyCode is Keys.Escape or Keys.F11)
         {
@@ -1010,6 +1009,7 @@ internal sealed partial class WallboardCanvas : Control
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+        if (e.Button is MouseButtons.Left or MouseButtons.Right) SelectHostAt(e.Location);
         if (e.Button == MouseButtons.Left && _topologyViewport.Contains(e.Location))
         {
             Focus(); _dragOrigin = e.Location; _dragPan = _panOffset; Capture = true;
@@ -1054,12 +1054,7 @@ internal sealed partial class WallboardCanvas : Control
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (e.KeyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down)
-        {
-            PanTopology(e.KeyCode == Keys.Left ? -80 : e.KeyCode == Keys.Right ? 80 : 0,
-                e.KeyCode == Keys.Up ? -80 : e.KeyCode == Keys.Down ? 80 : 0);
-            e.Handled = true;
-        }
+        if (HandleHostKey(e.KeyData)) { e.Handled = true; e.SuppressKeyPress = true; }
         base.OnKeyDown(e);
     }
 
@@ -1092,7 +1087,7 @@ internal sealed partial class WallboardCanvas : Control
     {
         Name = "WallboardCanvas";
         TabStop = true;
-        AccessibleName = "Host topology. All selected hosts fit in this view. Right-click a host for actions.";
+        AccessibleName = "Sites and hosts";
         DoubleBuffered = true;
         ResizeRedraw = true;
         BackColor = WallboardStyle.Background;
@@ -1161,7 +1156,7 @@ internal sealed partial class WallboardCanvas : Control
 
         int bodyTop = statsTop + statsHeight + (Embedded ? 0 : 18);
         int footerHeight = Embedded ? 0 : Presentation.WallboardFooterHeight;
-        bool hasOutages = snapshot.Monitoring && snapshot.Sites.SelectMany(site => site.Hosts).Any(host => host.State == HostState.Offline);
+        bool hasOutages = snapshot.Monitoring && snapshot.Sites.SelectMany(site => site.Hosts).Any(host => IsActiveOutage(snapshot, host));
         int sidebarWidth = !hasOutages ? 0 : Embedded ? Math.Clamp((int)(ClientSize.Width * .25), 200, 260) : Math.Clamp((int)(ClientSize.Width * .25), 240, 360);
         int gap = hasOutages ? (Embedded ? 12 : 16) : 0;
         int availableBodyHeight = Math.Max(
@@ -1208,6 +1203,8 @@ internal sealed partial class WallboardCanvas : Control
             g.Restore(outputClip);
         }
 
+        RefreshHostTargets();
+        DrawHostFocus(g);
         // Shortcuts remain available without a permanent legend.
     }
 
@@ -1226,7 +1223,7 @@ internal sealed partial class WallboardCanvas : Control
             g.DrawString(headings[c], _tinyFont, muted,
                 new RectangleF(x + width * fractions[c], y, width * (fractions[c + 1] - fractions[c]), 24), format);
         y += 32;
-        var hosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
+        var hosts = snapshot.Sites.SelectMany(site => site.Hosts).Where(host => !IsHostSnoozed(host)).ToList();
         _resultScrollOffset = Math.Clamp(_resultScrollOffset, 0, Math.Max(0, hosts.Count - 1));
         int visible = 0;
         foreach (var host in hosts.Skip(_resultScrollOffset))
@@ -1774,7 +1771,7 @@ internal sealed partial class WallboardCanvas : Control
         int x = rect.X + 16, y = rect.Y + 16, width = rect.Width - 32;
         g.DrawString("Active outages", _sectionFont, text, x, y);
         y += 32;
-        foreach (var host in snapshot.Sites.SelectMany(site => site.Hosts).Where(host => snapshot.Monitoring && host.State == HostState.Offline))
+        foreach (var host in snapshot.Sites.SelectMany(site => site.Hosts).Where(host => IsActiveOutage(snapshot, host)))
         {
             if (y + 48 > rect.Bottom - 12) break;
             _sidebarHitRegions.Add((new Rectangle(x, y, width, 48), host));

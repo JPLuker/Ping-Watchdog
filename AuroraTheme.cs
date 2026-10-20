@@ -134,6 +134,9 @@ internal static class AuroraTheme
     private static void ApplyControl(Control control)
     {
         var p = Palette;
+        // Native point sizes are independent of DPI; 9.75pt is the 13 logical-pixel reading floor.
+        if (control.Font.SizeInPoints < CaptionFont.SizeInPoints)
+            control.Font = control.Font.FontFamily.Name.Equals("Consolas", StringComparison.OrdinalIgnoreCase) ? MonoFont : CaptionFont;
         string role = control.Tag as string ?? "";
         control.ForeColor = p.Text;
         control.BackColor = role is "card" or "nav" or "header" ? p.Surface : p.Canvas;

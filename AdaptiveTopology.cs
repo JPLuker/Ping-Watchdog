@@ -109,8 +109,7 @@ internal sealed partial class WallboardCanvas
                 var point = new PointF(left + 12 * scale, cy);
                 using var connection = new Pen(StateColor(host.State, 60), 1);
                 g.DrawLine(connection, left + 4 * scale, cy, point.X, cy);
-                using var dot = new SolidBrush(StateColor(host.State, 255));
-                g.FillEllipse(dot, point.X - radius, point.Y - radius, radius * 2, radius * 2);
+                DrawHostMarker(g, point, radius, host);
                 var cell = Rectangle.Intersect(bounds, Rectangle.Round(new RectangleF(left, top, Math.Max(1, cellWidth - 4 * scale), Math.Max(1, cellHeight - 2 * scale))));
                 _hostHitRegions.Add((cell, host));
                 _hostCaptionRegions.Add((cell, host));

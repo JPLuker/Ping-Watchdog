@@ -292,7 +292,7 @@ internal sealed class SettingsForm : Form
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Windows notifications", _notifications,
             "Receive notifications when a host goes down or recovers. Monitoring and history continue when alerts are off."));
-        stack.Controls.Add(new Label { Text = "To mute one host for an hour, right-click it and choose Snooze alerts. Resume alerts cancels the snooze early. Snooze survives a restart and expires automatically.",
+        stack.Controls.Add(new Label { Text = "Right-click a host to snooze it for an hour. Pings and alerts pause until it resumes automatically. Resume monitoring ends the snooze early.",
             AutoSize = true, MaximumSize = new Size(540, 0), Margin = new Padding(0, 8, 0, 8) });
         return page;
     }

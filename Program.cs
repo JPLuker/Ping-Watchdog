@@ -1011,6 +1011,7 @@ public sealed partial class MainForm : Form
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
         SafeConfigStore.RunTests();
+        RunSnoozeRegressionTests();
         int originalSiteCount = form._sites.Count;
         bool newerFormatRejected = false;
         try { form.ApplyConfig(new WatchdogConfig { FormatVersion = 999 }); }
@@ -1156,13 +1157,35 @@ public sealed partial class MainForm : Form
             using var bitmap = new Bitmap(viewport.Width, viewport.Height);
             canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
             var found = new HashSet<string>();
-            // Every host must remain reachable after panning, including at narrow sizes.
+            // Every host must fit and remain reachable at narrow sizes.
             Check(canvas.AllHostNodesFit && canvas.VisibleHostCount == hitHosts.Length);
             for (int y = 0; y < viewport.Height; y += 4)
                 for (int x = 0; x < viewport.Width; x += 4)
                     if (canvas.HitTestHost(new Point(x, y)) is { } hit) found.Add(hit.Address);
             Check(found.Count == hitHosts.Length);
             Check(canvas.HitTestHost(Point.Empty) == null);
+            var accessible = canvas.AccessibilityObject;
+            Check(accessible.GetChildCount() == hitHosts.Length);
+            Check(accessible.GetChild(0)!.Name!.Contains("192.0.2.1") && accessible.GetChild(0)!.Name!.Contains("Online"));
+            WallboardHostSnapshot? actionHost = null;
+            canvas.HostRightClicked += (target, _) => actionHost = target;
+            canvas.HandleHostKey(Keys.Home);
+            canvas.HandleHostKey(Keys.Right);
+            Check(canvas.SelectedHost?.Address == "192.0.2.2");
+            canvas.HandleHostKey(Keys.Shift | Keys.F10);
+            Check(actionHost?.Address == "192.0.2.2");
+            accessible.GetChild(7)!.DoDefaultAction();
+            Check(actionHost?.Address == "192.0.2.8");
+            var removedChild = accessible.GetChild(7)!;
+            actionHost = null;
+            canvas.Snapshot = canvas.Snapshot! with { Sites = new[] {
+                new WallboardSiteSnapshot("Hit test", hitHosts.Take(7).ToArray()) } };
+            canvas.HandleHostKey(Keys.Enter);
+            Check(actionHost == null); // A stale selection must not target a removed host.
+            canvas.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
+            Check(accessible.GetChildCount() == 7);
+            removedChild.DoDefaultAction();
+            Check(actionHost == null && removedChild.State.HasFlag(AccessibleStates.Unavailable));
         }
 
         using (var outageCanvas = new WallboardCanvas { Size = new Size(1600, 1000), ShowCli = false })
@@ -1176,6 +1199,17 @@ public sealed partial class MainForm : Form
                 Array.Empty<WallboardCommandSnapshot>(), "24 hours", true);
             outageCanvas.DrawToBitmap(outageBitmap, new Rectangle(0, 0, 1600, 1000));
             Check(outageCanvas.CurrentOutageHosts.Select(host => host.Address).SequenceEqual(new[] { active.Address }));
+            WallboardHostSnapshot? outageAction = null;
+            outageCanvas.HostRightClicked += (target, _) => outageAction = target;
+            outageCanvas.HandleHostKey(Keys.End);
+            outageCanvas.HandleHostKey(Keys.Apps);
+            Check(outageAction?.Address == active.Address);
+            Check(outageCanvas.AccessibilityObject.GetSelected()!.Name!.Contains("Active outage"));
+            outageCanvas.Snapshot = outageCanvas.Snapshot! with { Sites = new[] {
+                new WallboardSiteSnapshot("Outage site", new[] { active with { SnoozedUntilUtc = DateTimeOffset.UtcNow.AddHours(1) }, recovered }) } };
+            outageCanvas.DrawToBitmap(outageBitmap, new Rectangle(0, 0, 1600, 1000));
+            Check(outageCanvas.CurrentOutageHosts.Count == 0);
+            Check(outageCanvas.AccessibilityObject.GetChild(0)!.Name!.Contains("Snoozed"));
             outageCanvas.Snapshot = outageCanvas.Snapshot with { Sites = new[] {
                 new WallboardSiteSnapshot("Outage site", new[] { active with { State = HostState.Online, OutageStarted = null }, recovered }) } };
             outageCanvas.DrawToBitmap(outageBitmap, new Rectangle(0, 0, 1600, 1000));
@@ -1391,7 +1425,7 @@ public sealed partial class MainForm : Form
                     "Closing the host menu disposed it during WinForms close processing.");
                 await Task.Delay(50);
             }
-            foreach (string action in new[] { "Snooze alerts for 1 hour", "Resume alerts now" })
+            foreach (string action in new[] { "Snooze host for 1 hour", "Resume monitoring now" })
             {
                 form.ShowHostQuickActions(surface, new Point(20, 20), host.Site, host.Address);
                 form._hostQuickMenu.Items.Cast<ToolStripItem>().Single(item => item.Text == action).PerformClick();
@@ -1399,7 +1433,7 @@ public sealed partial class MainForm : Form
                 await Task.Delay(50);
                 Check(!form._hostQuickMenu.IsDisposed, "A quick action destroyed the host menu.");
                 Check(form.HostSnapshot().Single(h => h.Options.Id == host.Options.Id).Options.IsSnoozed(DateTimeOffset.UtcNow)
-                    == (action == "Snooze alerts for 1 hour"), "Host snooze action did not apply.");
+                    == (action == "Snooze host for 1 hour"), "Host snooze action did not apply.");
             }
         }
 
@@ -1615,6 +1649,16 @@ public sealed partial class MainForm : Form
                     "Wallboard must open the shared Hosts manager.");
                 form._hostManager!.Close();
                 await CheckHostMenu(canvas);
+                canvas.Focus();
+                canvas.HandleHostKey(Keys.Home);
+                canvas.HandleHostKey(Keys.Shift | Keys.F10);
+                Check(form._hostQuickMenu.Visible, "Keyboard host action did not open the menu.");
+                Check(form._hostQuickMenu.Items[0].Text.Contains(canvas.SelectedHost!.Address),
+                    "Keyboard host menu targeted a different host.");
+                form._hostQuickMenu.Close(ToolStripDropDownCloseReason.Keyboard);
+                canvas.AccessibilityObject.GetChild(0)!.DoDefaultAction();
+                Check(form._hostQuickMenu.Visible, "Accessible host action did not open the menu.");
+                form._hostQuickMenu.Close(ToolStripDropDownCloseReason.Keyboard);
                 var visibleActions = form._wallboardForm!.Controls.Find("WallboardActions", true).Single();
                 Check(visibleActions.Controls.OfType<Button>().All(button => !button.Text.Contains("controls", StringComparison.OrdinalIgnoreCase)),
                     "Wallboard still exposes the removed controls toggle.");
@@ -3037,7 +3081,7 @@ public sealed partial class MainForm : Form
         SaveSites();
         RefreshSiteList(_selectedSiteName);
 
-        var targets = GetConfiguredTargets();
+        var targets = GetConfiguredTargets(includeSnoozed: true);
 
         if (targets.Count == 0)
         {
@@ -3073,6 +3117,7 @@ public sealed partial class MainForm : Form
 
         foreach (var target in targets)
         {
+            if (GetHostOptions(FindSite(target.Site), target.Address).IsSnoozed(DateTimeOffset.UtcNow)) continue;
             string key = BuildHostKey(target.Site, target.Address);
             var host = new HostMonitor(
                 target.Site,
@@ -3128,12 +3173,13 @@ public sealed partial class MainForm : Form
         }
     }
 
-    private List<(string Site, string Address)> GetConfiguredTargets()
+    private List<(string Site, string Address)> GetConfiguredTargets(bool includeSnoozed = false)
     {
         return _sites
             .Where(site => _selectedSiteName is null || site.Name.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase))
             .SelectMany(site =>
-                site.Hosts.Where(host => GetHostOptions(site, host).Enabled).Select(host => (Site: site.Name, Address: host)))
+                site.Hosts.Where(host => GetHostOptions(site, host).Enabled &&
+                    (includeSnoozed || !GetHostOptions(site, host).IsSnoozed(DateTimeOffset.UtcNow))).Select(host => (Site: site.Name, Address: host)))
             .ToList();
     }
 
@@ -3217,6 +3263,7 @@ public sealed partial class MainForm : Form
 
         while (!token.IsCancellationRequested)
         {
+            if (!IsHostProbeAllowed(host.Site, host.Address)) break;
             bool success;
             long? latency = null;
             string resultText;
@@ -3248,7 +3295,7 @@ public sealed partial class MainForm : Form
             }
 
             if (token.IsCancellationRequested || IsDisposed || Disposing ||
-                !IsHostEnabled(host.Site, host.Address))
+                !IsHostProbeAllowed(host.Site, host.Address))
             {
                 break;
             }
@@ -3282,7 +3329,7 @@ public sealed partial class MainForm : Form
         // Unit/self-tests exercise the state machine without a live session. During
         // real monitoring, however, a disabled host is quarantined even if a probe
         // completed concurrently with the Disable action.
-        if (_cts is not null && !IsHostEnabled(host.Site, host.Address))
+        if (_cts is not null && !IsHostProbeAllowed(host.Site, host.Address))
             return;
 
         string? notificationTitle = null;
@@ -3397,7 +3444,7 @@ public sealed partial class MainForm : Form
         string kind,
         string message)
     {
-        if (_cts is not null && !IsHostEnabled(site, host))
+        if (_cts is not null && !IsHostProbeAllowed(site, host))
             return;
 
         lock (_stateEvents)
@@ -3574,6 +3621,9 @@ public sealed partial class MainForm : Form
             GetHostOptions(site, address).Enabled;
     }
 
+    private bool IsHostProbeAllowed(string siteName, string address) =>
+        IsHostEnabled(siteName, address) && !GetHostOptions(FindSite(siteName), address).IsSnoozed(DateTimeOffset.UtcNow);
+
     private WallboardSnapshot BuildWallboardSnapshot()
     {
         bool monitoring = _cts is not null && !_cts.IsCancellationRequested;
@@ -3652,7 +3702,7 @@ public sealed partial class MainForm : Form
         }
 
         var commands = _commandEntries
-            .Where(entry => IsHostEnabled(entry.Site, entry.Host) && (_selectedSiteName is null || entry.Site.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase)))
+            .Where(entry => IsHostProbeAllowed(entry.Site, entry.Host) && (_selectedSiteName is null || entry.Site.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase)))
             .TakeLast(120)
             .Select(entry => new WallboardCommandSnapshot(
                 entry.Timestamp,
@@ -4294,6 +4344,8 @@ public sealed partial class MainForm : Form
             return;
         }
 
+        if (_cts is not null && !IsHostProbeAllowed(site, host)) return;
+
         var entry = new CommandLogEntry(
             site,
             host,
@@ -4325,7 +4377,7 @@ public sealed partial class MainForm : Form
 
     private bool CommandEntryMatchesFilter(CommandLogEntry entry)
     {
-        if (!IsHostEnabled(entry.Site, entry.Host))
+        if (!IsHostProbeAllowed(entry.Site, entry.Host))
             return false;
 
         return _selectedSiteName is null ||
@@ -4445,6 +4497,8 @@ public sealed partial class MainForm : Form
 
     private void RefreshGrid()
     {
+        // The active-session UI timer also resumes expired snoozes, including when all hosts are paused.
+        ReconcileMonitoringWithConfig();
         _monitorCanvas.Snapshot = BuildWallboardSnapshot();
         _monitorCanvas.Invalidate();
         var selection = GetSelectedHostIdentity();
@@ -4467,8 +4521,8 @@ public sealed partial class MainForm : Form
                 {
                     configuredHosts.TryGetValue(BuildHostKey(h.Site, h.Address), out var saved);
                     string health = _cts is null ? "Idle" : h.State.ToString();
-                    string statusText = saved?.Options.Enabled == false ? "Disabled" : health +
-                        (saved?.Options.IsSnoozed(DateTimeOffset.UtcNow) == true ? " · Snoozed" : "");
+                    string statusText = saved?.Options.Enabled == false ? "Disabled" :
+                        saved?.Options.IsSnoozed(DateTimeOffset.UtcNow) == true ? "Snoozed" : health;
                     return new
                     {
                         Site = h.Site,

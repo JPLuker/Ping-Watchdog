@@ -1,7 +1,7 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.17.4**.
-Proposed final feature release: **v1.18.0**, subject to acceptance and intervening version bumps.
+Current published Windows build: **v1.17.4** (v1.18.0 in validation).
+Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
 Current stage: standards audit and first configuration-safety batch complete. Essential accessibility, remaining data/UI work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
@@ -61,3 +61,12 @@ Passing iterative builds continue to publish for Joseph to test. A source audit,
 ## Scope
 
 Windows only in this chat. Linux remains a separate beta track under linux/ROADMAP.md. Do not change shared presentation to force a Windows design migration onto Linux. No cross-promotion, upgrade prompts or new diagnostic modules. Maintenance covers crashes, data loss, incorrect monitoring/notifications, security, compatibility, installation/updating and material accessibility defects.
+
+
+## Host access and snooze correction — 2026-10-20
+
+Candidate v1.18.0 adds keyboard selection and context actions for topology/outage hosts, per-host accessible objects, visible focus and state-specific marker shapes. Native themed controls below the reading floor are normalized, including independent recovery text.
+
+Joseph clarified snooze semantics: pause the host's probes, hide it from active outages and live command output for the hour, then resume automatically. The worker is cancelled without restarting unrelated hosts; late results are rejected, saved snoozes are honored, and an all-snoozed session stays alive for expiry. Historical events remain available. Menus now say Snooze host / Resume monitoring.
+
+New regression coverage exercises worker cancellation, late-result isolation, expiry, manual resume, saved snoozes, all-snoozed sessions, keyboard and accessible action targets, stale host removal and snoozed outage filtering. Windows validation/publication pending. The final-release target moves to a later minor because this behavior/accessibility iteration uses 1.18.0; maintenance acceptance remains open.

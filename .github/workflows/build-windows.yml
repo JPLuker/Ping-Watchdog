@@ -149,9 +149,10 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Save configurations with atomic replacement and three rolling backups.
-          - Refuse newer or damaged configuration files without overwriting their originals.
-          - Show a warning when configuration changes cannot be saved.
+          - Pause snoozed hosts for an hour: stop pings and hide active alerts and CMD output, then resume automatically.
+          - Select topology and outage hosts with the keyboard and open quick actions with Enter or Shift+F10.
+          - Expose individual host identities and states to Windows accessibility tools.
+          - Distinguish host states by marker shape and raise small supporting-window text to the reading floor.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
