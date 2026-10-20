@@ -897,7 +897,8 @@ public sealed partial class MainForm : Form
 
             ApplyResponsiveLayout();
 
-            if (_startMonitoringOnLaunch) StartMonitoring();
+            ShowStorageWarning();
+            if (_startMonitoringOnLaunch && !_configWriteBlocked) StartMonitoring();
 
             if (_autoCheckUpdates)
             {
@@ -1009,6 +1010,13 @@ public sealed partial class MainForm : Form
         form.LoadHostEditor();
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
+        SafeConfigStore.RunTests();
+        int originalSiteCount = form._sites.Count;
+        bool newerFormatRejected = false;
+        try { form.ApplyConfig(new WatchdogConfig { FormatVersion = 999 }); }
+        catch (InvalidDataException) { newerFormatRejected = true; }
+        if (!newerFormatRejected || form._sites.Count != originalSiteCount)
+            throw new InvalidOperationException("Newer configuration mutated the active sites.");
         DisplayTime.RunTests();
         AuroraTheme.RunTests();
         HostManagerForm.RunDraftTests();
@@ -1840,8 +1848,7 @@ public sealed partial class MainForm : Form
         {
             if (File.Exists(_autoConfigPath))
             {
-                var autoConfig = JsonSerializer.Deserialize<WatchdogConfig>(
-                    File.ReadAllText(_autoConfigPath));
+                var autoConfig = SafeConfigStore.Read(_autoConfigPath);
 
                 if (autoConfig is not null)
                 {
@@ -1850,9 +1857,11 @@ public sealed partial class MainForm : Form
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall through to legacy/default recovery.
+            ReportStorageProblem("The saved configuration could not be opened. Autosave is off for this session; the original file has been kept. Update Ping Watchdog or restore a backup.\r\n\r\n" + ex.Message,
+                protectOriginal: true);
+            return;
         }
 
         try
@@ -1901,9 +1910,11 @@ public sealed partial class MainForm : Form
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall through to bundled default.
+            ReportStorageProblem("The saved site list could not be opened. Autosave is off for this session; the original file has been kept. Restore a backup or export a new configuration to another location.\r\n\r\n" + ex.Message,
+                protectOriginal: true);
+            return;
         }
 
         try
@@ -1911,8 +1922,7 @@ public sealed partial class MainForm : Form
             if (!File.Exists(_bundledDefaultConfigPath))
                 return;
 
-            var defaultConfig = JsonSerializer.Deserialize<WatchdogConfig>(
-                File.ReadAllText(_bundledDefaultConfigPath));
+            var defaultConfig = SafeConfigStore.Read(_bundledDefaultConfigPath);
 
             if (defaultConfig is null)
                 return;
@@ -1928,30 +1938,22 @@ public sealed partial class MainForm : Form
 
     private void SaveSites()
     {
-        if (!_persistSites)
+        if (!_persistSites || _configWriteBlocked)
             return;
 
         try
         {
-            var directory = Path.GetDirectoryName(_settingsPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-
-            File.WriteAllText(
-                _settingsPath,
-                JsonSerializer.Serialize(
-                    _sites.Where(site => !site.Temporary).ToList(),
-                    new JsonSerializerOptions { WriteIndented = true }));
-
-            File.WriteAllText(
-                _autoConfigPath,
-                JsonSerializer.Serialize(
-                    BuildConfig(captureEditor: false),
-                    new JsonSerializerOptions { WriteIndented = true }));
+            // The full autosave is authoritative; the legacy inventory is secondary.
+            SafeConfigStore.Write(_autoConfigPath, BuildConfig(captureEditor: false));
+            SafeConfigStore.WriteAtomic(_settingsPath, JsonSerializer.Serialize(
+                _sites.Where(site => !site.Temporary).ToList(),
+                new JsonSerializerOptions { WriteIndented = true }));
+            _storageWarning = null;
+            _storageWarningShown = false;
         }
-        catch
+        catch (Exception ex)
         {
-            // Monitoring should remain usable even if persistence fails.
+            ReportStorageProblem("Changes could not be saved. Keep this window open and export the configuration to another location before closing.\r\n\r\n" + ex.Message);
         }
     }
 
@@ -2725,11 +2727,7 @@ public sealed partial class MainForm : Form
 
         try
         {
-            File.WriteAllText(
-                dialog.FileName,
-                JsonSerializer.Serialize(
-                    config,
-                    new JsonSerializerOptions { WriteIndented = true }));
+            SafeConfigStore.Write(dialog.FileName, config);
 
             _statusLabel.Text = $"Config saved: {Path.GetFileName(dialog.FileName)}";
         }
@@ -2767,8 +2765,7 @@ public sealed partial class MainForm : Form
 
         try
         {
-            var config = JsonSerializer.Deserialize<WatchdogConfig>(
-                File.ReadAllText(dialog.FileName));
+            var config = SafeConfigStore.Read(dialog.FileName);
 
             if (config is null)
                 throw new InvalidDataException("The config file was empty or invalid.");
@@ -2789,6 +2786,7 @@ public sealed partial class MainForm : Form
 
     private void ApplyConfig(WatchdogConfig config)
     {
+        SafeConfigStore.EnsureSupported(config.FormatVersion);
         var cleanedSites = new List<SiteDefinition>();
 
         foreach (var source in config.Sites ?? new List<SiteDefinition>())

@@ -90,3 +90,10 @@ No new monitoring features, framework changes, broad dashboard redesign or Linux
 5. Manual candidate acceptance, defect fixes, and final v1.18.0 publication when accepted.
 
 The release number remains tentative. If interim feature-bearing releases use 1.18.x, select a later compatible minor for the final candidate rather than reusing/downgrading a version.
+
+
+## First configuration-safety batch
+
+Implementation candidate v1.17.4 adds SafeConfigStore.cs and updates Program.cs. Full autosave, legacy inventory writes and explicit config export use atomic replacement with three rolling backups. Startup refuses damaged/newer full configs and damaged legacy site lists, protects originals by disabling session autosave, and shows a warning when the window is ready. Config imports/direct application validate format before changing live sites. Save failures produce a visible warning. Existing preference/history behavior, complete backup/restore, migration to a genuinely new schema, storage locations and Settings persistence feedback remain separate work.
+
+New tests exercise original preservation during a locked-file replacement, three-version backup retention, future-format read/write refusal, malformed-file protection, legacy missing-version compatibility, temporary-file cleanup and refusal before active-site mutation. Windows validation and publication pending.

@@ -149,10 +149,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Connect the fitted topology through a shared monitor-to-site backbone.
-          - Route site-to-host branches through dedicated gaps around labels.
-          - Balance site groups across rows while keeping the current style and no-scroll layout.
-          - Remove Show/Hide controls from Wallboard; actions stay directly available.
+          - Save configurations with atomic replacement and three rolling backups.
+          - Refuse newer or damaged configuration files without overwriting their originals.
+          - Show a warning when configuration changes cannot be saved.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

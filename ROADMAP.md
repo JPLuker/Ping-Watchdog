@@ -2,7 +2,7 @@
 
 Current published Windows build: **v1.17.3**.
 Proposed final feature release: **v1.18.0**, subject to acceptance and intervening version bumps.
-Current stage: standards audit complete; implementation gaps and manual acceptance remain open.
+Current stage: standards audit complete; first configuration-safety batch in Windows validation. Other implementation gaps and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
