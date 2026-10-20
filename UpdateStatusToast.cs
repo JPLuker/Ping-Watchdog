@@ -63,6 +63,9 @@ public sealed partial class MainForm
         _updateToast.BringToFront();
         AuroraTheme.Register(owner);
         AuroraTheme.Apply(owner);
+        _updateToast.BringToFront();
+        _updateToast.PerformLayout();
+        _updateToast.Invalidate(true);
         _updateToastTimer!.Stop();
         if (!persistent) _updateToastTimer.Start();
     }

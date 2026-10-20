@@ -1562,6 +1562,15 @@ public sealed partial class MainForm : Form
                         Check(review._checkUpdateButton.Text == "Check for updates", "Update action label changed into status.");
                         Check(review._updateToast?.Visible == true && review._updateToast.Right <= review.ClientSize.Width,
                             "Internal update status is missing or outside the application.");
+                        await Task.Delay(200);
+                        review._updateToast!.Update();
+                        Check(review.Controls.GetChildIndex(review._updateToast) == 0,
+                            "Update status is behind the main workspace.");
+                        using (var popup = new Bitmap(review._updateToast.Width, review._updateToast.Height))
+                        {
+                            review._updateToast.DrawToBitmap(popup, new Rectangle(Point.Empty, popup.Size));
+                            popup.Save(Path.Combine(output, "update-popup-" + appearance + ".png"));
+                        }
                         Capture(review, "update-status-" + appearance);
                         review._updateToast!.Visible = false;
                         review.SetWorkspaceView(true);

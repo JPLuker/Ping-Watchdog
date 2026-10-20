@@ -106,7 +106,7 @@ jobs:
           $sheet.Save("ui-smoke-test/appearance-review.png", [System.Drawing.Imaging.ImageFormat]::Png)
           $sheet.Dispose()
           Write-Output ("APPEARANCE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/appearance-review.png")) + "APPEARANCE_IMAGE_END")
-          foreach ($name in @("workspace-populated-Dark", "workspace-populated-Light", "update-status-Dark", "update-status-Light", "workspace-list-Dark", "workspace-list-Light")) {
+          foreach ($name in @("workspace-populated-Dark", "workspace-populated-Light", "update-status-Dark", "update-status-Light", "workspace-list-Dark", "workspace-list-Light", "update-popup-Dark", "update-popup-Light")) {
             Write-Output ("WORKSPACE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WORKSPACE_IMAGE_END")
           }
           foreach ($name in @("wallboard", "wallboard-controls-hidden", "wallboard-dense")) {
