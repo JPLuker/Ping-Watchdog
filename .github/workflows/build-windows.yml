@@ -115,6 +115,9 @@ jobs:
           foreach ($name in @("support-about-Light", "support-about-Dark", "support-diagnostics-Light", "support-diagnostics-Dark")) {
             Write-Output ("SUPPORT_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SUPPORT_IMAGE_END")
           }
+          foreach ($name in @("data-settings-Light", "data-settings-Dark")) {
+            Write-Output ("DATA_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "DATA_IMAGE_END")
+          }
           foreach ($name in @("wallboard", "wallboard-narrow", "wallboard-dense")) {
             Write-Output ("WALLBOARD_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "WALLBOARD_IMAGE_END")
           }
@@ -155,9 +158,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Add Settings > About as the single home for version and license details, with compact support actions.
-          - Review system diagnostics and storage paths before copying; no host inventory or history contents are included.
-          - Open the issue-report page from About and show clipboard or browser failures clearly.
+          - Add complete backups for sites, host settings, snoozes, saved preferences and outage history.
+          - Validate backups before replacement, retain originals and recover interrupted restores before startup autosave.
+          - Add Data & storage settings with backup, restore and open-data-folder actions.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

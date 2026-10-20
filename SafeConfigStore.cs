@@ -44,7 +44,10 @@ internal static class SafeConfigStore
         WriteAtomic(path, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    internal static void WriteAtomic(string path, string text)
+    internal static void WriteAtomic(string path, string text) =>
+        WriteAtomicBytes(path, new UTF8Encoding(false).GetBytes(text));
+
+    internal static void WriteAtomicBytes(string path, byte[] bytes)
     {
         string fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -52,10 +55,8 @@ internal static class SafeConfigStore
         try
         {
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
             {
-                writer.Write(text);
-                writer.Flush();
+                stream.Write(bytes);
                 stream.Flush(flushToDisk: true);
             }
             if (File.Exists(fullPath))

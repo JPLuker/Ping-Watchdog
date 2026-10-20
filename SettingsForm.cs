@@ -8,6 +8,7 @@ internal sealed class SettingsForm : Form
     private readonly Action<AppSettingsSnapshot> _apply;
     private readonly Func<Task> _updateAction;
     private readonly Action _openHistory;
+    private readonly Action? _backupAction, _restoreAction, _openDataFolder;
     private readonly System.Windows.Forms.Timer _runtimeTimer = new() { Interval = 750 };
 
     private readonly ListBox _nav = new()
@@ -67,12 +68,13 @@ internal sealed class SettingsForm : Form
         Func<AppSettingsSnapshot> provider,
         Action<AppSettingsSnapshot> apply,
         Func<Task> updateAction,
-        Action openHistory)
+        Action openHistory, Action? backupAction = null, Action? restoreAction = null, Action? openDataFolder = null)
     {
         _provider = provider;
         _apply = apply;
         _updateAction = updateAction;
         _openHistory = openHistory;
+        _backupAction = backupAction; _restoreAction = restoreAction; _openDataFolder = openDataFolder;
 
         Text = "Settings • Ping Watchdog";
         Width = 900;
@@ -99,7 +101,7 @@ internal sealed class SettingsForm : Form
         ApplyTheme();
         Shown += (_, _) => AuroraTheme.Register(this);
 
-        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Advanced", "About" });
+        _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Data & storage", "Advanced", "About" });
         _nav.DrawItem += DrawCategory;
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
@@ -239,6 +241,7 @@ internal sealed class SettingsForm : Form
         _pages["History"] = BuildHistoryPage();
         _pages["Updates"] = BuildUpdatesPage();
         _pages["About"] = BuildAboutPage();
+        _pages["Data & storage"] = BuildDataPage();
 
         foreach (var page in _pages.Values)
         {
@@ -369,6 +372,35 @@ internal sealed class SettingsForm : Form
             Margin = new Padding(0, 12, 0, 0)
         });
         return page;
+    }
+
+    private Control BuildDataPage()
+    {
+        // FOCAL: the existing staged Settings save action. Data operations stay secondary.
+        var page = Page("Data & storage", "");
+        var stack = (FlowLayoutPanel)page.Controls[1];
+        var backup = new AuroraButton { Text = "Create backup…", AutoSize = true, Enabled = _backupAction != null };
+        var restore = new AuroraButton { Text = "Restore backup…", AutoSize = true, Enabled = _restoreAction != null };
+        var open = new AuroraButton { Text = "Open data folder", AutoSize = true, Enabled = _openDataFolder != null };
+        backup.Click += (_, _) => _backupAction?.Invoke();
+        restore.Click += (_, _) => _restoreAction?.Invoke();
+        open.Click += (_, _) => _openDataFolder?.Invoke();
+        stack.Controls.Add(Section("Complete backup", backup,
+            "Includes sites, host settings, saved preferences and history. Excludes Settings drafts."));
+        stack.Controls.Add(Section("Restore saved data", restore,
+            "Replaces saved data and restarts the app. Stop monitoring first."));
+        stack.Controls.Add(Section("Data folder", open,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PingWatchdog")));
+        return page;
+    }
+
+    internal async Task CaptureDataReview(string output, string appearance)
+    {
+        SelectCategory("Data & storage");
+        await Task.Delay(75);
+        using var bitmap = new Bitmap(Width, Height);
+        DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+        bitmap.Save(Path.Combine(output, "data-settings-" + appearance + ".png"));
     }
 
     private Control BuildAboutPage()

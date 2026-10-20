@@ -758,6 +758,8 @@ public sealed partial class MainForm : Form
         _appNotificationsAvailable = appNotificationsAvailable;
         _suppressNotifications = suppressNotifications;
         _persistSites = persistSites;
+        if (_persistSites && DataBackupStore.RecoverPending(DataDirectory))
+            ReportStorageProblem("An interrupted restore was rolled back. The previous saved files were recovered.");
 
         Text = "Ping Watchdog";
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -1012,6 +1014,7 @@ public sealed partial class MainForm : Form
         UserPreferenceStore.RunTests();
         SafeConfigStore.RunTests();
         SettingsPersistence.RunTests();
+        DataBackupStore.RunTests();
         SettingsForm.RunSaveFailureTests(form.GetAppSettingsSnapshot());
         SupportInfo.RunTests();
         RunSnoozeRegressionTests();
@@ -1711,6 +1714,7 @@ public sealed partial class MainForm : Form
                     await SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
                         Path.Combine(output, "settings-save-error-" + appearance + ".png"));
                     await form._settingsForm!.CaptureAboutReview(output, appearance.ToString());
+                    await form._settingsForm!.CaptureDataReview(output, appearance.ToString());
                     form._settingsForm!.Close(); form._hostManager!.Close();
                 }
                 AuroraTheme.SetMode(appearanceBefore);
@@ -1996,7 +2000,7 @@ public sealed partial class MainForm : Form
 
     private void SaveSites()
     {
-        if (!_persistSites || _configWriteBlocked)
+        if (!_persistSites || _configWriteBlocked || _restoreRequiresRestart)
             return;
 
         try
@@ -3512,7 +3516,7 @@ public sealed partial class MainForm : Form
 
     private void PersistEventHistoryUnsafe()
     {
-        if (!_persistSites)
+        if (!_persistSites || _restoreRequiresRestart)
             return;
 
         try
@@ -4159,7 +4163,7 @@ public sealed partial class MainForm : Form
             GetAppSettingsSnapshot,
             ApplyAppSettings,
             RunUpdateActionAsync,
-            () => OpenEventHistory(owner));
+            () => OpenEventHistory(owner), ExportDataBackup, RestoreDataBackup, OpenDataFolder);
 
         _settingsForm.FormClosed += (_, _) => _settingsForm = null;
         _settingsForm.Show(owner ?? this);
