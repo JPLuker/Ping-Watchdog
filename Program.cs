@@ -1707,7 +1707,7 @@ public sealed partial class MainForm : Form
                     Capture(form, "appearance-main-" + appearance);
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
                     Capture(form._hostManager!, "appearance-hosts-" + appearance);
-                    SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
+                    await SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
                         Path.Combine(output, "settings-save-error-" + appearance + ".png"));
                     form._settingsForm!.Close(); form._hostManager!.Close();
                 }

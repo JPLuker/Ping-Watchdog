@@ -652,19 +652,20 @@ internal sealed class SettingsForm : Form
             throw new InvalidOperationException("Settings discard did not restore committed values.");
     }
 
-    internal static void CaptureSaveFailureReview(AppSettingsSnapshot initial, Form owner, string path)
+    internal static async Task CaptureSaveFailureReview(AppSettingsSnapshot initial, Form owner, string path)
     {
         using var review = new SettingsForm(() => initial, _ => throw new IOException(
             "The settings file is locked. Close the other application and try Save changes again."),
             () => Task.CompletedTask, () => { });
         review.Width = 760;
         review.Show(owner);
+        await Task.Delay(75); // Allow Shown/load and native layout before changing the draft.
         review._autoStart.Checked = !initial.StartMonitoringOnLaunch;
         review.SaveSettings();
         review.PerformLayout();
         foreach (var button in new[] { review._saveButton, review._saveDetails, review._closeButton })
             if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds))
-                throw new InvalidOperationException("Settings save-error controls are clipped.");
+                throw new InvalidOperationException($"Settings save-error control {button.Text}: visible={button.Visible}, bounds={button.Bounds}, parent={button.Parent?.ClientRectangle}.");
         using (var bitmap = new Bitmap(review.Width, review.Height))
         {
             review.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
