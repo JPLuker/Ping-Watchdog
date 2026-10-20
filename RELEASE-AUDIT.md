@@ -12,7 +12,7 @@ Execution checklist: [Maintenance mode checklist #4](https://github.com/JPLuker/
 - **Decision/owner check:** confirmation or repository settings cannot be established from source.
 - **Deviation:** a justified project choice, recorded in AGENTS.md. This never waives accessibility, privacy or security floors.
 
-This is a source/documentation audit, not a fresh Windows execution. No new binaries or new manual-test results were produced during the audit. The current dashboard and connected topology were accepted by Joseph after v1.17.3; cosmetic differences alone do not reopen that work.
+The baseline tables describe the initial audit; later checkpoints below record completed fixes. The initial audit was a source/documentation review, not a fresh Windows execution. No new binaries or new manual-test results were produced during the audit. The current dashboard and connected topology were accepted by Joseph after v1.17.3; cosmetic differences alone do not reopen that work.
 
 ## Verified baseline
 
@@ -96,4 +96,4 @@ The release number remains tentative. If interim feature-bearing releases use 1.
 
 Implementation candidate v1.17.4 adds SafeConfigStore.cs and updates Program.cs. Full autosave, legacy inventory writes and explicit config export use atomic replacement with three rolling backups. Startup refuses damaged/newer full configs and damaged legacy site lists, protects originals by disabling session autosave, and shows a warning when the window is ready. Config imports/direct application validate format before changing live sites. Save failures produce a visible warning. Existing preference/history behavior, complete backup/restore, migration to a genuinely new schema, storage locations and Settings persistence feedback remain separate work.
 
-New tests exercise original preservation during a locked-file replacement, three-version backup retention, future-format read/write refusal, malformed-file protection, legacy missing-version compatibility, temporary-file cleanup and refusal before active-site mutation. Windows validation and publication pending.
+New tests exercise original preservation during a locked-file replacement, three-version backup retention, future-format read/write refusal, malformed-file protection, legacy missing-version compatibility, temporary-file cleanup and refusal before active-site mutation. Windows [run 39485640920](https://github.com/JPLuker/Ping-Watchdog/actions/runs/39485640920) passed the self-tests (including all new storage regressions), published startup/UI exercises, independent recovery and package gates. v1.17.4 installer, portable ZIP and full/delta/feed assets were verified published. No schema migration or new complete-data backup feature was introduced, and no new physical-desktop acceptance is claimed.

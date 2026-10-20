@@ -1,8 +1,8 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.17.3**.
+Current published Windows build: **v1.17.4**.
 Proposed final feature release: **v1.18.0**, subject to acceptance and intervening version bumps.
-Current stage: standards audit complete; first configuration-safety batch in Windows validation. Other implementation gaps and manual acceptance remain open.
+Current stage: standards audit and first configuration-safety batch complete. Essential accessibility, remaining data/UI work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
@@ -23,8 +23,8 @@ The accepted dashboard and connected topology remain the visual baseline. Featur
 
 ## 2. Data protection and essential access — next
 
-- [ ] Atomic config saves, recoverable originals, visible errors and damaged-file protection.
-- [ ] Reject newer unsupported formats before applying/rewriting; test migration/backup retention.
+- [x] Atomic config saves, three rolling backups, visible write errors and damaged config/site-list protection (v1.17.4). Preferences/history and Settings save feedback remain separate.
+- [x] Reject newer unsupported configs before applying/rewriting; test original preservation and backup retention (v1.17.4). No schema migration was introduced; future migrations still need their own acceptance.
 - [ ] Keyboard and accessible topology/outage host actions; full identity/state independent of color.
 - [ ] Readable font floor, long addresses/IPv6 and constrained-height behavior.
 
