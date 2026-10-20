@@ -400,10 +400,17 @@ internal sealed class SettingsForm : Form
             using var review = SupportInfo.CreateReview("Diagnostic information", SupportInfo.CreateDiagnostics(_provider().Version), true);
             review.ShowDialog(this);
         };
-        stack.Controls.Add(license);
-        stack.Controls.Add(issue);
-        stack.Controls.Add(diagnostics);
-        stack.Controls.Add(status);
+        var actions = new FlowLayoutPanel
+        {
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown, WrapContents = false,
+            Margin = new Padding(0)
+        };
+        actions.Controls.Add(license);
+        actions.Controls.Add(issue);
+        actions.Controls.Add(diagnostics);
+        actions.Controls.Add(status);
+        stack.Controls.Add(actions);
         return page;
     }
 

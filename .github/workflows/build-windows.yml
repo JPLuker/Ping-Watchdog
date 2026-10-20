@@ -155,7 +155,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Add Settings > About as the single home for version and license details.
+          - Add Settings > About as the single home for version and license details, with compact support actions.
           - Review system diagnostics and storage paths before copying; no host inventory or history contents are included.
           - Open the issue-report page from About and show clipboard or browser failures clearly.
 
