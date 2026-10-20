@@ -117,3 +117,11 @@ The next version is 1.15.0 in PingWatchdog.csproj. On 2026-10-20 Joseph explicit
 Implemented a single idle/live host table with five default columns and a Columns menu, simpler site navigation, and a single Start/Stop action. Removed the duplicate inventory and repeated statistics. Wallboard controls start collapsed, topology text retains readable sizing with panning, and single-site placement and caption rendering were corrected.
 
 Windows run 39309561449 passed configuration/monitoring/updater tests, published startup and UI smoke tests, independent recovery tests, and packaging. Main/Hosts/Settings review captures were inspected during implementation. The latest Wallboard captures still require final visual review. Physical DPI, accessibility, installation/update acceptance, and the workday trial remain pending.
+
+## Dedicated monitoring workspace — 2026-10-20
+
+Rebuilt the main window around a compact site sidebar, one selected-site heading and Start/Stop action, a searchable host table, and optional ping output. Removed the duplicate app-brand header and stacked toolbar cards. Settings, Wallboard and utility actions are in sidebar navigation. Search only filters displayed rows; it does not change monitoring scope.
+
+Selecting a site now scopes actual enabled monitoring workers. Switching sites while running cancels old workers and adds the selected targets; All sites monitors all enabled hosts. Wallboard topology, history and output follow the selection. Added a published Windows regression for actual worker cancellation/replacement and search/configuration separation. Simplified topology captions and use one renderer for measurement and drawing.
+
+This is an iterative release, not final design acceptance. Remaining supporting-window polish, physical DPI/accessibility and full-workday testing remain open.

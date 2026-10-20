@@ -710,8 +710,6 @@ public sealed partial class MainForm : Form
     private TableLayoutPanel? _rightLayout;
     private FlowLayoutPanel? _headerActionsPanel;
     private FlowLayoutPanel? _settingsFlowPanel;
-    private Label? _brandSubtitleLabel;
-    private Label? _brandTitleLabel;
 
     private CancellationTokenSource? _cts;
     private WallboardForm? _wallboardForm;
@@ -1270,7 +1268,7 @@ public sealed partial class MainForm : Form
         form.ClientSize = new Size(960, 640);
         form.ApplyResponsiveLayout();
         Check(form._workspaceSplit.SplitterDistance <= 205);
-        Check(form._rootLayout?.RowStyles[0].Height >= 68);
+        Check(form._rootLayout?.RowStyles[0].Height == 0);
         Check(form._settingsFlowPanel?.WrapContents == true);
 
         form.ClientSize = new Size(1320, 840);
@@ -1392,29 +1390,15 @@ public sealed partial class MainForm : Form
                     Check(form.ClientSize.Width == width, "Runner clamped the requested window width.");
                     Check(form._versionLabel.Parent is null && form._monitorStateLabel.Parent is null,
                         "Duplicate header chrome returned.");
-                    Check(form.Controls.Find("WatchdogBrandLogo", true).Length == 1,
-                        "The supplied logo is missing or duplicated.");
-                    var title = form._brandTitleLabel!;
+                    Check(form.Controls.Find("WatchdogBrandLogo", true).Length == 0,
+                        "Repeated branding returned to the workspace.");
+                    Check(form._siteHeaderLabel.Parent!.ClientRectangle.Contains(form._siteHeaderLabel.Bounds),
+                        "Selected-site heading is clipped.");
+                    Check(form._startButton.Parent!.ClientRectangle.Contains(form._startButton.Bounds),
+                        "Monitoring action is clipped.");
                     var actions = form._headerActionsPanel!;
-                    Check(form._wallboardButton.Width >= form._wallboardButton.PreferredSize.Width,
-                        "Wallboard button text is clipped.");
                     Check(actions.ClientRectangle.Contains(form._wallboardButton.Bounds),
-                        "Wallboard button extends outside the header actions.");
-                    Check(title.Parent!.Width >= title.Right, "Brand title is clipped.");
-                    Check(title.PointToScreen(new Point(title.Width, 0)).X <= actions.PointToScreen(Point.Empty).X,
-                        "Brand title overlaps header actions.");
-                    var logo = form.Controls.Find("WatchdogBrandLogo", true)[0];
-                    Check(logo.Parent!.ClientRectangle.Contains(logo.Bounds), "Brand logo is clipped.");
-                    Check(logo.Parent.Parent!.ClientRectangle.Contains(logo.Parent.Bounds),
-                        "Brand group extends outside the visible header.");
-                    var subtitle = form._brandSubtitleLabel!;
-                    int textTop = title.PointToScreen(Point.Empty).Y;
-                    int textBottom = subtitle.Visible
-                        ? subtitle.PointToScreen(new Point(0, subtitle.Height)).Y
-                        : title.PointToScreen(new Point(0, title.Height)).Y;
-                    int logoCenter = logo.PointToScreen(new Point(0, logo.Height / 2)).Y;
-                    Check(Math.Abs(logoCenter - (textTop + textBottom) / 2) <= 2,
-                        "Logo is not vertically centered beside the brand text.");
+                        "Wallboard navigation is clipped.");
                     foreach (Control setting in form._settingsFlowPanel!.Controls)
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
@@ -1432,11 +1416,36 @@ public sealed partial class MainForm : Form
                     form._wallboardButton.Font = buttonFont;
                 }
 
+                using (var scoped = new MainForm(false, true, false))
+                {
+                    scoped.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, Sites = new()
+                    {
+                        new SiteDefinition { Name = "Site A", Hosts = new() { "127.0.0.1" } },
+                        new SiteDefinition { Name = "Site B", Hosts = new() { "127.0.0.2" } }
+                    } });
+                    scoped.WallboardSelectSite("Site A");
+                    scoped.StartMonitoring();
+                    await Task.Delay(150);
+                    Check(scoped._hosts.Count == 1 && scoped._hosts.Values.Single().Site == "Site A", "Start ignored site scope.");
+                    var oldToken = scoped._hostTokens.Values.Single().Token;
+                    scoped._siteList.SelectedIndex = scoped._siteList.Items.Cast<SiteListItem>().ToList().FindIndex(x => x.SiteName == "Site B");
+                    await Task.Delay(150);
+                    Check(oldToken.IsCancellationRequested && scoped._hosts.Count == 1 && scoped._hosts.Values.Single().Site == "Site B", "Site change kept an old worker.");
+                    Check(scoped.BuildWallboardSnapshot().Sites.All(x => x.Name == "Site B"), "Wallboard ignored scope.");
+                    scoped.WallboardSelectSite(null);
+                    Check(scoped._hosts.Count == 2, "All sites did not restore both targets.");
+                    scoped.StopMonitoring();
+                    Check(scoped._hostTokens.Count == 0, "Stop left workers active.");
+                }
                 WindowsBranding.RunShortcutSmokeTest(output);
                 form.ImportManagedHosts(new() { new(form._sites[0].Name, "192.0.2.254", "Menu test", "", new HostOptions(), "Unknown") }, false);
                 Check(form._grid.Rows.Count > 0, "Saved hosts are absent while idle.");
                 Check(form._grid.Columns.Cast<DataGridViewColumn>().Count(c => c.Visible) <= 5,
                     "Default results expose too many columns.");
+                form._hostSearch.Text = "does-not-match";
+                Check(form._grid.Rows.Count == 0 && form.HostSnapshot().Count == 1, "Search changed the saved targets.");
+                form._hostSearch.Clear();
+                Check(form._grid.Rows.Count == 1, "Clearing search did not restore the host.");
                 await CheckHostMenu(form._grid);
 
                 // Keep a non-first host, its selected column, and both scroll positions through repeated refreshes.
@@ -1625,6 +1634,7 @@ public sealed partial class MainForm : Form
 
         var hostsItem = new ToolStripMenuItem("Hosts...") { ShortcutKeys = Keys.Control | Keys.Shift | Keys.H };
         hostsItem.Click += (_, _) => OpenHostManager();
+        _appMenu.Items.Add("Quick monitor…", null, (_, _) => OpenQuickAdd(true));
         _appMenu.Items.Add(hostsItem);
         _appMenu.Items.Add(settingsItem);
         _appMenu.Items.Add(historyItem);
@@ -1699,376 +1709,6 @@ public sealed partial class MainForm : Form
 
     }
 
-    private void BuildLayout()
-    {
-        SuspendLayout();
-
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-            Tag = "window"
-        };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, Presentation.HeaderHeight));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        _rootLayout = root;
-
-        var header = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Padding = new Padding(20, 10, 16, 8),
-            Margin = new Padding(0),
-            Tag = "header"
-        };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var brand = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0),
-            Tag = "header"
-        };
-
-        _brandTitleLabel = new Label
-        {
-            Text = "Ping Watchdog",
-            AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 19, FontStyle.Bold),
-            ForeColor = Color.White,
-            Tag = "title"
-        };
-
-        _brandSubtitleLabel = new Label
-        {
-            Text = "",
-            Visible = false,
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9.25f),
-            Tag = "muted"
-        };
-
-        var logo = new PictureBox
-        {
-            Name = "WatchdogBrandLogo",
-            Image = _brandBitmap,
-            SizeMode = PictureBoxSizeMode.Zoom,
-            Margin = Padding.Empty,
-            BackColor = Color.Transparent,
-            TabStop = false,
-            AccessibleName = "Ping Watchdog logo"
-        };
-        _brandTitleLabel.Margin = Padding.Empty;
-        _brandSubtitleLabel.Margin = Padding.Empty;
-        brand.Controls.Add(logo);
-        brand.Controls.Add(_brandTitleLabel);
-        brand.Controls.Add(_brandSubtitleLabel);
-        // Place all three controls as one group; nested table rows previously displaced the logo.
-        brand.Layout += (_, _) =>
-        {
-            int logoSize = (int)Math.Round(42 * DeviceDpi / 96d);
-            int gap = (int)Math.Round(8 * DeviceDpi / 96d);
-            int textHeight = _brandTitleLabel.Height +
-                (_brandSubtitleLabel.Visible ? _brandSubtitleLabel.Height : 0);
-            int top = Math.Max(0, (brand.ClientSize.Height - textHeight) / 2);
-            _brandTitleLabel.Location = new Point(logoSize + gap, top);
-            _brandSubtitleLabel.Location = new Point(logoSize + gap, top + _brandTitleLabel.Height);
-            logo.Bounds = new Rectangle(0, top + (textHeight - logoSize) / 2, logoSize, logoSize);
-        };
-
-        var headerActions = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Margin = new Padding(0, 6, 0, 0),
-            Tag = "header"
-        };
-        _headerActionsPanel = headerActions;
-
-        _monitorStateLabel.Margin = new Padding(0, 0, 7, 0);
-        _checkUpdateButton.Margin = new Padding(0, 0, 7, 0);
-        _wallboardButton.Margin = new Padding(0, 0, 7, 0);
-        _settingsButton.Margin = new Padding(0, 0, 7, 0);
-        _moreButton.Margin = new Padding(0);
-
-        headerActions.Controls.Add(_checkUpdateButton);
-        headerActions.Controls.Add(_wallboardButton);
-        headerActions.Controls.Add(_settingsButton);
-        headerActions.Controls.Add(_moreButton);
-
-        header.Controls.Add(brand, 0, 0);
-        header.Controls.Add(headerActions, 1, 0);
-
-        _workspaceSplit.SplitterDistance = Presentation.SidebarWidth;
-        _workspaceSplit.SplitterWidth = 1;
-        _workspaceSplit.Panel1MinSize = 174;
-        _workspaceSplit.Panel1.Padding = new Padding(12, 14, 10, 14);
-        _workspaceSplit.Panel2.Padding = new Padding(16, 14, 16, 14);
-        _workspaceSplit.Panel1.Tag = "nav";
-        _workspaceSplit.Panel2.Tag = "window";
-
-        // FOCAL: live host results. Compact workspace with secondary actions on demand.
-        var sitePanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
-            Margin = Padding.Empty, Tag = "nav"
-        };
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sitePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        sitePanel.Controls.Add(new Label { Text = "Sites", AutoSize = true,
-            Font = AuroraTheme.LabelFont, Padding = new Padding(8), Tag = "primaryText" }, 0, 0);
-        sitePanel.Controls.Add(_siteList, 0, 1);
-        var siteActions = HostUi.Button("Manage sites", ShowSiteActions);
-        siteActions.Dock = DockStyle.Fill;
-        sitePanel.Controls.Add(siteActions, 0, 2);
-        _siteList.ContextMenuStrip = _siteActionsMenu;
-        _siteActionsMenu.Opening += (_, _) => PopulateSiteActions();
-
-        var right = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 4,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-            Tag = "window"
-        };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
-        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        _rightLayout = right;
-
-        var hostHeader = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
-            Margin = Padding.Empty, Tag = "window"
-        };
-        hostHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        hostHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _siteHeaderLabel.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
-        _siteHeaderLabel.Padding = new Padding(0, 8, 0, 0);
-        _siteHeaderLabel.Tag = "primaryText";
-        hostHeader.Controls.Add(_siteHeaderLabel, 0, 0);
-        hostHeader.Controls.Add(BuildHostActions(), 1, 0);
-        _ipBox.Visible = false;
-        Controls.Add(_ipBox);
-
-        var settingsCard = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Padding = new Padding(14, 10, 12, 10),
-            Margin = new Padding(0, 0, 0, 10),
-            Tag = "card"
-        };
-        settingsCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        settingsCard.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-        var settings = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            AutoScroll = false,
-            Margin = new Padding(0),
-            Tag = "card"
-        };
-        _settingsFlowPanel = settings;
-
-        settings.Controls.Add(HostUi.Button("Columns", ShowColumnMenu));
-        settings.Controls.Add(_showCommandView);
-        settingsCard.Controls.Add(settings, 0, 0);
-
-        var monitorActions = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Anchor = AnchorStyles.Right | AnchorStyles.Top,
-            Margin = new Padding(8, 0, 0, 0),
-            Tag = "card"
-        };
-
-        _startButton.Text = "Start Monitoring";
-        _startButton.MinimumSize = new Size(132, 34);
-        _stopButton.MinimumSize = new Size(76, 34);
-        monitorActions.Controls.Add(_startButton);
-        // A single button toggles the current monitoring session.
-        settingsCard.Controls.Add(monitorActions, 1, 0);
-
-        _mainSplit.Panel1.Padding = new Padding(0);
-        _mainSplit.Panel1.Controls.Add(_grid);
-
-        var commandPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(0, 8, 0, 0),
-            Tag = "window"
-        };
-        commandPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        commandPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var commandHeader = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = new Padding(0),
-            Tag = "window"
-        };
-        commandHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        commandHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        commandHeader.Controls.Add(new Label
-        {
-            Text = "Ping activity",
-            AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9.25f, FontStyle.Bold),
-            Padding = new Padding(2, 6, 0, 0),
-            Tag = "primaryText"
-        }, 0, 0);
-
-        _clearLogButton.Margin = new Padding(0, 0, 0, 3);
-        commandHeader.Controls.Add(_clearLogButton, 1, 0);
-        commandPanel.Controls.Add(commandHeader, 0, 0);
-        commandPanel.Controls.Add(_commandBox, 0, 1);
-        _mainSplit.Panel2.Controls.Add(commandPanel);
-
-        right.Controls.Add(hostHeader, 0, 0);
-        right.Controls.Add(settingsCard, 0, 2);
-        right.Controls.Add(_mainSplit, 0, 3);
-
-        _workspaceSplit.Panel1.Controls.Add(sitePanel);
-        _workspaceSplit.Panel2.Controls.Add(right);
-
-        root.Controls.Add(header, 0, 0);
-        root.Controls.Add(_workspaceSplit, 0, 1);
-        root.Controls.Add(_statusStrip, 0, 2);
-
-        Controls.Add(root);
-        ResumeLayout(true);
-        ApplyResponsiveLayout();
-    }
-
-    private void ApplyResponsiveLayout()
-    {
-        if (_rootLayout is null ||
-            _rightLayout is null ||
-            _headerActionsPanel is null ||
-            _settingsFlowPanel is null ||
-            IsDisposed)
-        {
-            return;
-        }
-
-        int width = Math.Max(1, ClientSize.Width);
-        int height = Math.Max(1, ClientSize.Height);
-        bool narrow = width < 1080;
-        bool veryNarrow = width < 960;
-        bool shortWindow = height < 720;
-
-        SuspendLayout();
-
-        try
-        {
-            _rootLayout.RowStyles[0].Height = Presentation.HeaderForWidth(width);
-
-            _workspaceSplit.Panel1MinSize = veryNarrow ? 165 : 174;
-            int requestedSidebar = Presentation.Sidebar(width);
-            int maxSidebar = Math.Max(_workspaceSplit.Panel1MinSize, width / 3);
-
-            try
-            {
-                _workspaceSplit.SplitterDistance = Math.Clamp(
-                    requestedSidebar,
-                    _workspaceSplit.Panel1MinSize,
-                    maxSidebar);
-            }
-            catch (InvalidOperationException)
-            {
-                // A resize can briefly make the splitter reject a valid target.
-            }
-
-            _rightLayout.RowStyles[0].Height = 56 * DeviceDpi / 96f;
-            _rightLayout.RowStyles[1].Height = 0;
-
-            _rightLayout.RowStyles[2].Height = narrow ? 106 : 84;
-
-            _headerActionsPanel.WrapContents = false;
-            _headerActionsPanel.MaximumSize = Size.Empty;
-            _checkUpdateButton.Visible = _showUpdateControlOnHome;
-            _wallboardButton.Visible = true;
-            _settingsButton.Visible = true;
-            _moreButton.Visible = true;
-
-            _settingsFlowPanel.WrapContents = true;
-            _settingsFlowPanel.AutoScroll = false;
-            _settingsFlowPanel.PerformLayout();
-            int settingsHeight = _settingsFlowPanel.Controls.Cast<Control>()
-                .Where(control => control.Visible)
-                .Select(control => control.Bottom + control.Margin.Bottom)
-                .DefaultIfEmpty(0)
-                .Max();
-            var settingsCard = _settingsFlowPanel.Parent!;
-            _rightLayout.RowStyles[2].Height = Math.Max(
-                64,
-                settingsHeight + settingsCard.Padding.Vertical + settingsCard.Margin.Vertical);
-
-
-            if (_pendingUpdateManager is null)
-            {
-                if (_updateCheckInProgress)
-                    _checkUpdateButton.Text = "Checking…";
-                else if (_checkUpdateButton.Text.StartsWith("Updates:", StringComparison.Ordinal))
-                    _checkUpdateButton.Text = "Unmanaged";
-                else if (_checkUpdateButton.Text.StartsWith("Downloading", StringComparison.Ordinal))
-                {
-                    // Keep live progress text.
-                }
-                else if (_checkUpdateButton.Text != "Up to date")
-                    _checkUpdateButton.Text = "Updates";
-            }
-
-            if (_brandSubtitleLabel is not null)
-                _brandSubtitleLabel.Visible = false;
-
-            _siteList.ItemHeight = Math.Max(
-                34,
-                (int)Math.Round(36 * DeviceDpi / 96d));
-
-            if (!_mainSplit.Panel2Collapsed)
-            {
-                int splitHeight = _mainSplit.ClientSize.Height;
-
-                if (splitHeight > 150)
-                {
-                    int desired = (int)(splitHeight * (shortWindow ? 0.56 : 0.64));
-                    _mainSplit.SplitterDistance = Math.Clamp(
-                        desired,
-                        Math.Min(80, splitHeight - 1),
-                        Math.Max(81, splitHeight - 70));
-                }
-            }
-        }
-        finally
-        {
-            ResumeLayout(true);
-        }
-    }
-
     private void DrawSiteItem(object? sender, DrawItemEventArgs e)
     {
         e.DrawBackground();
@@ -2086,7 +1726,9 @@ public sealed partial class MainForm : Form
             ? AuroraTheme.Palette.Text
             : AuroraTheme.Palette.Secondary);
 
-        e.Graphics.FillRectangle(background, bounds);
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var rowPath = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusMedium);
+        e.Graphics.FillPath(background, rowPath);
 
         string text = _siteList.Items[e.Index]?.ToString() ?? string.Empty;
         TextRenderer.DrawText(
@@ -2241,7 +1883,7 @@ public sealed partial class MainForm : Form
                 site.Hosts.Count(address => GetHostOptions(site, address).Enabled));
             _siteList.Items.Add(new SiteListItem(
                 null,
-                $"{AllSitesLabel} ({totalHosts})"));
+                "All sites"));
 
             foreach (var site in _sites
                 .OrderBy(site => site.FolderPath, StringComparer.OrdinalIgnoreCase)
@@ -2249,7 +1891,7 @@ public sealed partial class MainForm : Form
             {
                 _siteList.Items.Add(new SiteListItem(
                     site.Name,
-                    $"{FormatSiteDisplayPath(site)} ({site.Hosts.Count(address => GetHostOptions(site, address).Enabled)})"));
+                    FormatSiteDisplayPath(site)));
             }
 
             int selectedIndex = 0;
@@ -2284,9 +1926,8 @@ public sealed partial class MainForm : Form
 
         PersistCurrentEditor();
         SaveSites();
-        ReconcileMonitoringWithConfig();
-
         _selectedSiteName = (_siteList.SelectedItem as SiteListItem)?.SiteName;
+        ReconcileMonitoringWithConfig();
 
         RefreshSiteList(_selectedSiteName);
         LoadHostEditor();
@@ -3406,6 +3047,7 @@ public sealed partial class MainForm : Form
     private List<(string Site, string Address)> GetConfiguredTargets()
     {
         return _sites
+            .Where(site => _selectedSiteName is null || site.Name.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase))
             .SelectMany(site =>
                 site.Hosts.Where(host => GetHostOptions(site, host).Enabled).Select(host => (Site: site.Name, Address: host)))
             .ToList();
@@ -3875,6 +3517,7 @@ public sealed partial class MainForm : Form
         }
 
         var sites = _sites
+            .Where(site => _selectedSiteName is null || site.Name.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase))
             .Where(site => site.Hosts.Any(address => GetHostOptions(site, address).Enabled))
             .Select(site =>
             {
@@ -3912,7 +3555,7 @@ public sealed partial class MainForm : Form
                     _eventHistoryHours,
                     _hideSuspectEvents,
                     DateTime.Now)
-                .Where(e => IsHostEnabled(e.Site, e.Host))
+                .Where(e => IsHostEnabled(e.Site, e.Host) && (_selectedSiteName is null || e.Site.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase)))
                 .TakeLast(80)
                 .Select(e => new WallboardEventSnapshot(
                     e.Timestamp,
@@ -3925,7 +3568,7 @@ public sealed partial class MainForm : Form
         }
 
         var commands = _commandEntries
-            .Where(entry => IsHostEnabled(entry.Site, entry.Host))
+            .Where(entry => IsHostEnabled(entry.Site, entry.Host) && (_selectedSiteName is null || entry.Site.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase)))
             .TakeLast(120)
             .Select(entry => new WallboardCommandSnapshot(
                 entry.Timestamp,
@@ -4883,7 +4526,15 @@ public sealed partial class MainForm : Form
             .ThenBy(h => h.Host, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        string query = _hostSearch.Text.Trim();
+        if (query.Length > 0)
+            rows = rows.Where(h => h.Host.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                h.Label.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                h.Site.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
         _grid.DataSource = rows;
+        _emptyHosts.Text = query.Length > 0 ? "No matching hosts" : "No hosts — add hosts to start";
+        _emptyHosts.Visible = rows.Count == 0;
+        if (_emptyHosts.Visible) _emptyHosts.BringToFront();
 
         if (_grid.Columns["SiteColumn"] is DataGridViewColumn siteColumn)
             siteColumn.Visible = _selectedSiteName is null;
@@ -4949,8 +4600,7 @@ public sealed partial class MainForm : Form
 
         string view = _selectedSiteName ?? AllSitesLabel;
 
-        _statusLabel.Text = _cts is null
-            ? $"Ready"
-            : $"{online} online · {suspect} suspect · {offline} offline";
+        _statusLabel.Text = _cts is null ? "Stopped" :
+            $"Monitoring {_selectedSiteName ?? "all sites"} · {_hostTokens.Count} active hosts";
     }
 }

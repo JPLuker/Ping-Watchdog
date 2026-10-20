@@ -1347,7 +1347,7 @@ internal sealed class WallboardCanvas : Control
         {
             contentGraphics.Clear(WallboardStyle.Panel);
             contentGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            contentGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            contentGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             DrawTopologyCore(contentGraphics, snapshot, new Rectangle(0, 0, virtualWidth, virtualHeight));
         }
         var state = g.Save();
@@ -1731,8 +1731,7 @@ internal sealed class WallboardCanvas : Control
         var captionSize = MeasureHostNodeCaption(g, primary, secondary, _hostLabelFont, _hostIpFont);
         int width = captionSize.Width;
         int height = captionSize.Height;
-        int primaryHeight = TextRenderer.MeasureText(g, primary, _hostLabelFont, Size.Empty,
-            TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Height;
+        int primaryHeight = (int)Math.Ceiling(_hostLabelFont.GetHeight(g));
 
         if (!TopologyLayout.TryPlaceHostCaption(point, captionSize, topologyBounds,
             _captionObstacles, Math.Cos(angle) >= 0, out var rect))
@@ -1748,43 +1747,36 @@ internal sealed class WallboardCanvas : Control
                 Math.Clamp(point.Y, rect.Top, rect.Bottom)));
 
         using var fill = new SolidBrush(WallboardStyle.Panel);
-        using var border = new Pen(StateColor(host.State, 115), 1);
         using var primaryBrush = new SolidBrush(WallboardStyle.Text);
         using var secondaryBrush = new SolidBrush(WallboardStyle.Muted);
 
-        WallboardStyle.DrawSurface(g, rect, fill, border);
-
-        TextRenderer.DrawText(
-            g,
-            primary,
-            _hostLabelFont,
-            new Rectangle(rect.X + 5, rect.Y + 3, rect.Width - 10, primaryHeight),
-            primaryBrush.Color,
-            (secondary is null ? TextFormatFlags.Default : TextFormatFlags.EndEllipsis) | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        // One renderer for measurement and drawing; no GDI text over GDI+ bitmaps.
+        // Quiet labels on the canvas, with no outlined boxes around every address.
+        g.FillRectangle(fill, rect);
+        using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap,
+            Trimming = secondary is null ? StringTrimming.None : StringTrimming.EllipsisCharacter };
+        g.DrawString(primary, _hostLabelFont, primaryBrush,
+            new RectangleF(rect.X + 6, rect.Y + 4, rect.Width - 12, primaryHeight + 2), format);
 
         if (secondary is not null)
         {
-            TextRenderer.DrawText(
-                g,
-                secondary,
-                _hostIpFont,
-                new Rectangle(rect.X + 5, rect.Y + 3 + primaryHeight, rect.Width - 10, rect.Height - primaryHeight - 6),
-                secondaryBrush.Color,
-                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            format.Trimming = StringTrimming.None;
+            g.DrawString(secondary, _hostIpFont, secondaryBrush,
+                new RectangleF(rect.X + 6, rect.Y + 4 + primaryHeight, rect.Width - 12, rect.Height - primaryHeight), format);
         }
     }
 
-    // Measure with the same GDI renderer and flags used for drawing. Addresses never
+    // Measure with the same GDI+ renderer used for drawing. Addresses never
     // inherit the nickname width cap, including IPv6 and larger display scaling.
     internal static Size MeasureHostNodeCaption(Graphics g, string primary, string? secondary,
         Font primaryFont, Font addressFont)
     {
-        const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
-        var primarySize = TextRenderer.MeasureText(g, primary, primaryFont, Size.Empty, flags);
-        var addressSize = secondary is null ? Size.Empty : TextRenderer.MeasureText(g, secondary, addressFont, Size.Empty, flags);
-        int primaryWidth = secondary is null ? primarySize.Width : Math.Min(primarySize.Width, 180);
-        return new Size(Math.Max(62, Math.Max(primaryWidth, addressSize.Width) + 12),
-            Math.Max(22, primarySize.Height + addressSize.Height + 6));
+        using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap };
+        var primarySize = g.MeasureString(primary, primaryFont, int.MaxValue, format);
+        var addressSize = secondary is null ? SizeF.Empty : g.MeasureString(secondary, addressFont, int.MaxValue, format);
+        float primaryWidth = secondary is null ? primarySize.Width : Math.Min(primarySize.Width, 180);
+        return new Size((int)Math.Ceiling(Math.Max(64, Math.Max(primaryWidth, addressSize.Width) + 16)),
+            (int)Math.Ceiling(primaryFont.GetHeight(g) + (secondary is null ? 0 : addressFont.GetHeight(g)) + 12));
     }
 
     internal static (string Primary, string? Secondary) FormatHostNodeLines(

@@ -146,13 +146,11 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Consolidated inventory and live results into one host table, including idle hosts.
-          - Simplified site navigation and added a Columns menu with five default columns.
-          - Combined monitoring into a single Start/Stop action.
-          - Collapsed Wallboard controls by default; Show controls or F10 restores them.
-          - Kept topology text readable with panning for larger layouts and improved single-site placement.
-          - Corrected caption rendering and separated the outage-history filter from its heading.
-          - Preserved monitoring, host actions, saved configuration, and existing keyboard shortcuts.
+          - Fixed selected-site monitoring: only the selected site's enabled hosts are probed; All sites probes every enabled host.
+          - Switching sites while monitoring cancels workers outside the new selection. Wallboard and output follow the same scope.
+          - Rebuilt the main workspace with compact site navigation, a selected-site heading, one Start/Stop action, and searchable host results.
+          - Removed the oversized repeated app header and stacked toolbar cards; utilities now live at the foot of the sidebar.
+          - Simplified topology labels and unified their measurement and rendering.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
