@@ -1203,7 +1203,7 @@ internal sealed partial class WallboardCanvas : Control
             g.Restore(outputClip);
         }
 
-        RefreshHostTargets();
+        RefreshHostTargets(g);
         DrawHostFocus(g);
         // Shortcuts remain available without a permanent legend.
     }

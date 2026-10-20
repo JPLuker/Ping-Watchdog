@@ -26,13 +26,20 @@ internal sealed partial class WallboardCanvas
         (string.IsNullOrWhiteSpace(item.Host.Label) ? "" : item.Host.Label + ". ") +
         item.Host.Address + ". " + HostStatus(item.Host);
 
-    private void RefreshHostTargets()
+    private void RefreshHostTargets(Graphics graphics)
     {
         var targets = new List<HostTarget>();
         foreach (var hit in _hostHitRegions)
         {
             var bounds = hit.Bounds;
             bounds.Offset(_topologyViewport.X - _panOffset.X, _topologyViewport.Y - _panOffset.Y);
+            float scale = DeviceDpi / 96f, line = _hostIpFont.GetHeight(graphics);
+            bool twoLines = bounds.Height >= line * 2 + 6 * scale && !string.IsNullOrWhiteSpace(hit.Host.Label);
+            float width = graphics.MeasureString(hit.Host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width;
+            if (twoLines) width = Math.Max(width, graphics.MeasureString(hit.Host.Label, _hostLabelFont, int.MaxValue, StringFormat.GenericTypographic).Width);
+            int height = Math.Min(bounds.Height, (int)Math.Ceiling(line * (twoLines ? 2 : 1) + 8 * scale));
+            bounds = new Rectangle(bounds.X, bounds.Y + (bounds.Height - height) / 2,
+                Math.Min(bounds.Width, (int)Math.Ceiling(width + 32 * scale)), height);
             targets.Add(new(HostKey(hit.Host, false), hit.Host, bounds, false));
         }
         foreach (var hit in _sidebarHitRegions)
@@ -79,6 +86,8 @@ internal sealed partial class WallboardCanvas
     private void SelectHostAt(Point point)
     {
         int index = _hostTargets.FindLastIndex(item => item.Bounds.Contains(point));
+        if (index < 0 && HitTestHost(point) is { } host)
+            index = _hostTargets.FindIndex(item => item.Key == HostKey(host, false));
         if (index >= 0) SelectHost(index, showDetails: false);
     }
 
