@@ -8,6 +8,7 @@ internal static class StartupRecovery
     internal const string ReleasesUrl = "https://github.com/JPLuker/Ping-Watchdog/releases/latest";
     private static string? _attempt;
     private static int _reported;
+    private static bool _testMode;
 
     internal static bool HandleMode(string[] args)
     {
@@ -36,6 +37,7 @@ internal static class StartupRecovery
 
     internal static void RunGuarded(Action run, string? testDirectory = null)
     {
+        _testMode = testDirectory != null;
         try
         {
             string root = StoragePaths.Current.StartupDirectory;
@@ -74,6 +76,15 @@ internal static class StartupRecovery
         {
             AppDomain.CurrentDomain.UnhandledException -= backgroundFailure;
         }
+    }
+
+    internal static void ResumeAfterDeletion()
+    {
+        if (_attempt == null) return;
+        Directory.CreateDirectory(_attempt);
+        File.WriteAllText(Path.Combine(_attempt, "startup.txt"),
+            $"Ping Watchdog {typeof(Program).Assembly.GetName().Version}{Environment.NewLine}Started after saved-data deletion: {DateTimeOffset.Now:O}");
+        if (_testMode) File.WriteAllText(Path.Combine(_attempt, "test-mode.txt"), "diagnostics only");
     }
 
     internal static void SuppressForDataDeletion()

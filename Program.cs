@@ -66,7 +66,7 @@ internal static class Program
     private static void RunApplication(string[] args)
     {
         InitializeUpdater(args);
-        DataDeletionStore.FinishPending(StoragePaths.Current);
+        if (DataDeletionStore.FinishPending(StoragePaths.Current)) StartupRecovery.ResumeAfterDeletion();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         ApplicationConfiguration.Initialize();
         var notificationsRegistered = false;

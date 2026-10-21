@@ -162,6 +162,7 @@ jobs:
           - Add explicit folder-local storage for portable copies, preserving existing AppData until enabled.
           - Add typed-confirmation saved-data deletion, with interrupted-deletion retry and empty setup on next launch.
           - Use the active storage paths for preferences, backups, diagnostics and startup reports.
+          - Preserve independent startup recovery after an interrupted-deletion retry.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

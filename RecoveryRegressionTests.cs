@@ -15,7 +15,7 @@ internal static class RecoveryRegressionTests
         Directory.CreateDirectory(root);
         try
         {
-            foreach (string mode in new[] { "constructor", "ui", "background", "abrupt", "normal", "ready", "update-exit" })
+            foreach (string mode in new[] { "constructor", "ui", "background", "abrupt", "normal", "ready", "update-exit", "deletion-retry" })
             {
                 string directory = Path.Combine(root, mode);
                 if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
@@ -61,6 +61,13 @@ internal static class RecoveryRegressionTests
 
     internal static void InjectFailure(string mode)
     {
+        if (mode == "deletion-retry")
+        {
+            string attempt = Path.Combine(Environment.CurrentDirectory, "ui-smoke-test", "recovery", mode);
+            Directory.Delete(attempt, recursive: true); // Reproduce cleanup of the guard's current attempt.
+            StartupRecovery.ResumeAfterDeletion();
+            throw new InvalidOperationException("Injected failure after interrupted deletion recovery.");
+        }
         if (mode == "constructor") throw new InvalidOperationException("Injected startup constructor failure.");
         if (mode == "abrupt") Environment.Exit(72);
         if (mode == "ready") { StartupRecovery.MarkReady(); Environment.Exit(0); }
