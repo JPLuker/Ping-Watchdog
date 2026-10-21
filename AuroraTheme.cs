@@ -314,6 +314,39 @@ internal class AuroraButton : Button
     protected override void OnKeyUp(KeyEventArgs e) { _pressed = false; base.OnKeyUp(e); Invalidate(); }
     protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
     protected override void OnLostFocus(EventArgs e) { _pressed = false; base.OnLostFocus(e); Invalidate(); }
+    internal Color ResolveTextColor(AuroraPalette p) =>
+        !Enabled ? p.Muted : Destructive ? (Primary ? (p.Dark ? p.Canvas : Color.White) : p.StatusText(p.Danger))
+        : Primary ? p.OnAccent : p.Text;
+
+    internal static void RunDestructiveContrastTests()
+    {
+        double Luminance(Color color)
+        {
+            double Channel(byte component)
+            {
+                double value = component / 255.0;
+                return value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4);
+            }
+            return .2126 * Channel(color.R) + .7152 * Channel(color.G) + .0722 * Channel(color.B);
+        }
+        void Check(Color text, Color background)
+        {
+            double a = Luminance(text), b = Luminance(background);
+            if ((Math.Max(a, b) + .05) / (Math.Min(a, b) + .05) < 4.5)
+                throw new InvalidOperationException("Destructive action text does not meet the reading contrast floor.");
+        }
+        using var action = new AuroraButton { Destructive = true, Ghost = true, Enabled = true };
+        foreach (bool dark in new[] { false, true })
+        {
+            var palette = AuroraPalette.Create(dark);
+            action.Primary = false;
+            foreach (var background in new[] { palette.Canvas, palette.Surface2, palette.Surface3 })
+                Check(action.ResolveTextColor(palette), background);
+            action.Primary = true;
+            Check(action.ResolveTextColor(palette), palette.Danger);
+        }
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var p = AuroraTheme.Palette;
@@ -332,7 +365,7 @@ internal class AuroraButton : Button
             using var ring = WallboardStyle.Rounded(Rectangle.Inflate(bounds, 2, 2), bounds.Height / 2 + 2);
             e.Graphics.DrawPath(focus, ring);
         }
-        var ink = !Enabled ? p.Muted : Destructive ? (Primary ? (p.Dark ? p.Canvas : Color.White) : p.Danger) : Primary ? p.OnAccent : p.Text;
+        var ink = ResolveTextColor(p);
         var textBounds = bounds;
         if (_pressed) textBounds.Offset(0, 1);
         if (TextAlign is ContentAlignment.MiddleLeft) textBounds.X += Padding.Left;

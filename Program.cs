@@ -1011,6 +1011,7 @@ public sealed partial class MainForm : Form
         StoragePaths.RunTests();
         DataDeletionStore.RunTests();
         DeleteDataDialog.RunTests();
+        AuroraButton.RunDestructiveContrastTests();
         form._configWriteBlocked = true;
         bool protectedBackupRefused = false;
         try { form.CreateDataBackup(); }
