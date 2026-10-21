@@ -8,7 +8,10 @@ internal sealed class SettingsForm : Form
     private readonly Action<AppSettingsSnapshot> _apply;
     private readonly Func<Task> _updateAction;
     private readonly Action _openHistory;
-    private readonly Action? _backupAction, _restoreAction, _openDataFolder;
+    private readonly Action? _backupAction, _restoreAction, _openDataFolder, _portableAction, _deleteDataAction;
+    private readonly bool _canEnablePortable;
+    private readonly Label _dataStatus = new() { AutoSize = true };
+    private Button? _deleteDataButton;
     private readonly System.Windows.Forms.Timer _runtimeTimer = new() { Interval = 750 };
 
     private readonly ListBox _nav = new()
@@ -68,13 +71,14 @@ internal sealed class SettingsForm : Form
         Func<AppSettingsSnapshot> provider,
         Action<AppSettingsSnapshot> apply,
         Func<Task> updateAction,
-        Action openHistory, Action? backupAction = null, Action? restoreAction = null, Action? openDataFolder = null)
+        Action openHistory, Action? backupAction = null, Action? restoreAction = null, Action? openDataFolder = null, Action? portableAction = null, Action? deleteDataAction = null, bool canEnablePortable = false)
     {
         _provider = provider;
         _apply = apply;
         _updateAction = updateAction;
         _openHistory = openHistory;
         _backupAction = backupAction; _restoreAction = restoreAction; _openDataFolder = openDataFolder;
+        _portableAction = portableAction; _deleteDataAction = deleteDataAction; _canEnablePortable = canEnablePortable;
 
         Text = "Settings • Ping Watchdog";
         Width = 900;
@@ -374,6 +378,8 @@ internal sealed class SettingsForm : Form
         return page;
     }
 
+    internal void ReportDataStatus(string message) => _dataStatus.Text = message;
+
     private Control BuildDataPage()
     {
         // FOCAL: the existing staged Settings save action. Data operations stay secondary.
@@ -382,15 +388,24 @@ internal sealed class SettingsForm : Form
         var backup = new AuroraButton { Text = "Create backup…", AutoSize = true, Enabled = _backupAction != null };
         var restore = new AuroraButton { Text = "Restore backup…", AutoSize = true, Enabled = _restoreAction != null };
         var open = new AuroraButton { Text = "Open data folder", AutoSize = true, Enabled = _openDataFolder != null };
+        var portable = new AuroraButton { Text = "Enable portable storage…", AutoSize = true, Enabled = _portableAction != null && _canEnablePortable };
+        _deleteDataButton = new AuroraButton { Text = "Delete saved data…", AutoSize = true, Destructive = true, Ghost = true, Enabled = _deleteDataAction != null };
         backup.Click += (_, _) => _backupAction?.Invoke();
         restore.Click += (_, _) => _restoreAction?.Invoke();
         open.Click += (_, _) => _openDataFolder?.Invoke();
-        stack.Controls.Add(Section("Complete backup", backup,
-            "Includes sites, host settings, saved preferences and history. Excludes Settings drafts."));
-        stack.Controls.Add(Section("Restore saved data", restore,
-            "Replaces saved data and restarts the app. Stop monitoring first."));
-        stack.Controls.Add(Section("Data folder", open,
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PingWatchdog")));
+        portable.Click += (_, _) => _portableAction?.Invoke();
+        _deleteDataButton.Click += (_, _) => _deleteDataAction?.Invoke();
+        stack.Controls.Add(Section(StoragePaths.Current.Portable ? "Portable storage" : "Per-user storage", open, StoragePaths.Current.DataDirectory));
+        var backupButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
+        backupButtons.Controls.Add(backup); backupButtons.Controls.Add(restore);
+        stack.Controls.Add(Section("Backups", new Control[] { backupButtons, _dataStatus },
+            "Includes saved sites, host settings, preferences and history. Restore replaces data and restarts the app."));
+        stack.Controls.Add(Section("Storage location", portable, StoragePaths.Current.Portable
+            ? "Folder-local storage is enabled. Keep the Data folder when moving or updating this copy."
+            : _canEnablePortable ? "Copies the saved setup beside this portable copy and restarts. Original AppData files remain."
+            : "Folder-local storage is available in portable copies."));
+        stack.Controls.Add(Section("Delete saved data", _deleteDataButton,
+            "Removes data, backups and recovery reports from active storage, then closes the app. Stop monitoring first."));
         return page;
     }
 
@@ -398,9 +413,18 @@ internal sealed class SettingsForm : Form
     {
         SelectCategory("Data and storage");
         await Task.Delay(75);
-        using var bitmap = new Bitmap(Width, Height);
-        DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
-        bitmap.Save(Path.Combine(output, "data-settings-" + appearance + ".png"));
+        void Capture(string name)
+        {
+            using var bitmap = new Bitmap(Width, Height);
+            DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            bitmap.Save(Path.Combine(output, name + "-" + appearance + ".png"));
+        }
+        Capture("data-settings");
+        var stack = (FlowLayoutPanel)((TableLayoutPanel)_pages["Data and storage"]).Controls[1];
+        stack.ScrollControlIntoView(_deleteDataButton!.Parent!);
+        await Task.Delay(75);
+        Capture("data-delete");
+        await DeleteDataDialog.CaptureReview(this, Path.Combine(output, "data-confirm-" + appearance + ".png"));
     }
 
     private Control BuildAboutPage()

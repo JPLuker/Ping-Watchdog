@@ -38,8 +38,7 @@ internal static class StartupRecovery
     {
         try
         {
-            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "PingWatchdog", "Startup");
+            string root = StoragePaths.Current.StartupDirectory;
             _attempt = testDirectory ?? Path.Combine(root, Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_attempt);
             File.WriteAllText(Path.Combine(_attempt, "startup.txt"),
@@ -75,6 +74,13 @@ internal static class StartupRecovery
         {
             AppDomain.CurrentDomain.UnhandledException -= backgroundFailure;
         }
+    }
+
+    internal static void SuppressForDataDeletion()
+    {
+        ExpectUpdateExit();
+        _attempt = null;
+        Interlocked.Exchange(ref _reported, 1);
     }
 
     internal static void MarkReady() => WriteMarker("ready.txt");

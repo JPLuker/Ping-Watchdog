@@ -171,6 +171,9 @@ internal sealed class WallboardForm : Form
             _timer.Dispose();
             _canvas.Dispose();
             _appIcon.Dispose();
+            foreach (var button in new[] { _monitorButton, _operationsButton, _hostsButton, _cliButton,
+                _historyButton, _settingsButton, _updateButton, _screenButton, _mainButton })
+                button.Dispose();
         };
     }
 
@@ -220,77 +223,13 @@ internal sealed class WallboardForm : Form
 
     private void BuildShell()
     {
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = new Padding(0),
-            Padding = new Padding(0),
-            BackColor = WallboardStyle.Background
-        };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var toolbar = new Panel
-        {
-            Name = "WallboardToolbar",
-            Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            BackColor = WallboardStyle.Panel
-        };
-        var actions = new FlowLayoutPanel
-        {
-            Name = "WallboardActions",
-            AutoSize = false,
-            WrapContents = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = Padding.Empty,
-            BackColor = Color.Transparent
-        };
-        foreach (var button in new[] { _monitorButton, _operationsButton, _hostsButton, _cliButton,
-            _historyButton, _settingsButton, _updateButton, _screenButton, _mainButton })
-            actions.Controls.Add(button);
-        toolbar.Controls.Add(actions);
-        bool sizingToolbar = false;
-        void SizeToolbar()
-        {
-            if (sizingToolbar) return;
-            sizingToolbar = true;
-            try
-            {
-                actions.Location = new Point(14, 4);
-                actions.Width = Math.Max(1, root.ClientSize.Width - 24);
-                actions.PerformLayout();
-                actions.Height = actions.Controls.Cast<Control>().Where(c => c.Visible)
-                    .Select(c => c.Bottom + c.Margin.Bottom).DefaultIfEmpty(0).Max();
-                root.RowStyles[0].Height = actions.Bottom + 4;
-            }
-            finally { sizingToolbar = false; }
-        }
-        actions.Layout += (_, _) => SizeToolbar();
-        root.SizeChanged += (_, _) => SizeToolbar();
-        Shown += (_, _) => SizeToolbar();
-
-        var content = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0),
-            BackColor = WallboardStyle.Background
-        };
-
+        // Wallboard is a display surface. Actions remain on the keyboard and host context menus.
         _canvas.Dock = DockStyle.Fill;
         _canvas.ShowCli = _showCli;
-
         BuildOperationsDrawer();
-
-        content.Controls.Add(_canvas);
-        content.Controls.Add(_drawer);
+        Controls.Add(_canvas);
+        Controls.Add(_drawer);
         _drawer.BringToFront();
-
-        root.Controls.Add(toolbar, 0, 0);
-        root.Controls.Add(content, 0, 1);
-        Controls.Add(root);
     }
 
     private void BuildOperationsDrawer()
@@ -316,7 +255,7 @@ internal sealed class WallboardForm : Form
 
         stack.Controls.Add(SectionTitle("Hosts"));
         stack.Controls.Add(_hostGrid);
-        stack.Controls.Add(SectionNote("Right-click a host for quick actions. Use Hosts in the toolbar to add or edit hosts."));
+        stack.Controls.Add(SectionNote("Right-click a host for quick actions. Exit Wallboard to add or edit hosts."));
         var monitoringSettings = DrawerButton("Monitoring settings…");
         monitoringSettings.Click += (_, _) => _actions.OpenSettings();
         stack.Controls.Add(monitoringSettings);

@@ -263,6 +263,7 @@ internal sealed class AuroraMenuColors : ProfessionalColorTable
 internal class AuroraButton : Button
 {
     internal bool Primary { get; set; }
+    internal bool Destructive { get; set; }
     internal bool Ghost { get; set; }
     internal bool Selected { get; set; }
     private bool _hover, _pressed;
@@ -322,7 +323,7 @@ internal class AuroraButton : Button
         var bounds = Rectangle.Inflate(ClientRectangle, -inset, -inset);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         using var path = WallboardStyle.Rounded(bounds, bounds.Height / 2);
-        var fillColor = Primary && Enabled ? p.Accent : Selected || _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
+        var fillColor = Primary && Enabled ? (Destructive ? p.Danger : p.Accent) : Selected || _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
         using var fill = new SolidBrush(fillColor);
         e.Graphics.FillPath(fill, path);
         if (Focused && ShowFocusCues)
@@ -331,7 +332,7 @@ internal class AuroraButton : Button
             using var ring = WallboardStyle.Rounded(Rectangle.Inflate(bounds, 2, 2), bounds.Height / 2 + 2);
             e.Graphics.DrawPath(focus, ring);
         }
-        var ink = !Enabled ? p.Muted : Primary ? p.OnAccent : p.Text;
+        var ink = !Enabled ? p.Muted : Destructive ? (Primary ? (p.Dark ? p.Canvas : Color.White) : p.Danger) : Primary ? p.OnAccent : p.Text;
         var textBounds = bounds;
         if (_pressed) textBounds.Offset(0, 1);
         if (TextAlign is ContentAlignment.MiddleLeft) textBounds.X += Padding.Left;

@@ -66,6 +66,7 @@ internal static class Program
     private static void RunApplication(string[] args)
     {
         InitializeUpdater(args);
+        DataDeletionStore.FinishPending(StoragePaths.Current);
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         ApplicationConfiguration.Initialize();
         var notificationsRegistered = false;
@@ -502,21 +503,12 @@ public sealed partial class MainForm : Form
 {
     private const string AllSitesLabel = "All Sites";
     private const string UpdateRepoUrl = "https://github.com/JPLuker/Ping-Watchdog";
-    private readonly string _settingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "PingWatchdog",
-        "sites.json");
-    private readonly string _autoConfigPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "PingWatchdog",
-        "autosave.pingwatch.json");
+    private readonly string _settingsPath = Path.Combine(StoragePaths.Current.DataDirectory, "sites.json");
+    private readonly string _autoConfigPath = Path.Combine(StoragePaths.Current.DataDirectory, "autosave.pingwatch.json");
     private readonly string _bundledDefaultConfigPath = Path.Combine(
         AppContext.BaseDirectory,
         "default.pingwatch.json");
-    private readonly string _eventHistoryPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "PingWatchdog",
-        "event-history.json");
+    private readonly string _eventHistoryPath = Path.Combine(StoragePaths.Current.DataDirectory, "event-history.json");
 
     private readonly List<SiteDefinition> _sites = new();
     private readonly List<string> _siteFolders = new();
@@ -758,6 +750,7 @@ public sealed partial class MainForm : Form
         _appNotificationsAvailable = appNotificationsAvailable;
         _suppressNotifications = suppressNotifications;
         _persistSites = persistSites;
+        if (_persistSites) DataDeletionStore.FinishPending(StoragePaths.Current);
         if (_persistSites && DataBackupStore.RecoverPending(DataDirectory))
             ReportStorageProblem("An interrupted restore was rolled back. The previous saved files were recovered.");
 
@@ -1015,6 +1008,9 @@ public sealed partial class MainForm : Form
         SafeConfigStore.RunTests();
         SettingsPersistence.RunTests();
         DataBackupStore.RunTests();
+        StoragePaths.RunTests();
+        DataDeletionStore.RunTests();
+        DeleteDataDialog.RunTests();
         form._configWriteBlocked = true;
         bool protectedBackupRefused = false;
         try { form.CreateDataBackup(); }
@@ -1653,20 +1649,11 @@ public sealed partial class MainForm : Form
                     form._wallboardForm.ClientSize = new Size(width, 900);
                     await Task.Delay(100);
                     if (width == 900) Capture(form._wallboardForm, "wallboard-narrow");
-                    var actionBar = form._wallboardForm.Controls.Find("WallboardActions", true).Single();
-                    Check(actionBar.Parent!.Height <= actionBar.Bottom + 8,
-                        "Wallboard toolbar reserves empty vertical space.");
-                    Check(actionBar.Parent.Height < 180 * form._wallboardForm.DeviceDpi / 96,
-                        "Wallboard toolbar consumed excessive height.");
-                    foreach (var button in form._wallboardForm.Controls.Find("WallboardActions", true).Single().Controls.OfType<Button>())
-                    {
-                        Check(button.Width >= button.PreferredSize.Width && button.Height >= button.PreferredSize.Height,
-                            "Wallboard button text is clipped.");
-                        Check(button.Parent!.ClientRectangle.Contains(button.Bounds), "Wallboard action extends outside toolbar.");
-                    }
+                    Check(form._wallboardForm.Controls.Find("WallboardToolbar", true).Length == 0,
+                        "Wallboard top controls returned.");
+                    Check(canvas.Top == 0 && canvas.Height == form._wallboardForm.ClientSize.Height,
+                        "Wallboard canvas does not fill the available window.");
                 }
-                Check(form._wallboardForm.Controls.Find("WallboardToolbar", true).Single().Controls.OfType<Label>().Count() == 0,
-                    "Duplicate Wallboard branding returned in the toolbar.");
                 form.OpenHostManager(form._wallboardForm);
                 await Task.Delay(100);
                 Check(form._hostManager?.Visible == true && form._hostManager.Owner == form._wallboardForm,
@@ -1683,11 +1670,6 @@ public sealed partial class MainForm : Form
                 canvas.AccessibilityObject.GetChild(0)!.DoDefaultAction();
                 Check(form._hostQuickMenu.Visible, "Accessible host action did not open the menu.");
                 form._hostQuickMenu.Close(ToolStripDropDownCloseReason.Keyboard);
-                var visibleActions = form._wallboardForm!.Controls.Find("WallboardActions", true).Single();
-                Check(visibleActions.Controls.OfType<Button>().All(button => !button.Text.Contains("controls", StringComparison.OrdinalIgnoreCase)),
-                    "Wallboard still exposes the removed controls toggle.");
-                Check(visibleActions.Controls.OfType<Button>().Any(button => button.Visible && button.Text == "Exit Wallboard"),
-                    "Wallboard exit must remain directly available.");
                 Capture(form._wallboardForm!, "wallboard");
                 canvas.Snapshot = new WallboardSnapshot(true, DateTime.Now,
                     Enumerable.Range(1, 4).Select(site => new WallboardSiteSnapshot("Branch " + site,
@@ -4170,7 +4152,7 @@ public sealed partial class MainForm : Form
             GetAppSettingsSnapshot,
             ApplyAppSettings,
             RunUpdateActionAsync,
-            () => OpenEventHistory(owner), ExportDataBackup, RestoreDataBackup, OpenDataFolder);
+            () => OpenEventHistory(owner), ExportDataBackup, RestoreDataBackup, OpenDataFolder, EnablePortableStorage, DeleteSavedData, CanEnablePortableStorage);
 
         _settingsForm.FormClosed += (_, _) => _settingsForm = null;
         _settingsForm.Show(owner ?? this);

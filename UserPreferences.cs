@@ -78,10 +78,7 @@ public sealed partial class MainForm
         if (!_restoreLastSiteOnStartup) _selectedSiteName = null;
     }
 
-    private string UserPreferencesPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "PingWatchdog",
-        "preferences.json");
+    private string UserPreferencesPath => Path.Combine(StoragePaths.Current.DataDirectory, "preferences.json");
 
     private void LoadUserPreferences()
     {

@@ -15,8 +15,8 @@ internal static class SupportInfo
     internal static string CreateDiagnostics(string version)
     {
         // Deliberately do not read configuration, host inventory, history or recovery reports.
-        string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PingWatchdog");
-        string recovery = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PingWatchdog", "Startup");
+        string data = StoragePaths.Current.DataDirectory;
+        string recovery = StoragePaths.Current.StartupDirectory;
         return string.Join(Environment.NewLine, new[]
         {
             $"Ping Watchdog {version}",
@@ -25,6 +25,7 @@ internal static class SupportInfo
             $"Runtime: {RuntimeInformation.FrameworkDescription}",
             $"Process architecture: {RuntimeInformation.ProcessArchitecture}",
             $"OS architecture: {RuntimeInformation.OSArchitecture}",
+            $"Storage mode: {(StoragePaths.Current.Portable ? "Portable" : "Per-user")}",
             $"Data folder: {data}",
             $"Configuration: {Path.Combine(data, "autosave.pingwatch.json")}",
             $"Preferences: {Path.Combine(data, "preferences.json")}",

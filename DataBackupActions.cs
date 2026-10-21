@@ -51,7 +51,7 @@ public sealed partial class MainForm
         try
         {
             DataBackupStore.Write(dialog.FileName, CreateDataBackup(), DataDirectory);
-            MessageBox.Show(owner, "Backup saved.", "Complete backup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _settingsForm?.ReportDataStatus("Backup saved.");
         }
         catch (Exception ex)
         {

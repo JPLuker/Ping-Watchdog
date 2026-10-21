@@ -115,7 +115,7 @@ jobs:
           foreach ($name in @("support-about-Light", "support-about-Dark", "support-diagnostics-Light", "support-diagnostics-Dark")) {
             Write-Output ("SUPPORT_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SUPPORT_IMAGE_END")
           }
-          foreach ($name in @("data-settings-Light", "data-settings-Dark")) {
+          foreach ($name in @("data-settings-Light", "data-settings-Dark", "data-delete-Light", "data-delete-Dark", "data-confirm-Light", "data-confirm-Dark")) {
             Write-Output ("DATA_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "DATA_IMAGE_END")
           }
           foreach ($name in @("wallboard", "wallboard-narrow", "wallboard-dense")) {
@@ -158,10 +158,10 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Add complete backups for sites, host settings, snoozes, saved preferences and outage history.
-          - Validate incomplete and unsupported backups before replacement; retain originals and recover interrupted restores before startup autosave.
-          - Add Data and storage settings with backup, restore and open-data-folder actions.
-          - Refuse fallback backups when startup protected an unreadable saved configuration.
+          - Remove the top Wallboard toolbar; retain keyboard shortcuts and host context actions.
+          - Add explicit folder-local storage for portable copies, preserving existing AppData until enabled.
+          - Add typed-confirmation saved-data deletion, with interrupted-deletion retry and empty setup on next launch.
+          - Use the active storage paths for preferences, backups, diagnostics and startup reports.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

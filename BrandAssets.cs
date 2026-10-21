@@ -4,8 +4,7 @@ namespace PingWatchdog;
 internal static class BrandAssets
 {
     // A new filename avoids the Shell reusing the old heartbeat icon's cached path.
-    private static string ShellAssetsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PingWatchdog", "Brand");
+    private static string ShellAssetsDirectory => StoragePaths.Current.BrandDirectory;
     internal static string ShellIconPath => Path.Combine(ShellAssetsDirectory, "Watchdog-dog-v1.ico");
     internal static string NotificationIconPath => Path.Combine(ShellAssetsDirectory, "Watchdog-dog-v1.png");
 
