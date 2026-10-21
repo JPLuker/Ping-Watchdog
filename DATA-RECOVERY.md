@@ -35,6 +35,6 @@ Do not remove `restore-pending.json` while recovery is unresolved. It is needed 
 
 ## Data location
 
-**Open data folder** opens `%APPDATA%\PingWatchdog` in File Explorer.
+**Open data folder** opens the active storage folder in File Explorer. The per-user default is `%APPDATA%\PingWatchdog`.
 
-The current Windows portable ZIP also uses this per-user location. Portable folder-local storage and full data deletion remain separate roadmap items. Copying the executable alone does not transfer saved data; use a complete backup.
+Existing Windows copies keep this per-user location by default. Portable copies can explicitly enable folder-local storage; Settings and diagnostics show the active folder. See [PORTABLE-AND-DELETION.md](PORTABLE-AND-DELETION.md) for activation, retained AppData and confirmed deletion. Copying an executable alone does not transfer saved data; use a complete backup or move the whole activated portable package.

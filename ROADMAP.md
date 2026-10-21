@@ -1,10 +1,10 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.9**.
+Current published Windows build: **v1.18.13**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
-Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Remaining supporting UI, portable storage/deletion, release work and manual acceptance remain open.
+Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. Remaining supporting UI, release work and manual acceptance remain open.
 
-The accepted dashboard and connected topology remain the visual baseline. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
+The accepted dashboard and connected topology remain the visual baseline. Wallboard now omits the visible top toolbar at Joseph's request; keyboard and host context actions remain. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
 ## Source of truth
 
@@ -36,7 +36,7 @@ The accepted dashboard and connected topology remain the visual baseline. Featur
 - [ ] Complete dialog ownership, focus, keyboard and independent recovery acceptance across remaining supporting windows.
 - [x] Complete backup/restore including preferences and history, explicit replacement policy and journaled interruption recovery (v1.18.9; see DATA-RECOVERY.md).
 - [x] Open the current data folder from Settings (v1.18.9).
-- [ ] Complete portable folder-local storage and deliberate full data deletion.
+- [x] Implement explicit portable folder-local storage and confirmed active-storage deletion, including interruption retry (v1.18.13; physical/package-update acceptance remains pending).
 
 ## 4. Release and security hardening
 
@@ -111,3 +111,18 @@ Tests exercise round-trip labels/categories/snooze/preferences/history, original
 Windows run 39497671069 passed self-tests, published startup/UI, independent recovery, packaging and publication. Actual light/dark Data and storage captures were inspected. Installer, portable, full/delta packages and both update feeds were verified. v1.18.7's fixture escaping was corrected before the working v1.18.8 build; v1.18.8 published successfully, then v1.18.9 corrected the storage category mnemonic rendering and protected legacy-config fallback export.
 
 Actual installed/portable restart-and-restore acceptance, multi-instance usage, physical power loss and final workday/DPI/screen-reader trials remain open. The portable ZIP still uses AppData; folder-local storage and deliberate full deletion are separate tasks.
+
+
+## Portable storage, deletion and display-only Wallboard — 2026-10-21
+
+v1.18.13 adds explicit opt-in folder-local storage. Existing copies keep their per-user AppData location until enabled. The current saved setup is staged and committed to a new Data folder before a portable marker activates it; original AppData remains intact. Existing destination data is refused, not merged. For Velopack layouts, the Data folder and marker are in the package root, outside current/app-* directories replaced by updates. Setup-installed copies cannot enable the feature through Settings. Preferences, backup/restore, support diagnostics, brand assets and startup reports share the active storage layout.
+
+Delete saved data requires stopped monitoring, an exact typed DELETE confirmation with folder scope, and normal Settings draft protection. It closes the app without writing stale memory. Active data, rolling backups, restore journals/originals, startup reports and brand assets are removed; external backups, inactive storage copies and installation packages are retained. Linked files/folders are refused. A deletion intent outside the data directory survives partial failure and is completed before saved data or restore journals can load. An empty config prevents example hosts from returning. This is ordinary filesystem deletion, not secure erasure.
+
+The startup guard recreates only fresh current-attempt diagnostics after a deletion retry, retaining the independent recovery/updater path if startup then fails. PORTABLE-AND-DELETION.md documents scope, retained copies, migration failures and retry behavior.
+
+Joseph clarified that the visible Wallboard top toolbar must be removed. The canvas now occupies a single full-window content cell; keyboard shortcuts and host context actions remain. AGENTS.md records this direction, superseding the earlier wrapping-toolbar deviation.
+
+Windows run 39615057833 passed self-tests, published startup/UI, independent recovery including a new process-level deletion-retry crash case, packaging and publication. Tests cover explicit routing, package-root/current layout, preserved originals, rejected destination collisions and installed-mode activation, unsupported portable markers, interrupted/locked deletion retry, empty post-deletion inventory, retained external/installation/inactive data, exact confirmation and cancellation. Light/dark Settings and deletion-confirmation renders, plus the toolbar-free Wallboard, were inspected. Installer, portable, full/delta packages and both feeds were verified.
+
+The v1.18.10 UI gate withheld publication after finding the direct Form child did not settle to full-window bounds. v1.18.11 returned to a one-cell layout, passed/published and was inspected; v1.18.12 additionally protected recovery after a deletion retry. v1.18.13 corrects light-mode destructive text contrast and adds 4.5:1 text-pair tests for both themes and interactive surfaces. Human installed/portable migration, actual portable package updates, read-only drives, real concurrent copies, deletion/restart acceptance and the final desktop/workday trials remain pending.
