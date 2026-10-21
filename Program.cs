@@ -1648,11 +1648,12 @@ public sealed partial class MainForm : Form
                 {
                     form._wallboardForm.ClientSize = new Size(width, 900);
                     await Task.Delay(100);
+                    form._wallboardForm.PerformLayout();
                     if (width == 900) Capture(form._wallboardForm, "wallboard-narrow");
                     Check(form._wallboardForm.Controls.Find("WallboardToolbar", true).Length == 0,
                         "Wallboard top controls returned.");
                     Check(canvas.Top == 0 && canvas.Height == form._wallboardForm.ClientSize.Height,
-                        "Wallboard canvas does not fill the available window.");
+                        $"Wallboard canvas does not fill the available window: canvas={canvas.Bounds}, parent={canvas.Parent?.ClientRectangle}, window={form._wallboardForm.ClientRectangle}.");
                 }
                 form.OpenHostManager(form._wallboardForm);
                 await Task.Delay(100);

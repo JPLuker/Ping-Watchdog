@@ -223,13 +223,23 @@ internal sealed class WallboardForm : Form
 
     private void BuildShell()
     {
-        // Wallboard is a display surface. Actions remain on the keyboard and host context menus.
+        // One full-window content cell; no toolbar row or reserved toolbar height.
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1,
+            Margin = Padding.Empty, Padding = Padding.Empty, BackColor = WallboardStyle.Background
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var content = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = Padding.Empty };
         _canvas.Dock = DockStyle.Fill;
         _canvas.ShowCli = _showCli;
         BuildOperationsDrawer();
-        Controls.Add(_canvas);
-        Controls.Add(_drawer);
+        content.Controls.Add(_canvas);
+        content.Controls.Add(_drawer);
         _drawer.BringToFront();
+        root.Controls.Add(content, 0, 0);
+        Controls.Add(root);
     }
 
     private void BuildOperationsDrawer()
