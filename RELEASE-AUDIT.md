@@ -170,3 +170,5 @@ Implemented in v1.18.14 (A2/A3 code gaps; issue #5). Map site order matches the 
 
 Evidence: Windows validation run 39803989941 passed self-tests (dense 24/60-site topology without heading or host overlap, all hosts reachable, IPv6/long names, map/list order, truncation detection, History font floor) and UI regressions. Not established: inspection of rendered captures from this run (artifacts were unreachable from the session), physical scaling/large-text/screen-reader behavior, or Joseph's confirmation with his real site list.
 
+Publication: build run 39804394546 passed published startup/UI, independent recovery and packaging, and published v1.18.14 as latest with installer, portable ZIP, full package, RELEASES and releases.win.json (feed verified: 1.18.14 full package with SHA256). **No delta package was produced.** The previous-release download step is `continue-on-error` and evidently failed; the publish step accepts four assets, so the omission passed silently. Installed copies still update through the full package. Release hardening should fail or warn visibly when the delta or prior feed entries are missing.
+
