@@ -117,8 +117,9 @@ internal static class Program
         var form = Application.OpenForms.Count > 0
             ? Application.OpenForms[0] as MainForm
             : null;
-
-        form?.BeginInvoke(form.RestoreFromTray);
+        // Copy now: the arguments belong to the notification thread.
+        var arguments = new Dictionary<string, string>(args.Arguments);
+        form?.BeginInvoke((Action)(() => form.HandleNotificationActivation(arguments)));
     }
 }
 
@@ -161,6 +162,8 @@ internal sealed class WatchdogConfig
     public bool NotificationsEnabled { get; set; } = true;
     public bool WallboardShowCli { get; set; } = true;
     public bool ShowUpdateControlOnHome { get; set; }
+    // Empty uses the Windows alarm sound.
+    public string PriorityAlarmSound { get; set; } = "";
 }
 
 internal sealed class NicknameDialog : Form
@@ -413,7 +416,8 @@ internal sealed record AppSettingsSnapshot(
     string UpdateActionText,
     bool RestoreLastSiteOnStartup = false,
     bool StartMonitoringOnLaunch = false,
-    AppearanceMode Appearance = AppearanceMode.System);
+    AppearanceMode Appearance = AppearanceMode.System,
+    string PriorityAlarmSound = "");
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -470,7 +474,8 @@ internal sealed record WallboardHostSnapshot(
     HostState State,
     long? LatencyMs,
     DateTime? OutageStarted,
-    DateTimeOffset? SnoozedUntilUtc = null);
+    DateTimeOffset? SnoozedUntilUtc = null,
+    bool Priority = false);
 
 internal sealed record WallboardSiteSnapshot(
     string Name,
@@ -730,6 +735,7 @@ public sealed partial class MainForm : Form
     private bool _autoCheckUpdates = true;
     private bool _minimizeToTray = true;
     private bool _notificationsEnabled = true;
+    private string _priorityAlarmSound = "";
     private bool _wallboardShowCli = true;
     private bool _showUpdateControlOnHome;
 
@@ -779,6 +785,7 @@ public sealed partial class MainForm : Form
 
         BuildGrid();
         BuildLayout();
+        InitializePriorityAlarm();
         BuildGridContextMenu();
         _statusStrip.Items.Add(_statusLabel);
         // Build and ownership details live in About.
@@ -1239,6 +1246,28 @@ public sealed partial class MainForm : Form
             }
             Expect(named.SiteHeadingBounds.Count == 12, "Named sites lost headings.");
         }
+
+        // Priority alarm: rings at once, repeats every 15 s, latest change per host wins, stops only when all are acknowledged.
+        int rings = 0;
+        using (var alarm = new PriorityAlarm(_ => rings++))
+        {
+            Expect(PriorityAlarm.RepeatInterval == TimeSpan.FromSeconds(15), "Priority alarm does not repeat every 15 seconds.");
+            var down = alarm.Raise("Anderson", "10.233.48.1", "Watchguard", offline: true, DateTime.Now);
+            Expect(rings == 1 && alarm.Ringing && alarm.Active.Count == 1, "A priority alert did not ring immediately.");
+            alarm.Ring();
+            Expect(rings == 2, "Repeat ring did not play.");
+            var up = alarm.Raise("anderson", "10.233.48.1", "Watchguard", offline: false, DateTime.Now);
+            Expect(alarm.Active.Count == 1 && !alarm.Active[0].Offline && alarm.Active[0].Id == up.Id, "A newer change did not replace the host's alert.");
+            Expect(!alarm.Acknowledge(down.Id), "A replaced alert could still be acknowledged.");
+            alarm.Raise("DHQ", "10.0.0.1", "Core switch", offline: true, DateTime.Now);
+            Expect(alarm.Acknowledge(up.Id) && alarm.Ringing && alarm.Active.Count == 1, "Acknowledging one alert stopped the others.");
+            alarm.AcknowledgeAll();
+            int before = rings;
+            alarm.Ring();
+            Expect(!alarm.Ringing && alarm.Active.Count == 0 && rings == before, "The alarm kept ringing after everything was acknowledged.");
+        }
+        var priorityOptions = new HostOptions { Priority = true };
+        Expect(JsonSerializer.Deserialize<HostOptions>(JsonSerializer.Serialize(priorityOptions))!.Priority && priorityOptions.Copy().Priority, "Priority flag is not saved.");
 
         // Paste: hidden characters, line breaks and HTML-only copies still become clean names; a busy clipboard is reported.
         Expect(ClipboardText.NormalizeLine("  Anderson\u00A0Corps\u200B\r\n") == "Anderson Corps", "Pasted name kept hidden characters.");
@@ -1748,6 +1777,26 @@ public sealed partial class MainForm : Form
                     Check(sorted._headerActionsPanel?.Controls.Count == 4, "Sidebar actions were not reduced to four.");
                     Check(sorted._addSiteButton.Text == "+" && sorted._addSiteButton.AccessibleName == "Add site", "Sites header lost its add action.");
                     Check(!sorted._siteHeaderLabel.UseMnemonic, "Site heading would hide & in names.");
+
+                    // Priority host: marked from the menu path, shown on map and list, alarms on offline and recovery, acknowledged from the notification.
+                    var mike = sorted.HostSnapshot().First(h => h.Site == "Mike");
+                    sorted.SetHostPriority(mike.Options.Id, true);
+                    Check(sorted.HostSnapshot().First(h => h.Site == "Mike").Options.Priority, "Mark as priority did not save.");
+                    Check(sorted.BuildWallboardSnapshot().Sites.SelectMany(x => x.Hosts).Single(h => h.Site == "Mike").Priority, "Map does not know the host is priority.");
+                    var watched = new HostMonitor("Mike", mike.Address) { Options = sorted.HostSnapshot().First(h => h.Site == "Mike").Options.Copy() };
+                    for (int i = 0; i < 3; i++) sorted.ProcessResult(watched, false, null);
+                    Check(sorted.ActivePriorityAlerts.Count == 1 && sorted.ActivePriorityAlerts[0].Offline, "Priority host going offline did not alarm.");
+                    Check(sorted._priorityBanner!.MessageText.Contains("went offline"), $"Banner reads '{sorted._priorityBanner.MessageText}'.");
+                    for (int i = 0; i < 2; i++) sorted.ProcessResult(watched, true, 1);
+                    Check(sorted.ActivePriorityAlerts.Count == 1 && !sorted.ActivePriorityAlerts[0].Offline, "Priority host recovering did not alarm.");
+                    sorted.HandleNotificationActivation(new Dictionary<string, string> { ["action"] = "acknowledge", ["alert"] = sorted.ActivePriorityAlerts[0].Id });
+                    Check(sorted.ActivePriorityAlerts.Count == 0, "Acknowledge from the notification did not stop the alarm.");
+                    var ordinary = new HostMonitor("Zulu", "192.0.2.10");
+                    for (int i = 0; i < 3; i++) sorted.ProcessResult(ordinary, false, null);
+                    Check(sorted.ActivePriorityAlerts.Count == 0, "An ordinary host started the priority alarm.");
+                    for (int i = 0; i < 3; i++) sorted.ProcessResult(watched, false, null);
+                    sorted.SetHostPriority(mike.Options.Id, false);
+                    Check(sorted.ActivePriorityAlerts.Count == 0, "Removing priority left the host ringing.");
 
                     // Quick Add opens on the site in view, accepts typed and pasted names, and creates new sites.
                     var siteNames = sorted._sites.Select(x => x.Name).ToList();
@@ -3024,7 +3073,8 @@ public sealed partial class MainForm : Form
             MinimizeToTray = _minimizeToTray,
             NotificationsEnabled = _notificationsEnabled,
             WallboardShowCli = _wallboardShowCli,
-            ShowUpdateControlOnHome = _showUpdateControlOnHome
+            ShowUpdateControlOnHome = _showUpdateControlOnHome,
+            PriorityAlarmSound = _priorityAlarmSound
         };
     }
 
@@ -3161,6 +3211,8 @@ public sealed partial class MainForm : Form
         _autoCheckUpdates = config.AutoCheckUpdates;
         _minimizeToTray = config.MinimizeToTray;
         _notificationsEnabled = config.NotificationsEnabled;
+        _priorityAlarmSound = config.PriorityAlarmSound ?? "";
+        if (_priorityAlarm is not null) _priorityAlarm.SoundPath = _priorityAlarmSound;
         _wallboardShowCli = config.WallboardShowCli;
         _showUpdateControlOnHome = config.ShowUpdateControlOnHome;
         // UI/developer preferences are machine-user preferences, not scan-definition settings.
@@ -3676,7 +3728,14 @@ public sealed partial class MainForm : Form
                 eventKind,
                 eventMessage);
 
-        if (!_suppressNotifications &&
+        // Priority hosts ring until acknowledged and replace the ordinary notification.
+        bool priorityAlert = notificationTitle is not null && host.Options.Priority &&
+            !host.Options.IsSnoozed(DateTimeOffset.UtcNow) && !IsDisposed && !Disposing;
+        if (priorityAlert)
+            RaisePriorityAlert(host, eventKind == "DOWN");
+
+        if (!priorityAlert &&
+            !_suppressNotifications &&
             _notificationsEnabled &&
             !host.Options.IsSnoozed(DateTimeOffset.UtcNow) &&
             notificationTitle is not null &&
@@ -3898,7 +3957,8 @@ public sealed partial class MainForm : Form
                         host.State,
                         host.LastRoundTripMs,
                         host.OutageStarted,
-                        host.Options.SnoozedUntilUtc);
+                        host.Options.SnoozedUntilUtc,
+                        host.Options.Priority);
                 }
             }
         }
@@ -3927,7 +3987,8 @@ public sealed partial class MainForm : Form
                         HostState.Unknown,
                         null,
                         null,
-                        GetHostOptions(site, address).SnoozedUntilUtc);
+                        GetHostOptions(site, address).SnoozedUntilUtc,
+                        GetHostOptions(site, address).Priority);
                 }).ToList();
 
                 return new WallboardSiteSnapshot(
@@ -4268,6 +4329,7 @@ public sealed partial class MainForm : Form
             ToggleSuspectHistory,
             _wallboardShowCli,
             ShowHostQuickActions);
+        _wallboardForm.AttachPriorityBanner(new PriorityBanner(_priorityAlarm));
 
         _wallboardForm.FormClosed += (_, _) =>
         {
@@ -4303,7 +4365,8 @@ public sealed partial class MainForm : Form
             GetUpdateActionText(),
             _restoreLastSiteOnStartup,
             _startMonitoringOnLaunch,
-            AuroraTheme.Mode);
+            AuroraTheme.Mode,
+            _priorityAlarmSound);
     }
 
     private string GetUpdateActionText()
@@ -4335,6 +4398,8 @@ public sealed partial class MainForm : Form
         _autoCheckUpdates = settings.AutoCheckUpdates;
         _minimizeToTray = settings.MinimizeToTray;
         _notificationsEnabled = settings.NotificationsEnabled;
+        _priorityAlarmSound = settings.PriorityAlarmSound ?? "";
+        _priorityAlarm.SoundPath = _priorityAlarmSound;
         _wallboardShowCli = settings.WallboardShowCli;
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
@@ -4776,8 +4841,9 @@ public sealed partial class MainForm : Form
                 {
                     configuredHosts.TryGetValue(BuildHostKey(h.Site, h.Address), out var saved);
                     string health = _cts is null ? "Idle" : h.State.ToString();
-                    string statusText = saved?.Options.Enabled == false ? "Disabled" :
-                        saved?.Options.IsSnoozed(DateTimeOffset.UtcNow) == true ? "Snoozed" : health;
+                    string statusText = (saved?.Options.Enabled == false ? "Disabled" :
+                        saved?.Options.IsSnoozed(DateTimeOffset.UtcNow) == true ? "Snoozed" : health) +
+                        (saved?.Options.Priority == true ? " · Priority" : "");
                     return new
                     {
                         Site = h.Site,

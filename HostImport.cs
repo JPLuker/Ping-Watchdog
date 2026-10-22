@@ -14,6 +14,8 @@ internal sealed class HostOptions
     public int IntervalSeconds { get; set; }
     public int TimeoutMs { get; set; }
     public int FailureThreshold { get; set; }
+    // Priority hosts ring until acknowledged when they go offline or come back online.
+    public bool Priority { get; set; }
     public HostOptions Copy() => (HostOptions)MemberwiseClone();
 }
 

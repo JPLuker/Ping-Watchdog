@@ -22,7 +22,7 @@ internal sealed partial class WallboardCanvas
         ? "Snoozed until " + DisplayTime.Clock(host.SnoozedUntilUtc!.Value.LocalDateTime) : host.State.ToString();
 
     private static string HostDescription(HostTarget item) =>
-        (item.Outage ? "Active outage. " : "") + item.Host.Site + ". " +
+        (item.Outage ? "Active outage. " : "") + (item.Host.Priority ? "Priority. " : "") + item.Host.Site + ". " +
         (string.IsNullOrWhiteSpace(item.Host.Label) ? "" : item.Host.Label + ". ") +
         item.Host.Address + ". " + HostStatus(item.Host);
 
@@ -156,6 +156,13 @@ internal sealed partial class WallboardCanvas
     private static void DrawHostMarker(Graphics g, PointF point, float radius, WallboardHostSnapshot host)
     {
         var state = host.State;
+        if (host.Priority)
+        {
+            // Priority: an accent ring around the state marker (shape, not just colour).
+            using var ring = new Pen(WallboardStyle.Accent, Math.Max(1.5f, radius / 2.5f));
+            float r = radius * 1.9f + 1;
+            g.DrawEllipse(ring, point.X - r, point.Y - r, r * 2, r * 2);
+        }
         using var fill = new SolidBrush(IsHostSnoozed(host) ? WallboardStyle.Muted : StateColor(state, 255));
         using var pen = new Pen(fill.Color, 2);
         if (IsHostSnoozed(host))

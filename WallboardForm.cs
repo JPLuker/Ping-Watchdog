@@ -242,6 +242,14 @@ internal sealed class WallboardForm : Form
         Controls.Add(root);
     }
 
+    // A priority alarm is the one thing allowed above the display-only canvas, and only while it rings.
+    internal void AttachPriorityBanner(PriorityBanner banner)
+    {
+        var fill = Controls.OfType<TableLayoutPanel>().FirstOrDefault();
+        Controls.Add(banner);
+        fill?.BringToFront();
+    }
+
     private void BuildOperationsDrawer()
     {
         var stack = new FlowLayoutPanel
