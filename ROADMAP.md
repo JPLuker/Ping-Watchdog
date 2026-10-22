@@ -1,7 +1,7 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.19**.
-Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
+Current published Windows build: **v1.19.0**.
+Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Wallboard now omits the visible top toolbar at Joseph's request; keyboard and host context actions remain. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
@@ -153,4 +153,12 @@ v1.18.18 softens the All sites outline to the quietest per-theme color that keep
 ## Paste, Quick Add and the Hosts overhaul — 2026-10-22
 
 Joseph chose to do the Hosts overhaul (#7) before release hardening, with Hosts as a page in the main window and edits saving instantly with Undo. v1.18.19 is the first part: names paste reliably (busy-clipboard retry, HTML/RTF-only copies, hidden characters removed, busy state reported; #6), Quick Add opens on the site in view and creates a typed new site, and the Sites header uses a + button. Validation 39819409144 and build 39819815923 passed; installer, portable, full + delta and feed published. The Hosts page itself follows in a later build.
+
+v1.18.20 fixes "&" in site and host names (it rendered as an underline; mnemonic processing is now off for names).
+
+## Priority hosts — 2026-10-22
+
+Joseph added one feature by explicit request: priority hosts that keep alerting until acknowledged. v1.19.0: Mark as priority from the host menu (accent ring on the map, "Priority" in list status, announced to screen readers). Offline and recovery on a priority host start an alarm (Windows alarm or a chosen .wav) that rings immediately and every 15 seconds; snoozed hosts do not ring. A banner in the main window and Wallboard offers Acknowledge and Acknowledge all, and the Windows notification (alarm scenario) has its own Acknowledge button. The sound is set in Settings > Notifications > Priority alarm. Validation 39828890857 passed self-tests and UI regressions, including end-to-end offline/recovery alarms and notification acknowledgement; build 39831813534 published installer, portable, full + delta and feed. Not yet established: the real Windows notification button, sound playback, and behaviour while minimized to the tray, which need Joseph's check. The final maintenance target moves to v1.20.0.
+
+Next: List view becomes the place to edit hosts (multi-select actions, instant save with Undo), replacing the separate Hosts window (#7).
 
