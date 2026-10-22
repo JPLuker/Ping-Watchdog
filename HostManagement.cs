@@ -38,7 +38,6 @@ public sealed partial class MainForm
         _rightLayout.RowStyles[1].Height = Math.Clamp(_inventoryHeight * scale, minimum, Math.Max(minimum, remaining));
     }
     private DataGridView? _hostInventory;
-    private HostManagerForm? _hostManager;
     private readonly ContextMenuStrip _hostQuickMenu = new();
     private static HostOptions GetHostOptions(SiteDefinition? site, string address)
     {
@@ -65,7 +64,7 @@ public sealed partial class MainForm
     private FlowLayoutPanel BuildHostActions()
     {
         var actions = HostUi.Bar(); actions.WrapContents = false; actions.Tag = "window";
-        actions.Controls.Add(HostUi.Button("Hosts", OpenHostManager));
+        actions.Controls.Add(HostUi.Button("Hosts", ShowHostList));
         actions.Controls.Add(HostUi.Button("Quick Add", () => OpenQuickAdd(false)));
         actions.Controls.Add(HostUi.Button("Quick Monitor", () => OpenQuickAdd(true)));
         return actions;
@@ -81,7 +80,7 @@ public sealed partial class MainForm
             ShowHostQuickActions(_hostInventory, _hostInventory.PointToClient(Cursor.Position),
                 row.Cells["Site"].Value?.ToString() ?? "", row.Cells["Address"].Value?.ToString() ?? "");
         };
-        _hostInventory.CellDoubleClick += (_, _) => OpenHostManager();
+        _hostInventory.CellDoubleClick += (_, _) => ShowHostList();
         return _hostInventory;
     }
     private void ShowHostQuickActions(Control surface, Point location, string site, string address)
@@ -135,20 +134,25 @@ public sealed partial class MainForm
         Add("Snooze host for 1 hour", () => SetHostSnooze(host.Options.Id, DateTimeOffset.UtcNow.AddHours(1)));
         if (host.Options.IsSnoozed(DateTimeOffset.UtcNow))
             Add("Resume monitoring now", () => SetHostSnooze(host.Options.Id, null));
-        Add(host.Options.Priority ? "Remove priority" : "Mark as priority", () => SetHostPriority(host.Options.Id, !host.Options.Priority));
+        string shown = string.IsNullOrWhiteSpace(host.Label) ? address : host.Label;
+        Add(host.Options.Priority ? "Remove priority" : "Mark as priority", () => ApplyHostEdit(() =>
+        {
+            SetHostPriority(host.Options.Id, !host.Options.Priority);
+            return host.Options.Priority ? $"Removed priority from {shown}" : $"Marked {shown} as priority";
+        }));
         Add(host.Options.Enabled ? "Disable monitoring" : "Enable monitoring", () =>
         {
             var current = HostSnapshot().FirstOrDefault(h => h.Options.Id == host.Options.Id);
             if (current == null) return;
             var options = current.Options.Copy(); options.Enabled = !options.Enabled;
-            SaveManagedHosts(new() { current with { Options = options } });
+            ApplyHostEdit(() => { SaveManagedHosts(new() { current with { Options = options } }); return (options.Enabled ? "Enabled " : "Disabled ") + shown; });
         });
         menu.Items.Add(new ToolStripSeparator());
         Add("Remove host…", () =>
         {
             if (MessageBox.Show(surface.FindForm(), $"Remove {address} from {site}?", "Remove host",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                DeleteManagedHosts(new() { host });
+                ApplyHostEdit(() => { DeleteManagedHosts(new() { host }); return $"Removed {shown}"; });
         });
         AuroraTheme.ApplyMenu(menu);
         menu.Show(surface, location);
@@ -172,21 +176,13 @@ public sealed partial class MainForm
         foreach (var h in HostSnapshot().Where(h => _selectedSiteName == null || h.Site == _selectedSiteName))
             _hostInventory.Rows.Add(h.Label, h.Address, h.Site, h.Group, h.Options.IsSnoozed(DateTimeOffset.UtcNow) ? "Snoozed" : h.Options.Enabled ? "Enabled" : "Disabled");
     }
-    private void OpenHostManager() => OpenHostManager(null);
-    private void OpenHostManager(Form? owner)
-    {
-        if (_hostManager is { IsDisposed: false }) { _hostManager.RefreshNow(); _hostManager.Activate(); return; }
-        _hostManager = new HostManagerForm(HostSnapshot, SaveManagedHosts, DeleteManagedHosts, (temporary, site) => OpenQuickAdd(temporary, site ?? _selectedSiteName), SaveTemporaryHosts, () => _sites.Select(s => s.Name).ToList());
-        _hostManager.FormClosed += (_, _) => _hostManager = null;
-        _hostManager.Show(owner ?? this);
-    }
     private void OpenQuickAdd(bool temporary) => OpenQuickAdd(temporary, _selectedSiteName);
     // site: the site in view where Quick Add was opened (main sidebar or Hosts filter); null for All sites.
     private void OpenQuickAdd(bool temporary, string? site)
     {
         using var form = new QuickAddForm(_sites.Where(s => !s.Temporary).Select(s => s.Name), site,
             HostSnapshot, ImportManagedHosts, temporary, name => SiteNameError(name, _sites, null));
-        form.ShowDialog(_hostManager is { IsDisposed: false } ? _hostManager : this);
+        form.ShowDialog(this);
     }
     private void ImportManagedHosts(List<ManagedHost> hosts, bool temporary)
     {
@@ -269,7 +265,7 @@ public sealed partial class MainForm
         var temporary = hosts.Where(h => FindSite(h.Site)?.Temporary == true).ToList();
         if (temporary.Count == 0) return;
         using var picker = new SiteNameDialog("Save temporary hosts as a new site", "Save Hosts");
-        if (picker.ShowDialog(_hostManager) != DialogResult.OK) return;
+        if (picker.ShowDialog(this) != DialogResult.OK) return;
         if (!ValidateNewSiteName(picker.SiteName, null)) return;
         var site = new SiteDefinition { Name = picker.SiteName }; _sites.Add(site);
         foreach (var host in temporary)
