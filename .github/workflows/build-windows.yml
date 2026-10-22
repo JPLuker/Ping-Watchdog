@@ -89,7 +89,8 @@ jobs:
         run: |
           Add-Type -AssemblyName System.Drawing
           $files = @(Get-ChildItem "ui-smoke-test/appearance-*.png" | Sort-Object Name)
-          if ($files.Count -ne 6) { throw "Expected six appearance screenshots." }
+          # Main window and Settings in light and dark; the Hosts window was retired in v1.19.1.
+          if ($files.Count -ne 4) { throw "Expected four appearance screenshots (main and Settings, light and dark)." }
           $sheet = [System.Drawing.Bitmap]::new(1200, 1200)
           $graphics = [System.Drawing.Graphics]::FromImage($sheet)
           $graphics.Clear([System.Drawing.Color]::White)
