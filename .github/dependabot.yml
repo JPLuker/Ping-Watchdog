@@ -1,0 +1,14 @@
+# Proposes updates as pull requests; each one still has to pass Windows validation and be merged by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
