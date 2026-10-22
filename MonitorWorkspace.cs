@@ -14,6 +14,7 @@ public sealed partial class MainForm
     private readonly Button _mapTab = new AuroraButton { Text = "Map", AutoSize = true };
     private readonly Button _listTab = new AuroraButton { Text = "List", AutoSize = true };
     private AuroraWell? _siteWell;
+    private readonly ToolTip _addSiteTip = new();
     private Panel? _sectionDivider;
     private readonly Button _outageHistoryButton = new AuroraButton { Text = "Outage history", AutoSize = true };
 
@@ -40,11 +41,17 @@ public sealed partial class MainForm
         navigation.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var siteHeading = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, Tag = "nav" };
-        siteHeading.Controls.Add(new Label { Text = "Sites", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(8, 12, 8, 0) });
-        _addSiteButton.Text = "Add site";
+        // "Sites" heading with a compact add action at the far edge, not a second label beside it.
+        var siteHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Tag = "nav" };
+        siteHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        siteHeading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        siteHeading.Controls.Add(new Label { Text = "Sites", AutoSize = true, Font = AuroraTheme.LabelFont, Tag = "primaryText", Anchor = AnchorStyles.Left, Padding = new Padding(8, 0, 8, 0) }, 0, 0);
+        _addSiteButton.Text = "+";
+        _addSiteButton.AccessibleName = "Add site";
+        _addSiteButton.Anchor = AnchorStyles.Right;
+        _addSiteTip.SetToolTip(_addSiteButton, "Add site");
         if (_addSiteButton is AuroraButton add) add.Ghost = true;
-        siteHeading.Controls.Add(_addSiteButton);
+        siteHeading.Controls.Add(_addSiteButton, 1, 0);
         navigation.Controls.Add(siteHeading, 0, 0);
         _allSitesButton.Dock = DockStyle.Fill;
         _allSitesButton.Margin = new Padding(0, 0, 0, 8);
