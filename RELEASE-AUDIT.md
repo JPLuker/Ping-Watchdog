@@ -172,3 +172,8 @@ Evidence: Windows validation run 39803989941 passed self-tests (dense 24/60-site
 
 Publication: build run 39804394546 passed published startup/UI, independent recovery and packaging, and published v1.18.14 as latest with installer, portable ZIP, full package, RELEASES and releases.win.json (feed verified: 1.18.14 full package with SHA256). **No delta package was produced.** The previous-release download step is `continue-on-error` and evidently failed; the publish step accepts four assets, so the omission passed silently. Installed copies still update through the full package. Release hardening should fail or warn visibly when the delta or prior feed entries are missing.
 
+
+## Pinned All sites and sidebar separation — 2026-10-22
+
+v1.18.15: pinned All sites scope, inset site-list well, divider, four sidebar actions, front-trimmed map addresses. Evidence: Windows validation run 39808709209 (self-tests and UI regressions). Not established: rendered capture inspection, Joseph's visual confirmation, physical DPI/large text/screen reader.
+

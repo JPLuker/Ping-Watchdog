@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.14**.
+Current published Windows build: **v1.18.15**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -135,4 +135,11 @@ v1.18.14 answers issue #5. Map sites now follow the site list order (folder, the
 The site list shows the full name on hover when a row is truncated. History event-type and header text was 8.5pt (about 11px, under the 12px absolute minimum) and is now 9.75pt (13 logical px).
 
 Regression checks cover 24 sites at 1600×1000 and 900×650 (all names drawn) and 60 sites at 900×650, with IPv6 and long names: no heading or host overlap, every host present. They also cover map/list order, truncation detection and the History font floor. Windows validation run 39803989941 passed self-tests and UI regressions. The first run (39803642344) failed to compile a test helper call and was corrected. Rendered captures from this run were not inspected: the session could not download artifacts. Joseph's visual check with his real site list, physical DPI and large-text acceptance remain open.
+
+
+## Pinned All sites and sidebar separation — 2026-10-22
+
+Joseph's screenshots showed the real #5 problem: the site list and the sidebar actions blended into one column. v1.18.15 pins All sites above the list as its own button with the enabled host count, places the list in a rounded inset well with an accent bar on the selected site, and adds a divider before the actions. Wallboard moved beside Start monitoring and Manage sites into More (right-click on the list still offers the same actions), leaving Outage history, Settings, Check for updates and More. Map addresses now trim from the front so the distinguishing end stays visible. The Sites/Add site header is deliberately left for the Hosts overhaul (#7).
+
+Windows validation run 39808709209 passed self-tests and UI regressions, including pinned-scope selection both ways, the host count, four sidebar actions, non-overlapping sidebar sections and IPv4/IPv6 address trimming. Rendered captures were not inspected from the session; Joseph's visual check remains the acceptance step.
 
