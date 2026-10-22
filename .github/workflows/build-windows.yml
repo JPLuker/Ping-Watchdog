@@ -159,10 +159,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - The List is now where you edit hosts. Filter chips: All, Priority, Offline, Disabled, Snoozed.
-          - Select several hosts (Ctrl/Shift-click) for one action bar: Mark or Remove priority, Enable/Disable, Move to site, Set group, Monitoring, Remove.
-          - Changes save at once; Undo appears for a few seconds (Ctrl+Z also works). Double-click or F2 renames, Delete removes.
-          - The separate Hosts window is retired; More > Hosts (Ctrl+Shift+H) opens the List.
+          - Filter chips stay visible above the list; the selection action bar now appears as a second row instead of replacing them.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

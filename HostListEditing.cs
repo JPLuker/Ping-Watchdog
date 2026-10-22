@@ -31,7 +31,8 @@ public sealed partial class MainForm
     private void BuildHostListEditing()
     {
         _listHeader = new Panel { Dock = DockStyle.Top, Tag = "window", Margin = Padding.Empty };
-        _filterBar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 4) };
+        // Filters stay on top at all times; the action bar is a second row only while hosts are selected.
+        _filterBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 4) };
         foreach (var filter in Enum.GetValues<HostFilter>())
         {
             var chip = new AuroraButton { Text = FilterName(filter), AutoSize = true, Ghost = true, Outline = true, AccessibleName = FilterName(filter) + " hosts" };
@@ -39,7 +40,7 @@ public sealed partial class MainForm
             _filterChips[filter] = chip;
             _filterBar.Controls.Add(chip);
         }
-        _selectionBar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Visible = false, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 4) };
+        _selectionBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Visible = false, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 4) };
         _priorityAction.Click += (_, _) => TogglePriorityForSelection();
         _enableAction.Click += (_, _) => ToggleEnabledForSelection();
         _keepAction.Click += (_, _) => KeepSelectionInSite();
@@ -54,6 +55,7 @@ public sealed partial class MainForm
         var clear = new AuroraButton { Text = "Clear selection", AutoSize = true, Ghost = true };
         clear.Click += (_, _) => _grid.ClearSelection();
         _selectionBar.Controls.AddRange(new Control[] { _selectionCount, _priorityAction, _enableAction, move, group, policy, _keepAction, remove, clear });
+        // Dock Top stacks the last-added control highest: filters first, the action bar beneath.
         _listHeader.Controls.Add(_selectionBar);
         _listHeader.Controls.Add(_filterBar);
         _listHeader.Resize += (_, _) => SizeHostListBars();
@@ -88,10 +90,11 @@ public sealed partial class MainForm
     private void SizeHostListBars()
     {
         if (_listHeader is null || _filterBar is null || _selectionBar is null || _undoBar is null) return;
-        var bar = _selectionMode ? _selectionBar : _filterBar;
         int width = Math.Max(1, _listHeader.ClientSize.Width);
-        int height = bar.GetPreferredSize(new Size(width, 0)).Height;
-        _listHeader.Height = Math.Max((int)(48 * DeviceDpi / 96f), height);
+        int row = (int)(48 * DeviceDpi / 96f);
+        _filterBar.Height = Math.Max(row, _filterBar.GetPreferredSize(new Size(width, 0)).Height);
+        _selectionBar.Height = Math.Max(row, _selectionBar.GetPreferredSize(new Size(width, 0)).Height);
+        _listHeader.Height = _filterBar.Height + (_selectionMode ? _selectionBar.Height : 0);
         _undoBar.Height = (int)(48 * DeviceDpi / 96f);
         _undoBar.Padding = new Padding((int)(16 * DeviceDpi / 96f), 4, 8, 4);
     }
@@ -156,7 +159,6 @@ public sealed partial class MainForm
         {
             _selectionMode = any;
             _selectionBar.Visible = any;
-            _filterBar.Visible = !any;
         }
         SizeHostListBars();
     }
@@ -370,6 +372,11 @@ public sealed partial class MainForm
     internal int VisibleHostRows => _grid.Rows.Count;
     internal string PriorityActionText => _priorityAction.Text;
     internal bool SelectionBarShowing => _selectionMode;
+    // On a shown window: chips visible above the action bar, and the header tall enough for both.
+    internal bool FiltersShownWithSelection =>
+        _listHeader is { } header && _filterBar is { } filters && _selectionBar is { } actions &&
+        filters.Visible && actions.Visible && filters.Height > 0 &&
+        actions.Top >= filters.Bottom && header.Height >= filters.Height + actions.Height;
     internal string FilterChipText(HostFilter filter) => _filterChips[filter].Text;
     internal string UndoMessageText => _undoSites is null ? "" : _undoMessage.Text;
     internal void TogglePriorityForTest() => TogglePriorityForSelection();
