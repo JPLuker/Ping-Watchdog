@@ -139,7 +139,7 @@ internal static class AuroraTheme
             control.Font = control.Font.FontFamily.Name.Equals("Consolas", StringComparison.OrdinalIgnoreCase) ? MonoFont : CaptionFont;
         string role = control.Tag as string ?? "";
         control.ForeColor = p.Text;
-        control.BackColor = role is "divider" ? p.Surface3 : role is "well" ? p.Surface2 : role is "card" or "nav" or "header" ? p.Surface : p.Canvas;
+        control.BackColor = role is "divider" ? p.Surface3 : role is "well" ? AuroraWell.WellColor : role is "card" or "nav" or "header" ? p.Surface : p.Canvas;
         switch (control)
         {
             case PictureBox picture:
@@ -189,7 +189,7 @@ internal static class AuroraTheme
                 number.BackColor = p.Surface; number.ForeColor = p.Text;
                 break;
             case ListBox list:
-                list.BackColor = role is "well" ? p.Surface2 : p.Surface; list.ForeColor = p.Text;
+                list.BackColor = role is "well" ? AuroraWell.WellColor : p.Surface; list.ForeColor = p.Text;
                 break;
             case TreeView tree:
                 tree.BackColor = p.Surface; tree.ForeColor = p.Text;
@@ -260,8 +260,10 @@ internal sealed class AuroraMenuColors : ProfessionalColorTable
 }
 
 // Rounded inset that gives a scrolling region a visible edge against its surroundings.
+// The well, its list background and unselected rows all read this one token so they cannot drift apart.
 internal sealed class AuroraWell : Panel
 {
+    internal static Color WellColor => AuroraTheme.Palette.Surface2;
     public AuroraWell() { SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true); }
     protected override void OnPaintBackground(PaintEventArgs e)
     {
@@ -269,8 +271,26 @@ internal sealed class AuroraWell : Panel
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         if (ClientRectangle.Width <= 1 || ClientRectangle.Height <= 1) return;
         using var path = WallboardStyle.Rounded(new Rectangle(0, 0, ClientSize.Width - 1, ClientSize.Height - 1), AuroraTheme.RadiusMedium);
-        using var fill = new SolidBrush(BackColor);
+        using var fill = new SolidBrush(WellColor);
         e.Graphics.FillPath(fill, path);
+    }
+}
+
+// Windows can erase a themed list's empty space with its own color; paint it from BackColor instead.
+internal sealed class AuroraListBox : ListBox
+{
+    private const int WmEraseBackground = 0x0014;
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WmEraseBackground && m.WParam != IntPtr.Zero)
+        {
+            using (var g = Graphics.FromHdc(m.WParam))
+            using (var fill = new SolidBrush(BackColor))
+                g.FillRectangle(fill, ClientRectangle);
+            m.Result = (IntPtr)1;
+            return;
+        }
+        base.WndProc(ref m);
     }
 }
 
