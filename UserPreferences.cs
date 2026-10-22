@@ -9,6 +9,8 @@ internal sealed class UserPreferences
     public bool RestoreLastSiteOnStartup { get; set; }
     public bool StartMonitoringOnLaunch { get; set; }
     public AppearanceMode Appearance { get; set; } = AppearanceMode.System;
+    // Keeps automatic update checks to once a day across restarts.
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
 }
 
 internal static class UserPreferenceStore
@@ -92,7 +94,28 @@ public sealed partial class MainForm
         _showUpdateControlOnHome = preferences.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = preferences.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = preferences.StartMonitoringOnLaunch;
+        _lastUpdateCheckUtc = preferences.LastUpdateCheckUtc;
         AuroraTheme.SetMode(preferences.Appearance);
+    }
+
+    private DateTimeOffset? _lastUpdateCheckUtc;
+
+    // Only the timestamp changes; every other saved preference is read back and kept.
+    private void RecordUpdateCheck(DateTimeOffset when)
+    {
+        _lastUpdateCheckUtc = when;
+        if (!_persistSites) return;
+        try
+        {
+            var preferences = File.Exists(UserPreferencesPath) ? UserPreferenceStore.Read(UserPreferencesPath) : new UserPreferences
+            {
+                ShowUpdateControlOnHome = _showUpdateControlOnHome, RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
+                StartMonitoringOnLaunch = _startMonitoringOnLaunch, Appearance = AuroraTheme.Mode
+            };
+            preferences.LastUpdateCheckUtc = when;
+            UserPreferenceStore.Save(UserPreferencesPath, preferences);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException) { }
     }
 
 }

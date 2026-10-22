@@ -57,7 +57,8 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _hideSuspects = new() { Text = "Hide SUSPECT events by default", AutoSize = true };
     private readonly Button _openHistoryButton = new AuroraButton() { Text = "Open history", AutoSize = true };
 
-    private readonly CheckBox _autoUpdates = new() { Text = "Check automatically on startup and every 6 hours", AutoSize = true };
+    private readonly CheckBox _autoUpdates = new() { Text = "Check for updates automatically (once a day)", AutoSize = true };
+    private readonly Label _updatesManaged = new() { Text = UpdatePolicy.ManagedText, AutoSize = true, Tag = "primaryText", Visible = false, Margin = new Padding(0, 12, 0, 10) };
     private readonly CheckBox _showHomeUpdateControl = new() { Text = "Developer: show update control in the main UI", AutoSize = true };
     private readonly Label _versionValue = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 10) };
     private readonly Label _updateStatus = new() { AutoSize = false, Height = 48, Width = 560 };
@@ -379,6 +380,7 @@ internal sealed class SettingsForm : Form
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(LabeledValue("Update status", _updateStatus));
         _autoUpdates.Margin = new Padding(0, 12, 0, 10);
+        stack.Controls.Add(_updatesManaged);
         stack.Controls.Add(_autoUpdates);
 
         _showHomeUpdateControl.Margin = new Padding(0, 4, 0, 14);
@@ -692,6 +694,9 @@ internal sealed class SettingsForm : Form
             _restoreLastSite.Checked = s.RestoreLastSiteOnStartup;
             _autoStart.Checked = s.StartMonitoringOnLaunch;
             _autoUpdates.Checked = s.AutoCheckUpdates;
+            // Managed by policy: the controls give way to one line saying so.
+            _updatesManaged.Visible = s.UpdatesManaged;
+            _autoUpdates.Visible = _updateButton.Visible = !s.UpdatesManaged;
             _showHomeUpdateControl.Checked = s.ShowUpdateControlOnHome;
             _historyRange.SelectedIndex = HistoryHoursToIndex(s.EventHistoryHours);
             _hideSuspects.Checked = s.HideSuspectEvents;

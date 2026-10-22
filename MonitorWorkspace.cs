@@ -190,7 +190,8 @@ public sealed partial class MainForm
         if (_rootLayout is null || _rightLayout is null || _settingsFlowPanel is null || IsDisposed) return;
         float scale = DeviceDpi / 96f;
         _rootLayout.RowStyles[0].Height = 0;
-        _checkUpdateButton.Visible = true;
+        // Hidden when IT has turned updates off; there is nothing for it to do.
+        _checkUpdateButton.Visible = !UpdatesManaged;
         _checkUpdateButton.Text = "Check for updates";
         _workspaceSplit.Panel1MinSize = (int)(224 * scale);
         try { _workspaceSplit.SplitterDistance = (int)((ClientSize.Width / scale < 1080 ? 224 : 240) * scale); }

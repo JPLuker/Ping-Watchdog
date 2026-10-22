@@ -177,7 +177,8 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Release process: each release now includes SHA256SUMS.txt, pinned build actions and a vulnerable-package check. No app changes.
+          - Automatic update checks run at most once a day, including across restarts. Check for updates still works any time.
+          - IT can turn updates off with HKLM\Software\Policies\PingWatchdog DisableUpdates = 1 or PINGWATCHDOG_DISABLE_UPDATES=1; Settings then says updates are managed by your organization.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
