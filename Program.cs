@@ -517,7 +517,7 @@ public sealed partial class MainForm : Form
     private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _hostTokens = new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly ListBox _siteList = new()
+    private readonly ListBox _siteList = new AuroraListBox
     {
         Dock = DockStyle.Fill,
         BorderStyle = BorderStyle.None,
@@ -1478,6 +1478,37 @@ public sealed partial class MainForm : Form
                 throw new InvalidOperationException(message);
         }
 
+        // Gaps, unselected rows, empty list space and the well's own padding must all be the one well color.
+        void CheckSiteWellBlends(MainForm window)
+        {
+            var list = window._siteList;
+            var well = window._siteWell!;
+            using var bitmap = new Bitmap(window.Width, window.Height);
+            window.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            var origin = window.Bounds.Location;
+            var expected = AuroraWell.WellColor;
+            var samples = new List<(string Where, Point At)>();
+            int item = list.ItemHeight, width = list.ClientSize.Width;
+            for (int i = list.TopIndex; i + 1 < list.Items.Count && (i - list.TopIndex + 2) * item <= list.ClientSize.Height; i++)
+            {
+                if (i == list.SelectedIndex || i + 1 == list.SelectedIndex) continue;
+                int y = (i - list.TopIndex + 1) * item;
+                samples.Add(("gap between rows", list.PointToScreen(new Point(width / 2, y))));
+                samples.Add(("unselected row", list.PointToScreen(new Point(width - 10, y + item / 2))));
+                break;
+            }
+            int itemsBottom = (list.Items.Count - list.TopIndex) * item;
+            if (itemsBottom + 8 < list.ClientSize.Height)
+                samples.Add(("empty list space", list.PointToScreen(new Point(width / 2, itemsBottom + 6))));
+            samples.Add(("well padding", well.PointToScreen(new Point(well.ClientSize.Width / 2, 2))));
+            foreach (var (where, at) in samples)
+            {
+                var pixel = bitmap.GetPixel(at.X - origin.X, at.Y - origin.Y);
+                bool close = Math.Abs(pixel.R - expected.R) <= 3 && Math.Abs(pixel.G - expected.G) <= 3 && Math.Abs(pixel.B - expected.B) <= 3;
+                Check(close, $"Site well {where} is {ColorTranslator.ToHtml(pixel)}, expected {ColorTranslator.ToHtml(expected)}.");
+            }
+        }
+
         void Capture(Form window, string name)
         {
             using var bitmap = new Bitmap(window.Width, window.Height);
@@ -1536,6 +1567,7 @@ public sealed partial class MainForm : Form
                     Check(form._siteWell!.ClientRectangle.Contains(form._siteList.Bounds), "Site list escapes its well.");
                     Check(form._allSitesButton.Bottom <= form._siteWell.Top && form._sectionDivider!.Bottom <= form._headerActionsPanel!.Top,
                         "Sidebar sections overlap.");
+                    CheckSiteWellBlends(form);
                     foreach (Control setting in form._settingsFlowPanel!.Controls.Cast<Control>().Where(control => control.Visible))
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
@@ -1942,7 +1974,9 @@ public sealed partial class MainForm : Form
 
     private void DrawSiteItem(object? sender, DrawItemEventArgs e)
     {
-        using (var canvas = new SolidBrush(AuroraTheme.Palette.Surface)) e.Graphics.FillRectangle(canvas, e.Bounds);
+        // Fill the whole row with the well first so gaps and unselected rows blend; only the selection gets a pill.
+        using (var well = new SolidBrush(AuroraWell.WellColor))
+            e.Graphics.FillRectangle(well, e.Bounds);
 
         if (e.Index < 0 || e.Index >= _siteList.Items.Count)
             return;
@@ -1952,7 +1986,7 @@ public sealed partial class MainForm : Form
 
         using var background = new SolidBrush(selected
             ? AuroraTheme.Palette.Surface3
-            : _siteList.BackColor);
+            : AuroraWell.WellColor);
         using var textBrush = new SolidBrush(selected
             ? AuroraTheme.Palette.Text
             : AuroraTheme.Palette.Secondary);
