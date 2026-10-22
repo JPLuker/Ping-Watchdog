@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.0**.
+Current published Windows build: **v1.19.1**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -161,4 +161,8 @@ v1.18.20 fixes "&" in site and host names (it rendered as an underline; mnemonic
 Joseph added one feature by explicit request: priority hosts that keep alerting until acknowledged. v1.19.0: Mark as priority from the host menu (accent ring on the map, "Priority" in list status, announced to screen readers). Offline and recovery on a priority host start an alarm (Windows alarm or a chosen .wav) that rings immediately and every 15 seconds; snoozed hosts do not ring. A banner in the main window and Wallboard offers Acknowledge and Acknowledge all, and the Windows notification (alarm scenario) has its own Acknowledge button. The sound is set in Settings > Notifications > Priority alarm. Validation 39828890857 passed self-tests and UI regressions, including end-to-end offline/recovery alarms and notification acknowledgement; build 39831813534 published installer, portable, full + delta and feed. Not yet established: the real Windows notification button, sound playback, and behaviour while minimized to the tray, which need Joseph's check. The final maintenance target moves to v1.20.0.
 
 Next: List view becomes the place to edit hosts (multi-select actions, instant save with Undo), replacing the separate Hosts window (#7).
+
+## Host editing in the List — 2026-10-22
+
+v1.19.1 makes the List the place to edit hosts (#7). Filter chips (All, Priority, Offline, Disabled, Snoozed) show counts; selecting hosts swaps the chips for an action bar (Mark/Remove priority, Enable/Disable, Move to site, Set group, Monitoring, Keep in a site, Remove). Edits save immediately with an eight-second Undo (Ctrl+Z); double-click/F2 renames, Delete removes. The separate Hosts window is retired; More > Hosts and the Wallboard action open the List. Validation 39839194817 passed self-tests and UI regressions, including bulk priority, filters, Remove priority and Undo. The first publish run (39839598754) stopped before release because the appearance review step still expected the two retired Hosts-window screenshots; the count was corrected and run 39840180803 published installer, portable, full + delta and feed. Joseph's hands-on check of the new List remains.
 
