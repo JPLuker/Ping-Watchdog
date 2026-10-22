@@ -106,7 +106,7 @@ public sealed partial class MainForm
             try { action(); }
             catch (Exception ex) { MessageBox.Show(surface.FindForm(), ex.Message, "Host action failed"); }
         });
-        menu.Items.Add(new ToolStripMenuItem(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address) { Enabled = false });
+        menu.Items.Add(new ToolStripMenuItem(AuroraTheme.MenuText(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address)) { Enabled = false });
         Add("Copy address", () => Clipboard.SetText(address));
         Add("Set label / nickname…", () =>
         {

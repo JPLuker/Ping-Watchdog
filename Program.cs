@@ -568,6 +568,7 @@ public sealed partial class MainForm : Form
     };
     private readonly Label _siteHeaderLabel = new()
     {
+        UseMnemonic = false,
         Text = "HOSTS",
         AutoSize = true,
         Font = new Font("Segoe UI", 9, FontStyle.Bold),
@@ -1255,6 +1256,23 @@ public sealed partial class MainForm : Form
             Expect(pasteBox.Text == "Eagle Creek - Booth Manor", $"Single-line paste produced '{pasteBox.Text}'.");
         }
 
+        // "&" in names is a character, not a keyboard-shortcut marker, in owner-drawn rows, labels and menus.
+        using (var nameFont = new Font("Segoe UI Semibold", 10.5f))
+        {
+            const string ampersandName = "Women & Children's Center";
+            int asTyped = TextRenderer.MeasureText(ampersandName, nameFont, new Size(int.MaxValue, int.MaxValue), AuroraTheme.NameTextFlags).Width;
+            int asShortcut = TextRenderer.MeasureText(ampersandName, nameFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.SingleLine).Width;
+            Expect(asTyped > asShortcut, "Site rows still treat & as a shortcut marker.");
+        }
+        Expect(AuroraTheme.MenuText("Women & Children's Center") == "Women && Children's Center", "Menu names would hide their &.");
+        using (var themedForm = new Form())
+        {
+            var nameLabel = new Label { Text = "Women & Children's Center" };
+            themedForm.Controls.Add(nameLabel);
+            AuroraTheme.Apply(themedForm);
+            Expect(!nameLabel.UseMnemonic, "Themed labels still treat & as a shortcut marker.");
+        }
+
         // Truncated map addresses keep their distinguishing end, never just the shared prefix.
         using (var trimBitmap = new Bitmap(200, 50))
         using (var trimGraphics = Graphics.FromImage(trimBitmap))
@@ -1729,6 +1747,7 @@ public sealed partial class MainForm : Form
                     Check(sorted._sectionDivider?.Parent is not null, "Site list and actions have no divider.");
                     Check(sorted._headerActionsPanel?.Controls.Count == 4, "Sidebar actions were not reduced to four.");
                     Check(sorted._addSiteButton.Text == "+" && sorted._addSiteButton.AccessibleName == "Add site", "Sites header lost its add action.");
+                    Check(!sorted._siteHeaderLabel.UseMnemonic, "Site heading would hide & in names.");
 
                     // Quick Add opens on the site in view, accepts typed and pasted names, and creates new sites.
                     var siteNames = sorted._sites.Select(x => x.Name).ToList();
@@ -2118,7 +2137,7 @@ public sealed partial class MainForm : Form
             _siteItemFont,
             new Rectangle(bounds.X + 12, bounds.Y, bounds.Width - 18, bounds.Height),
             textBrush.Color,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+            TextFormatFlags.VerticalCenter | AuroraTheme.NameTextFlags);
 
         if ((e.State & DrawItemState.Focus) != 0 && ShowFocusCues)
         {
