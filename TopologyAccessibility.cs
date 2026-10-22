@@ -99,6 +99,7 @@ internal sealed partial class WallboardCanvas
         bool action = menu || code is Keys.Enter or Keys.Space;
         if (!action && code is not (Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.Home or Keys.End)) return false;
         if (_hostTargets.Count == 0) return true;
+        ShowKeyboardHighlight();
         int index = Math.Max(0, SelectedHostIndex);
         if (action) { SelectHost(index, showDetails: false); OpenSelectedHostActions(); return true; }
         index = code switch
@@ -143,9 +144,41 @@ internal sealed partial class WallboardCanvas
         Invalidate();
     }
 
+    // The keyboard highlight appears only after a key press and fades after a quiet period, so an
+    // unattended display (the Wallboard) does not keep a host boxed forever. Selection itself is kept.
+    internal static readonly TimeSpan KeyboardHighlightDuration = TimeSpan.FromSeconds(8);
+    private DateTime _keyboardHighlightUntil = DateTime.MinValue;
+    private System.Windows.Forms.Timer? _keyboardHighlightTimer;
+    internal bool KeyboardHighlightVisible => DateTime.UtcNow < _keyboardHighlightUntil;
+
+    private void ShowKeyboardHighlight()
+    {
+        _keyboardHighlightUntil = DateTime.UtcNow + KeyboardHighlightDuration;
+        if (_keyboardHighlightTimer is null)
+        {
+            _keyboardHighlightTimer = new System.Windows.Forms.Timer();
+            _keyboardHighlightTimer.Tick += (_, _) => EndKeyboardHighlight();
+            Disposed += (_, _) => _keyboardHighlightTimer.Dispose();
+        }
+        _keyboardHighlightTimer.Stop();
+        _keyboardHighlightTimer.Interval = (int)KeyboardHighlightDuration.TotalMilliseconds;
+        _keyboardHighlightTimer.Start();
+        Invalidate();
+    }
+
+    private void EndKeyboardHighlight()
+    {
+        _keyboardHighlightTimer?.Stop();
+        _keyboardHighlightUntil = DateTime.MinValue;
+        _hostTip.Hide(this);
+        Invalidate();
+    }
+
+    internal void ExpireKeyboardHighlightForTest() => EndKeyboardHighlight();
+
     private void DrawHostFocus(Graphics g)
     {
-        if (!Focused || SelectedHostIndex < 0) return;
+        if (!Focused || SelectedHostIndex < 0 || !KeyboardHighlightVisible) return;
         var bounds = Rectangle.Intersect(ClientRectangle, _hostTargets[SelectedHostIndex].Bounds);
         bounds.Inflate(-2, -2);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;

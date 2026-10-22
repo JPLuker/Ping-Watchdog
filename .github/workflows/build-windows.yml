@@ -159,7 +159,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Filter chips stay visible above the list; the selection action bar now appears as a second row instead of replacing them.
+          - Wallboard and map: the keyboard highlight appears only after you use the arrow keys and fades after 8 seconds.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
