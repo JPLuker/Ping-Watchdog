@@ -1053,6 +1053,12 @@ public sealed partial class MainForm : Form
                 throw new InvalidOperationException("Ping Watchdog self-test failed.");
         }
 
+        void Expect(bool condition, string message)
+        {
+            if (!condition)
+                throw new InvalidOperationException("Ping Watchdog self-test failed: " + message);
+        }
+
         form.ProcessResult(host, false, null);
         Check(host.State == HostState.Suspect && !host.AlertedForCurrentOutage);
 
@@ -1178,13 +1184,13 @@ public sealed partial class MainForm : Form
             using var denseBitmap = new Bitmap(viewport.Width, viewport.Height);
             dense.DrawToBitmap(denseBitmap, new Rectangle(Point.Empty, viewport));
             int denseHosts = denseSites.Sum(site => site.Hosts.Count);
-            Check(dense.AllHostNodesFit && dense.VisibleHostCount == denseHosts, $"{siteCount} sites at {viewport} lost hosts.");
-            Check(!dense.TopologyRegionsOverlap(), $"{siteCount} sites at {viewport} overlap.");
+            Expect(dense.AllHostNodesFit && dense.VisibleHostCount == denseHosts, $"{siteCount} sites at {viewport} lost hosts.");
+            Expect(!dense.TopologyRegionsOverlap(), $"{siteCount} sites at {viewport} overlap.");
             if (expectHeadings)
-                Check(dense.DrawnSiteHeadings.Count == siteCount, $"{siteCount} sites at {viewport} dropped site names.");
+                Expect(dense.DrawnSiteHeadings.Count == siteCount, $"{siteCount} sites at {viewport} dropped site names.");
         }
 
-        Check(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
+        Expect(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
 
         var snoozeNow = DateTimeOffset.UtcNow;
         var snoozeOptions = new HostOptions { SnoozedUntilUtc = snoozeNow.AddHours(1) };
