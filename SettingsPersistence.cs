@@ -112,7 +112,8 @@ public sealed partial class MainForm
             ShowUpdateControlOnHome = settings.ShowUpdateControlOnHome,
             RestoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup,
             StartMonitoringOnLaunch = settings.StartMonitoringOnLaunch,
-            Appearance = settings.Appearance
+            Appearance = settings.Appearance,
+            LastUpdateCheckUtc = _lastUpdateCheckUtc
         });
     }
 }

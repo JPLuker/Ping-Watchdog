@@ -417,7 +417,8 @@ internal sealed record AppSettingsSnapshot(
     bool RestoreLastSiteOnStartup = false,
     bool StartMonitoringOnLaunch = false,
     AppearanceMode Appearance = AppearanceMode.System,
-    string PriorityAlarmSound = "");
+    string PriorityAlarmSound = "",
+    bool UpdatesManaged = false);
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -692,10 +693,15 @@ public sealed partial class MainForm : Form
         TextAlign = ContentAlignment.MiddleRight
     };
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 500 };
+    // Hourly look at whether a day has passed; the check itself runs at most once a day.
     private readonly System.Windows.Forms.Timer _updateTimer = new()
     {
-        Interval = 6 * 60 * 60 * 1000
+        Interval = 60 * 60 * 1000
     };
+    private readonly bool _updatesManaged = UpdatePolicy.DisabledByPolicy;
+    private bool _updatesManagedOverride;
+    private bool UpdatesManaged => _updatesManaged || _updatesManagedOverride;
+    internal void ManageUpdatesForTest(bool managed) => _updatesManagedOverride = managed;
 
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _trayStopItem;
@@ -869,7 +875,7 @@ public sealed partial class MainForm : Form
         _uiTimer.Tick += (_, _) => RefreshGrid();
         _updateTimer.Tick += async (_, _) =>
         {
-            if (_autoCheckUpdates)
+            if (_autoCheckUpdates && UpdatePolicy.IsDue(_lastUpdateCheckUtc, DateTimeOffset.UtcNow))
                 await CheckForUpdatesAsync(userInitiated: false);
         };
 
@@ -905,10 +911,11 @@ public sealed partial class MainForm : Form
             ShowStorageWarning();
             if (_startMonitoringOnLaunch && !_configWriteBlocked) StartMonitoring();
 
-            if (_autoCheckUpdates)
+            if (_autoCheckUpdates && !UpdatesManaged)
             {
                 _updateTimer.Start();
-                await CheckForUpdatesAsync(userInitiated: false);
+                if (UpdatePolicy.IsDue(_lastUpdateCheckUtc, DateTimeOffset.UtcNow))
+                    await CheckForUpdatesAsync(userInitiated: false);
             }
         };
 
@@ -1245,6 +1252,19 @@ public sealed partial class MainForm : Form
             }
             Expect(named.SiteHeadingBounds.Count == 12, "Named sites lost headings.");
         }
+
+        // Updates: at most one automatic check a day (clock rollback re-arms it); IT policy turns them off.
+        var checkedAt = new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero);
+        Expect(UpdatePolicy.IsDue(null, checkedAt), "First update check was not due.");
+        Expect(!UpdatePolicy.IsDue(checkedAt, checkedAt.AddHours(23)), "Update check ran twice in a day.");
+        Expect(UpdatePolicy.IsDue(checkedAt, checkedAt.AddHours(24)), "Daily update check was not due after a day.");
+        Expect(UpdatePolicy.IsDue(checkedAt, checkedAt.AddHours(-3)), "A clock moved backwards blocked update checks.");
+        Expect(UpdatePolicy.Evaluate(1, null) && UpdatePolicy.Evaluate("1", null) && UpdatePolicy.Evaluate(null, "1") && UpdatePolicy.Evaluate(null, " true "),
+            "Update policy did not honour an enabled value.");
+        Expect(!UpdatePolicy.Evaluate(0, null) && !UpdatePolicy.Evaluate(null, "0") && !UpdatePolicy.Evaluate(null, null) && !UpdatePolicy.Evaluate(new byte[] { 1 }, ""),
+            "Update policy disabled updates without a clear setting.");
+        var checkPrefs = JsonSerializer.Deserialize<UserPreferences>(JsonSerializer.Serialize(new UserPreferences { LastUpdateCheckUtc = checkedAt }))!;
+        Expect(checkPrefs.LastUpdateCheckUtc == checkedAt, "Last update check time is not saved.");
 
         // Priority alarm: rings at once, repeats every 15 s, latest change per host wins, stops only when all are acknowledged.
         int rings = 0;
@@ -1781,6 +1801,13 @@ public sealed partial class MainForm : Form
                     Check(sorted._headerActionsPanel?.Controls.Count == 4, "Sidebar actions were not reduced to four.");
                     Check(sorted._addSiteButton.Text == "+" && sorted._addSiteButton.AccessibleName == "Add site", "Sites header lost its add action.");
                     Check(!sorted._siteHeaderLabel.UseMnemonic, "Site heading would hide & in names.");
+
+                    // Managed updates: Settings learns it, and a check reports it instead of contacting GitHub.
+                    sorted.ManageUpdatesForTest(true);
+                    Check(sorted.GetAppSettingsSnapshot().UpdatesManaged, "Settings is not told updates are managed.");
+                    await sorted.CheckForUpdatesAsync(userInitiated: true);
+                    Check(sorted._updateStatusText == UpdatePolicy.ManagedText, $"Managed update check reported '{sorted._updateStatusText}'.");
+                    sorted.ManageUpdatesForTest(false);
 
                     // Priority host: marked from the menu path, shown on map and list, alarms on offline and recovery, acknowledged from the notification.
                     var mike = sorted.HostSnapshot().First(h => h.Site == "Mike");
@@ -4404,7 +4431,8 @@ public sealed partial class MainForm : Form
             _restoreLastSiteOnStartup,
             _startMonitoringOnLaunch,
             AuroraTheme.Mode,
-            _priorityAlarmSound);
+            _priorityAlarmSound,
+            UpdatesManaged);
     }
 
     private string GetUpdateActionText()
@@ -4470,11 +4498,11 @@ public sealed partial class MainForm : Form
         if (_showCommandView.Checked != settings.ShowCommandView)
             _showCommandView.Checked = settings.ShowCommandView;
 
-        if (_autoCheckUpdates)
+        if (_autoCheckUpdates && !UpdatesManaged)
         {
             _updateTimer.Start();
 
-            if (!wasAutoCheck)
+            if (!wasAutoCheck && UpdatePolicy.IsDue(_lastUpdateCheckUtc, DateTimeOffset.UtcNow))
                 _ = CheckForUpdatesAsync(userInitiated: false);
         }
         else
@@ -4628,6 +4656,11 @@ public sealed partial class MainForm : Form
     private async Task CheckForUpdatesAsync(bool userInitiated)
     {
         if ((!userInitiated && !_autoCheckUpdates) || IsDisposed || Disposing) return;
+        if (UpdatesManaged)
+        {
+            SetUpdateStatus(UpdatePolicy.ManagedText);
+            return;
+        }
         if (_pendingUpdateManager != null && _pendingUpdateInfo != null)
         {
             SetUpdateStatus($"Version {_pendingUpdateVersion} is downloaded and ready.", userInitiated, true);
@@ -4646,6 +4679,7 @@ public sealed partial class MainForm : Form
                 return;
             }
             var update = await manager.CheckForUpdatesAsync();
+            RecordUpdateCheck(DateTimeOffset.UtcNow);
             if (update == null)
             {
                 ClearPendingUpdateUi();
