@@ -786,6 +786,7 @@ public sealed partial class MainForm : Form
         BuildGrid();
         BuildLayout();
         InitializePriorityAlarm();
+        BuildHostListEditing();
         BuildGridContextMenu();
         _statusStrip.Items.Add(_statusLabel);
         // Build and ownership details live in About.
@@ -938,7 +939,6 @@ public sealed partial class MainForm : Form
             _eventHistoryForm?.Close();
             _settingsForm?.Close();
             _organizationForm?.Close();
-            _hostManager?.Close();
             PersistCurrentEditor();
             SaveSites();
             StopMonitoring();
@@ -1052,7 +1052,6 @@ public sealed partial class MainForm : Form
             throw new InvalidOperationException("Newer configuration mutated the active sites.");
         DisplayTime.RunTests();
         AuroraTheme.RunTests();
-        HostManagerForm.RunDraftTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
         var host = new HostMonitor("Test Site", "127.0.0.1");
@@ -1861,11 +1860,45 @@ public sealed partial class MainForm : Form
 
                 Check(form._rightLayout!.RowStyles[1].Height == 0, "Duplicate inventory space returned.");
                 Capture(form, "single-host-table");
-                form.OpenHostManager();
+                // Host editing lives in the List: chips by default, the action bar while hosts are selected.
+                form.SetWorkspaceView(true);
                 await Task.Delay(100);
-                Check(form._hostManager?.Visible == true, "Host Manager did not open.");
-                Capture(form._hostManager!, "hosts");
-                form._hostManager!.Close();
+                Check(!form.SelectionBarShowing, "Action bar showed with nothing selected.");
+                form.SelectHostsForTest(form.HostSnapshot().First().Address);
+                await Task.Delay(50);
+                Check(form.SelectionBarShowing, "Selecting a host did not show the action bar.");
+                Capture(form, "list-selection");
+                form.SelectHostsForTest();
+
+                // Filters, multi-select actions that save at once, and Undo.
+                form._hostSearch.Text = "";
+                string editSite = form._selectedSiteName ?? form._sites[0].Name;
+                form.ImportManagedHosts(new() {
+                    new(editSite, "192.0.2.201", "Edit A", "", new HostOptions(), "Unknown"),
+                    new(editSite, "192.0.2.202", "Edit B", "", new HostOptions(), "Unknown") }, false);
+                form.SetHostFilter(HostFilter.All);
+                form.SelectHostsForTest("192.0.2.201", "192.0.2.202");
+                Check(form.PriorityActionText == "Mark as priority", $"Action read '{form.PriorityActionText}'.");
+                form.TogglePriorityForTest();
+                bool BothPriority() => form.HostSnapshot().Where(h => h.Address is "192.0.2.201" or "192.0.2.202").All(h => h.Options.Priority);
+                Check(BothPriority() && form.UndoMessageText == "Marked 2 hosts as priority", $"Bulk priority failed; undo reads '{form.UndoMessageText}'.");
+                form.SetHostFilter(HostFilter.Priority);
+                Check(form.VisibleHostRows == 2 && form.FilterChipText(HostFilter.Priority) == "Priority 2",
+                    $"Priority filter shows {form.VisibleHostRows} rows; chip '{form.FilterChipText(HostFilter.Priority)}'.");
+                form.SelectHostsForTest("192.0.2.201", "192.0.2.202");
+                Check(form.PriorityActionText == "Remove priority", "Selected priority hosts do not offer Remove priority.");
+                form.TogglePriorityForTest();
+                Check(!form.HostSnapshot().Any(h => h.Options.Priority) && form.VisibleHostRows == 0, "Remove priority did not clear the filter.");
+                form.UndoLastHostEdit();
+                Check(BothPriority() && form.VisibleHostRows == 2 && form.UndoMessageText == "", "Undo did not restore priority.");
+                form.SetHostFilter(HostFilter.All);
+                form.SelectHostsForTest("192.0.2.202");
+                form.ToggleEnabledForTest();
+                form.SetHostFilter(HostFilter.Disabled);
+                Check(form.VisibleHostRows == 1 && form.FilterChipText(HostFilter.Disabled) == "Disabled 1", "Disabled filter is wrong.");
+                Capture(form, "list-filter-disabled");
+                form.SetHostFilter(HostFilter.All);
+                form.DeleteManagedHosts(form.HostSnapshot().Where(h => h.Address is "192.0.2.201" or "192.0.2.202").ToList());
                 using (var quickAdd = new QuickAddForm(form._sites.Select(s => s.Name), form._selectedSiteName,
                     form.HostSnapshot, form.ImportManagedHosts))
                 {
@@ -1953,11 +1986,6 @@ public sealed partial class MainForm : Form
                     Check(canvas.Top == 0 && canvas.Height == form._wallboardForm.ClientSize.Height,
                         $"Wallboard canvas does not fill the available window: canvas={canvas.Bounds}, parent={canvas.Parent?.ClientRectangle}, window={form._wallboardForm.ClientRectangle}.");
                 }
-                form.OpenHostManager(form._wallboardForm);
-                await Task.Delay(100);
-                Check(form._hostManager?.Visible == true && form._hostManager.Owner == form._wallboardForm,
-                    "Wallboard must open the shared Hosts manager.");
-                form._hostManager!.Close();
                 await CheckHostMenu(canvas);
                 canvas.Focus();
                 canvas.HandleHostKey(Keys.Home);
@@ -1991,19 +2019,16 @@ public sealed partial class MainForm : Form
                 {
                     AuroraTheme.SetMode(appearance);
                     form.OpenSettings();
-                    form.OpenHostManager();
                     await Task.Delay(100);
                     Check(form.BackColor == AuroraTheme.Palette.Canvas, "Main appearance did not update.");
                     Check(form._settingsForm!.BackColor == AuroraTheme.Palette.Canvas, "Open Settings appearance did not update.");
-                    Check(form._hostManager!.BackColor == AuroraTheme.Palette.Canvas, "Open Hosts appearance did not update.");
                     Capture(form, "appearance-main-" + appearance);
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
-                    Capture(form._hostManager!, "appearance-hosts-" + appearance);
                     await SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
                         Path.Combine(output, "settings-save-error-" + appearance + ".png"));
                     await form._settingsForm!.CaptureAboutReview(output, appearance.ToString());
                     await form._settingsForm!.CaptureDataReview(output, appearance.ToString());
-                    form._settingsForm!.Close(); form._hostManager!.Close();
+                    form._settingsForm!.Close();
                 }
                 AuroraTheme.SetMode(appearanceBefore);
                 File.WriteAllText(Path.Combine(output, "passed.txt"), "UI smoke test passed.");
@@ -2065,7 +2090,7 @@ public sealed partial class MainForm : Form
         aboutItem.Click += (_, _) => ShowAboutDialog();
 
         var hostsItem = new ToolStripMenuItem("Hosts...") { ShortcutKeys = Keys.Control | Keys.Shift | Keys.H };
-        hostsItem.Click += (_, _) => OpenHostManager();
+        hostsItem.Click += (_, _) => ShowHostList();
         _appMenu.Items.Add("Export monitoring batch…", null, (_, _) => ExportMonitoringBatch());
         _appMenu.Items.Add("Quick monitor…", null, (_, _) => OpenQuickAdd(true));
         _appMenu.Items.Add(hostsItem);
@@ -2144,7 +2169,7 @@ public sealed partial class MainForm : Form
             column.MinimumWidth = name switch { "Host" => 140, "Label" => 96, "Site" => 80, "Status" => 76, _ => 64 };
             column.FillWeight = name switch { "Host" => 30, "Label" => 24, "Site" => 19, "Status" => 16, _ => 13 };
         }
-        _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OpenHostManager(); };
+        _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) RenameSelectedHost(); };
 
     }
 
@@ -2954,6 +2979,13 @@ public sealed partial class MainForm : Form
     {
         if (e.Button != MouseButtons.Right || e.RowIndex < 0)
             return;
+
+        // Right-clicking inside a multi-selection acts on all of it.
+        if (_grid.Rows[e.RowIndex].Selected && _grid.SelectedRows.Count > 1)
+        {
+            ShowSelectionMenu(_grid.PointToClient(Cursor.Position));
+            return;
+        }
 
         _grid.ClearSelection();
         _grid.Rows[e.RowIndex].Selected = true;
@@ -4323,7 +4355,7 @@ public sealed partial class MainForm : Form
                 () => SaveConfigFile(_wallboardForm),
                 () => LoadConfigFile(_wallboardForm),
                 ClearCommandLog,
-                () => OpenHostManager(_wallboardForm)),
+                ShowHostList),
             target,
             CycleEventHistoryWindow,
             ToggleSuspectHistory,
@@ -4822,6 +4854,10 @@ public sealed partial class MainForm : Form
         _monitorCanvas.Snapshot = BuildWallboardSnapshot();
         _monitorCanvas.Invalidate();
         var selection = GetSelectedHostIdentity();
+        // Keep every selected host selected across refreshes (List editing works on multi-selections).
+        var selectedKeys = _grid.SelectedRows.Cast<DataGridViewRow>()
+            .Select(r => BuildHostKey(r.Cells["SiteColumn"].Value?.ToString() ?? "", r.Cells["HostColumn"].Value?.ToString() ?? ""))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         string? selectedColumn = _grid.CurrentCell?.OwningColumn.Name;
         int firstDisplayedRow = _grid.FirstDisplayedScrollingRowIndex;
         int horizontalOffset = _grid.HorizontalScrollingOffset;
@@ -4869,8 +4905,10 @@ public sealed partial class MainForm : Form
             rows = rows.Where(h => h.Host.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 h.Label.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 h.Site.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        UpdateFilterChips(rows.Select(h => h.Status));
+        rows = rows.Where(h => MatchesFilter(_hostFilter, h.Status)).ToList();
         _grid.DataSource = rows;
-        _emptyHosts.Text = query.Length > 0 ? "No matching hosts" : "No hosts — add hosts to start";
+        _emptyHosts.Text = query.Length > 0 ? "No matching hosts" : EmptyFilterText();
         _emptyHosts.Visible = rows.Count == 0;
         if (_emptyHosts.Visible) _emptyHosts.BringToFront();
 
@@ -4896,6 +4934,10 @@ public sealed partial class MainForm : Form
                 break;
             }
         }
+        foreach (DataGridViewRow row in _grid.Rows)
+            if (selectedKeys.Contains(BuildHostKey(row.Cells["SiteColumn"].Value?.ToString() ?? "", row.Cells["HostColumn"].Value?.ToString() ?? "")))
+                row.Selected = true;
+        UpdateSelectionBar();
         if (firstDisplayedRow >= 0 && _grid.Rows.Count > 0)
             _grid.FirstDisplayedScrollingRowIndex = Math.Min(firstDisplayedRow, _grid.Rows.Count - 1);
         _grid.HorizontalScrollingOffset = horizontalOffset;

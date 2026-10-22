@@ -158,10 +158,10 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Priority hosts: right-click a host and choose Mark as priority. A ring marks it on the map, and the list shows Priority.
-          - When a priority host goes offline or comes back online, an alarm sounds every 15 seconds until acknowledged.
-          - Acknowledge from the banner in the app or Wallboard, or from the Acknowledge button on the Windows notification.
-          - Settings > Notifications > Priority alarm: choose a .wav, test it, or use the Windows alarm.
+          - The List is now where you edit hosts. Filter chips: All, Priority, Offline, Disabled, Snoozed.
+          - Select several hosts (Ctrl/Shift-click) for one action bar: Mark or Remove priority, Enable/Disable, Move to site, Set group, Monitoring, Remove.
+          - Changes save at once; Undo appears for a few seconds (Ctrl+Z also works). Double-click or F2 renames, Delete removes.
+          - The separate Hosts window is retired; More > Hosts (Ctrl+Shift+H) opens the List.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

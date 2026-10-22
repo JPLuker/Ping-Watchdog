@@ -138,7 +138,6 @@ public sealed partial class MainForm
         toolbar.Controls.Add(_listTab);
         toolbar.Controls.Add(_searchLabel);
         toolbar.Controls.Add(_hostSearch);
-        toolbar.Controls.Add(HostUi.Button("Edit hosts", OpenHostManager));
         _columnPickerButton.Click += (_, _) => ShowColumnMenu();
         toolbar.Controls.Add(_columnPickerButton);
         toolbar.Controls.Add(_showCommandView);
@@ -203,6 +202,7 @@ public sealed partial class MainForm
         _settingsFlowPanel.PerformLayout();
         _rightLayout.RowStyles[2].Height = Math.Max(64 * scale, _settingsFlowPanel.Controls.Cast<Control>().Where(c => c.Visible).Select(c => c.Bottom + c.Margin.Bottom).DefaultIfEmpty(0).Max() + 8 * scale);
         SizeDashboard();
+        SizeHostListBars();
     }
 
     private void SizeDashboard()
