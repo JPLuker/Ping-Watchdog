@@ -37,6 +37,9 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _restoreLastSite = new() { Text = "Restore the last selected site on startup", AutoSize = true };
     private readonly CheckBox _use12HourTime = new() { Text = "Use 12-hour time (AM / PM)", AutoSize = true };
     private readonly CheckBox _notifications = new() { Text = "Windows outage and recovery notifications", AutoSize = true };
+    // Staged like every other setting; empty means the Windows alarm.
+    private string _alarmSound = "";
+    private readonly Label _alarmSoundName = new() { AutoSize = true, Tag = "primaryText", UseMnemonic = false, Margin = new Padding(0, 4, 0, 8) };
     private readonly CheckBox _showMainCli = new() { Text = "Show ping log in the main window", AutoSize = true };
     private readonly CheckBox _wallboardCli = new() { Text = "Show ping log when Wallboard opens", AutoSize = true };
 
@@ -310,6 +313,20 @@ internal sealed class SettingsForm : Form
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Windows notifications", _notifications,
             "Receive notifications when a host goes down or recovers. Monitoring and history continue when alerts are off."));
+        var soundActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        var choose = new AuroraButton { Text = "Choose sound…", AutoSize = true };
+        var test = new AuroraButton { Text = "Test", AutoSize = true };
+        var reset = new AuroraButton { Text = "Use Windows alarm", AutoSize = true, Ghost = true };
+        choose.Click += (_, _) =>
+        {
+            using var dialog = new OpenFileDialog { Filter = "WAV sound|*.wav", Title = "Priority alarm sound" };
+            if (dialog.ShowDialog(this) == DialogResult.OK) SetAlarmSound(dialog.FileName);
+        };
+        test.Click += (_, _) => PriorityAlarm.PlaySound(_alarmSound);
+        reset.Click += (_, _) => SetAlarmSound("");
+        soundActions.Controls.AddRange(new Control[] { choose, test, reset });
+        stack.Controls.Add(Section("Priority alarm", new Control[] { _alarmSoundName, soundActions },
+            "Priority hosts ring every 15 seconds after going offline or coming back online, until acknowledged. Right-click a host to mark it as priority."));
         stack.Controls.Add(new Label { Text = "Right-click a host to snooze it for an hour. Pings and alerts pause until it resumes automatically. Resume monitoring ends the snooze early.",
             AutoSize = true, MaximumSize = new Size(540, 0), Margin = new Padding(0, 8, 0, 8) });
         return page;
@@ -669,6 +686,7 @@ internal sealed class SettingsForm : Form
             _wallboardCli.Checked = s.WallboardShowCli;
             _minimizeToTray.Checked = s.MinimizeToTray;
             _notifications.Checked = s.NotificationsEnabled;
+            SetAlarmSound(s.PriorityAlarmSound ?? "");
             _use12HourTime.Checked = s.Use12HourTime;
             _appearance.SelectedIndex = Enum.IsDefined(s.Appearance) ? (int)s.Appearance : 0;
             _restoreLastSite.Checked = s.RestoreLastSiteOnStartup;
@@ -692,8 +710,17 @@ internal sealed class SettingsForm : Form
         EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
         Use12HourTime = _use12HourTime.Checked, RestoreLastSiteOnStartup = _restoreLastSite.Checked,
         Appearance = (AppearanceMode)Math.Max(0, _appearance.SelectedIndex),
-        StartMonitoringOnLaunch = _autoStart.Checked, HideSuspectEvents = _hideSuspects.Checked
+        StartMonitoringOnLaunch = _autoStart.Checked, HideSuspectEvents = _hideSuspects.Checked,
+        PriorityAlarmSound = _alarmSound
     };
+
+    private void SetAlarmSound(string path)
+    {
+        _alarmSound = path;
+        _alarmSoundName.Text = path.Length == 0 ? "Windows alarm" : Path.GetFileName(path);
+        UpdateDirtyState();
+    }
+    internal string AlarmSoundForTest { get => _alarmSound; set => SetAlarmSound(value); }
     private bool HasChanges() => !_loading && _baseline != null && ReadSettings(_baseline) != _baseline;
     private void UpdateDirtyState()
     {
@@ -802,7 +829,7 @@ internal sealed class SettingsForm : Form
         { _interval.Value = 2; _timeout.Value = 1000; _downAfter.Value = 3; _recoverAfter.Value = 2; }
         _minimizeToTray.Checked = true; _restoreLastSite.Checked = false; _autoStart.Checked = false;
         _appearance.SelectedIndex = 0;
-        _use12HourTime.Checked = false; _notifications.Checked = true;
+        _use12HourTime.Checked = false; _notifications.Checked = true; SetAlarmSound("");
         _showMainCli.Checked = true; _wallboardCli.Checked = true;
         _autoUpdates.Checked = true; _showHomeUpdateControl.Checked = false;
         _historyRange.SelectedIndex = 0; _hideSuspects.Checked = true;

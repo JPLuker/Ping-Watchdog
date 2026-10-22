@@ -135,6 +135,7 @@ public sealed partial class MainForm
         Add("Snooze host for 1 hour", () => SetHostSnooze(host.Options.Id, DateTimeOffset.UtcNow.AddHours(1)));
         if (host.Options.IsSnoozed(DateTimeOffset.UtcNow))
             Add("Resume monitoring now", () => SetHostSnooze(host.Options.Id, null));
+        Add(host.Options.Priority ? "Remove priority" : "Mark as priority", () => SetHostPriority(host.Options.Id, !host.Options.Priority));
         Add(host.Options.Enabled ? "Disable monitoring" : "Enable monitoring", () =>
         {
             var current = HostSnapshot().FirstOrDefault(h => h.Options.Id == host.Options.Id);

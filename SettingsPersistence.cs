@@ -100,6 +100,7 @@ public sealed partial class MainForm
         config.WallboardShowCli = settings.WallboardShowCli;
         config.MinimizeToTray = settings.MinimizeToTray;
         config.NotificationsEnabled = settings.NotificationsEnabled;
+        config.PriorityAlarmSound = settings.PriorityAlarmSound ?? "";
         config.AutoCheckUpdates = settings.AutoCheckUpdates;
         config.ShowUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         config.EventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
