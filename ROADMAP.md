@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.1**.
+Current published Windows build: **v1.19.2**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -166,3 +166,4 @@ Next: List view becomes the place to edit hosts (multi-select actions, instant s
 
 v1.19.1 makes the List the place to edit hosts (#7). Filter chips (All, Priority, Offline, Disabled, Snoozed) show counts; selecting hosts swaps the chips for an action bar (Mark/Remove priority, Enable/Disable, Move to site, Set group, Monitoring, Keep in a site, Remove). Edits save immediately with an eight-second Undo (Ctrl+Z); double-click/F2 renames, Delete removes. The separate Hosts window is retired; More > Hosts and the Wallboard action open the List. Validation 39839194817 passed self-tests and UI regressions, including bulk priority, filters, Remove priority and Undo. The first publish run (39839598754) stopped before release because the appearance review step still expected the two retired Hosts-window screenshots; the count was corrected and run 39840180803 published installer, portable, full + delta and feed. Joseph's hands-on check of the new List remains.
 
+v1.19.2: Joseph could not find the filter. In v1.19.1 the action bar replaced the chips whenever a row was selected, which in practice was nearly always. Chips now keep their own top row, and the action bar is a second row beneath them (validation 39842073825, build 39842467718). The UI test now checks both rows are on screen together.
