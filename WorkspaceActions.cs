@@ -21,7 +21,7 @@ public sealed partial class MainForm
     private void ShowSiteActions()
     {
         PopulateSiteActions();
-        _siteActionsMenu.Show(_siteList, new Point(0, _siteList.Height));
+        _siteActionsMenu.Show(_moreButton, Point.Empty, ToolStripDropDownDirection.AboveRight);
     }
 
     private void ShowColumnMenu()

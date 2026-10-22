@@ -18,6 +18,23 @@ internal sealed partial class WallboardCanvas
     private static float TopologyRowGutter(float height, int rows, float scale) =>
         rows <= 3 ? 24 * scale : Math.Clamp(height * 0.15f / rows, 10 * scale, 24 * scale);
 
+    // Hosts in one site usually share a prefix, so the end of an address is what tells them apart.
+    // Trim from the front ("…80.60") rather than the end ("10.23…"). Full values stay in tooltips and accessible names.
+    internal static string TrimAddressStart(Graphics g, string address, Font font, float width)
+    {
+        using var measure = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces };
+        bool Fits(string value) => g.MeasureString(value, font, int.MaxValue, measure).Width <= width;
+        if (string.IsNullOrEmpty(address) || Fits(address)) return address;
+        int low = 1, high = address.Length - 1, best = 0;
+        while (low <= high)
+        {
+            int keep = (low + high) / 2;
+            if (Fits("…" + address[^keep..])) { best = keep; low = keep + 1; }
+            else high = keep - 1;
+        }
+        return best == 0 ? "…" : "…" + address[^best..];
+    }
+
     private void DrawFittedTopology(Graphics g, WallboardSnapshot snapshot, Rectangle bounds)
     {
         // FOCAL: every selected host. Reflow the groups and nodes instead of creating a scrollable canvas.
@@ -152,7 +169,7 @@ internal sealed partial class WallboardCanvas
                 if (twoLines)
                     g.DrawString(host.Label, _hostLabelFont, text, new RectangleF(tx, cy - line, tw, line + 2), format);
                 if (cellHeight >= line)
-                    g.DrawString(host.Address, _hostIpFont, twoLines ? muted : text,
+                    g.DrawString(TrimAddressStart(g, host.Address, _hostIpFont, tw), _hostIpFont, twoLines ? muted : text,
                         new RectangleF(tx, twoLines ? cy : cy - line / 2, tw, line + 2), format);
             }
         }

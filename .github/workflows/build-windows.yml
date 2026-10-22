@@ -158,10 +158,10 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Sort map sites alphabetically, matching the site list.
-          - Keep the map readable with many sites: wider layouts when needed, no overlapping site names or hosts.
-          - Show full site names on hover when the site list cuts them off.
-          - Raise History event-type text to the 13px reading floor.
+          - Pin All sites above the site list, with the total host count; it no longer scrolls away.
+          - Give the site list its own inset panel and a divider before the app actions.
+          - Move Wallboard next to Start monitoring and Manage sites into More, leaving four sidebar actions.
+          - Keep the end of long map addresses visible (…80.60 instead of 10.23…).
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

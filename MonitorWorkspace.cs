@@ -13,7 +13,8 @@ public sealed partial class MainForm
     private readonly Button _columnPickerButton = new AuroraButton { Text = "Columns", AutoSize = true };
     private readonly Button _mapTab = new AuroraButton { Text = "Map", AutoSize = true };
     private readonly Button _listTab = new AuroraButton { Text = "List", AutoSize = true };
-    private readonly Button _manageSitesButton = new AuroraButton { Text = "Manage sites", AutoSize = true };
+    private AuroraWell? _siteWell;
+    private Panel? _sectionDivider;
     private readonly Button _outageHistoryButton = new AuroraButton { Text = "Outage history", AutoSize = true };
 
     private void BuildLayout()
@@ -32,10 +33,12 @@ public sealed partial class MainForm
         _workspaceSplit.Panel1.Tag = "nav";
         _workspaceSplit.Panel2.Tag = "window";
 
-        var navigation = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = Padding.Empty, Tag = "nav" };
+        // Sites heading, pinned All sites, the scrolling site well, a divider, then app actions.
+        var navigation = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Margin = Padding.Empty, Tag = "nav" };
         navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         navigation.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+        navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var siteHeading = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, Tag = "nav" };
         siteHeading.Controls.Add(new Label { Text = "Sites", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(8, 12, 8, 0) });
@@ -43,8 +46,35 @@ public sealed partial class MainForm
         if (_addSiteButton is AuroraButton add) add.Ghost = true;
         siteHeading.Controls.Add(_addSiteButton);
         navigation.Controls.Add(siteHeading, 0, 0);
-        navigation.Controls.Add(_siteList, 0, 1);
-        _manageSitesButton.Click += (_, _) => ShowSiteActions();
+        _allSitesButton.Dock = DockStyle.Fill;
+        _allSitesButton.Margin = new Padding(0, 0, 0, 8);
+        _allSitesButton.Click += (_, _) => { if (_selectedSiteName is not null) SelectSiteScope(null); };
+        navigation.Controls.Add(_allSitesButton, 0, 1);
+        _siteWell = new AuroraWell { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(4, 6, 4, 6), Tag = "well" };
+        _siteList.Tag = "well";
+        _siteWell.Controls.Add(_siteList);
+        navigation.Controls.Add(_siteWell, 0, 2);
+        _sectionDivider = new Panel { Height = 1, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(8, 12, 8, 8), Tag = "divider" };
+        navigation.Controls.Add(_sectionDivider, 0, 3);
+        _siteList.KeyDown += (_, e) =>
+        {
+            // Up from the first site reaches the pinned All sites scope.
+            if (e.KeyCode == Keys.Up && _siteList.SelectedIndex <= 0)
+            {
+                e.Handled = true;
+                _allSitesButton.Focus();
+                if (_selectedSiteName is not null) SelectSiteScope(null);
+            }
+        };
+        _allSitesButton.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Down && _siteList.Items.Count > 0)
+            {
+                e.Handled = true;
+                _siteList.Focus();
+                _siteList.SelectedIndex = Math.Max(0, _siteList.SelectedIndex);
+            }
+        };
         _outageHistoryButton.Click += (_, _) => OpenEventHistory();
         _siteList.ContextMenuStrip = _siteActionsMenu;
         _siteActionsMenu.Opening += (_, _) => PopulateSiteActions();
@@ -54,9 +84,7 @@ public sealed partial class MainForm
 
         var utilities = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty, Tag = "nav" };
         _headerActionsPanel = utilities;
-        utilities.Controls.Add(_manageSitesButton);
         utilities.Controls.Add(_outageHistoryButton);
-        utilities.Controls.Add(_wallboardButton);
         utilities.Controls.Add(_settingsButton);
         utilities.Controls.Add(_checkUpdateButton);
         utilities.Controls.Add(_moreButton);
@@ -64,7 +92,7 @@ public sealed partial class MainForm
         _moreButton.AccessibleName = "More actions";
         _moreButton.Padding = new Padding(16, 4, 16, 4);
         utilities.SizeChanged += (_, _) => SizeNavigationActions();
-        navigation.Controls.Add(utilities, 0, 3);
+        navigation.Controls.Add(utilities, 0, 4);
         _workspaceSplit.Panel1.Controls.Add(navigation);
 
         var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = Padding.Empty, Tag = "window" };
@@ -85,6 +113,7 @@ public sealed partial class MainForm
         heading.Controls.Add(_siteHeaderLabel, 0, 0);
         var actions = new FlowLayoutPanel { AutoSize = true, Anchor = AnchorStyles.Right, WrapContents = false, Margin = Padding.Empty, Tag = "window" };
         actions.Controls.Add(HostUi.Button("Add hosts", () => OpenQuickAdd(false)));
+        actions.Controls.Add(_wallboardButton);
         if (_startButton is AuroraButton primary) primary.Primary = true;
         _startButton.Text = "Start monitoring";
         actions.Controls.Add(_startButton);
@@ -199,6 +228,8 @@ public sealed partial class MainForm
 
     private void SizeNavigationActions()
     {
+        _allSitesButton.Height = (int)(40 * DeviceDpi / 96f);
+        _allSitesButton.Padding = new Padding(12, 4, 12, 4);
         if (_headerActionsPanel is null) return;
         foreach (var button in _headerActionsPanel.Controls.OfType<Button>())
         {

@@ -526,6 +526,8 @@ public sealed partial class MainForm : Form
     };
 
     private readonly Button _addSiteButton = new AuroraButton() { Text = "+ Add Site", AutoSize = true };
+    // Pinned scope: stays visible above the scrolling site list and is never one of its rows.
+    private readonly AuroraButton _allSitesButton = new() { Text = "All sites", AccessibleName = "All sites", AutoSize = false, Ghost = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button _organizeButton = new AuroraButton() { Text = "Organize", AutoSize = true };
     private readonly Button _renameSiteButton = new AuroraButton() { Text = "Rename Site", AutoSize = true };
     private readonly Button _deleteSiteButton = new AuroraButton() { Text = "Delete Site", AutoSize = true };
@@ -1192,6 +1194,20 @@ public sealed partial class MainForm : Form
 
         Expect(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
 
+        // Truncated map addresses keep their distinguishing end, never just the shared prefix.
+        using (var trimBitmap = new Bitmap(200, 50))
+        using (var trimGraphics = Graphics.FromImage(trimBitmap))
+        using (var trimFont = new Font("Consolas", 9.75f))
+        using (var trimFormat = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces })
+        {
+            float Width(string value) => trimGraphics.MeasureString(value, trimFont, int.MaxValue, trimFormat).Width;
+            Expect(WallboardCanvas.TrimAddressStart(trimGraphics, "10.235.80.60", trimFont, Width("10.235.80.60") + 1) == "10.235.80.60", "A fitting address was trimmed.");
+            string tight = WallboardCanvas.TrimAddressStart(trimGraphics, "10.235.80.60", trimFont, Width("…80.60") + 1);
+            Expect(tight.StartsWith("…") && tight.EndsWith("80.60") && Width(tight) <= Width("…80.60") + 1, $"Address trimmed to '{tight}' instead of keeping its end.");
+            string v6 = WallboardCanvas.TrimAddressStart(trimGraphics, "2001:db8:abcd:1234:5678:90ab:cdef:1234", trimFont, Width("…cdef:1234") + 1);
+            Expect(v6.EndsWith("cdef:1234"), $"IPv6 address trimmed to '{v6}'.");
+        }
+
         var snoozeNow = DateTimeOffset.UtcNow;
         var snoozeOptions = new HostOptions { SnoozedUntilUtc = snoozeNow.AddHours(1) };
         Check(snoozeOptions.IsSnoozed(snoozeNow));
@@ -1515,9 +1531,11 @@ public sealed partial class MainForm : Form
                         "Selected-site heading is clipped.");
                     Check(form._startButton.Parent!.ClientRectangle.Contains(form._startButton.Bounds),
                         "Monitoring action is clipped.");
-                    var actions = form._headerActionsPanel!;
-                    Check(actions.ClientRectangle.Contains(form._wallboardButton.Bounds),
-                        "Wallboard navigation is clipped.");
+                    Check(form._wallboardButton.Parent!.ClientRectangle.Contains(form._wallboardButton.Bounds),
+                        "Wallboard action is clipped.");
+                    Check(form._siteWell!.ClientRectangle.Contains(form._siteList.Bounds), "Site list escapes its well.");
+                    Check(form._allSitesButton.Bottom <= form._siteWell.Top && form._sectionDivider!.Bottom <= form._headerActionsPanel!.Top,
+                        "Sidebar sections overlap.");
                     foreach (Control setting in form._settingsFlowPanel!.Controls.Cast<Control>().Where(control => control.Visible))
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
@@ -1529,7 +1547,7 @@ public sealed partial class MainForm : Form
                 {
                     using var largerFont = new Font(buttonFont.FontFamily, buttonFont.Size * scale, buttonFont.Style);
                     form._wallboardButton.Font = largerFont;
-                    form._headerActionsPanel!.PerformLayout();
+                    form._wallboardButton.Parent!.PerformLayout();
                     Check(form._wallboardButton.Width >= form._wallboardButton.PreferredSize.Width,
                         "Wallboard button is clipped with larger UI text.");
                     form._wallboardButton.Font = buttonFont;
@@ -1569,12 +1587,27 @@ public sealed partial class MainForm : Form
                     } });
                     var mapOrder = sorted.BuildWallboardSnapshot().Sites.Select(x => x.Name).ToArray();
                     Check(mapOrder.SequenceEqual(new[] { "alpha", "Mike", longName, "Zulu" }, StringComparer.Ordinal), "Map sites are not alphabetical.");
-                    var listOrder = sorted._siteList.Items.Cast<SiteListItem>().Skip(1).Select(x => x.SiteName).ToArray();
+                    var listOrder = sorted._siteList.Items.Cast<SiteListItem>().Select(x => x.SiteName).ToArray();
                     Check(listOrder.SequenceEqual(mapOrder, StringComparer.Ordinal), "Map and site list order differ.");
                     int longIndex = sorted._siteList.Items.Cast<SiteListItem>().ToList().FindIndex(x => x.SiteName == longName);
                     Check(sorted.IsSiteNameTruncated(longIndex), "A truncated site name has no full-name tooltip.");
                     if (sorted._siteList.ClientSize.Width > 150)
                         Check(!sorted.IsSiteNameTruncated(longIndex - 1), "A short site name was treated as truncated.");
+
+                    // All sites is pinned outside the scrolling list and tracks the scope both ways.
+                    Check(sorted._siteList.Items.Cast<SiteListItem>().All(x => x.SiteName is not null), "All sites returned as a list row.");
+                    Check(sorted._allSitesButton.Parent is not null && sorted._siteWell?.Contains(sorted._allSitesButton) == false,
+                        "All sites is not pinned outside the site list.");
+                    Check(sorted._allSitesButton.Text == "All sites · 4 hosts", "All sites does not show the host count.");
+                    sorted.SelectSiteScope(null);
+                    Check(sorted._selectedSiteName is null && sorted._allSitesButton.Selected && sorted._siteList.SelectedIndex == -1,
+                        "All sites scope is not shown as selected.");
+                    sorted._siteList.SelectedIndex = sorted._siteList.Items.Cast<SiteListItem>().ToList().FindIndex(x => x.SiteName == "Mike");
+                    Check(sorted._selectedSiteName == "Mike" && !sorted._allSitesButton.Selected, "Choosing a site left All sites selected.");
+                    sorted.SelectSiteScope(null);
+                    Check(sorted._selectedSiteName is null && sorted._allSitesButton.Selected, "All sites did not restore the full scope.");
+                    Check(sorted._sectionDivider?.Parent is not null, "Site list and actions have no divider.");
+                    Check(sorted._headerActionsPanel?.Controls.Count == 4, "Sidebar actions were not reduced to four.");
                 }
                 form.SetWorkspaceView(true);
                 WindowsBranding.RunShortcutSmokeTest(output);
@@ -1830,6 +1863,7 @@ public sealed partial class MainForm : Form
         _appMenu.Items.Add(hostsItem);
         _appMenu.Items.Add(settingsItem);
         _appMenu.Items.Add(historyItem);
+        _appMenu.Items.Add("Manage sites…", null, (_, _) => ShowSiteActions());
         _appMenu.Items.Add(new ToolStripSeparator());
         _appMenu.Items.Add(exportItem);
         _appMenu.Items.Add(importItem);
@@ -1918,7 +1952,7 @@ public sealed partial class MainForm : Form
 
         using var background = new SolidBrush(selected
             ? AuroraTheme.Palette.Surface3
-            : AuroraTheme.Palette.Surface);
+            : _siteList.BackColor);
         using var textBrush = new SolidBrush(selected
             ? AuroraTheme.Palette.Text
             : AuroraTheme.Palette.Secondary);
@@ -1926,6 +1960,14 @@ public sealed partial class MainForm : Form
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         using var rowPath = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusMedium);
         e.Graphics.FillPath(background, rowPath);
+        if (selected)
+        {
+            // Accent bar marks the selected site beyond fill and text weight alone.
+            int bar = Math.Max(3, (int)(3 * DeviceDpi / 96f)), barInset = bounds.Height / 4;
+            using var accent = new SolidBrush(AuroraTheme.Palette.Accent);
+            using var barPath = WallboardStyle.Rounded(new Rectangle(bounds.X + 4, bounds.Y + barInset, bar, Math.Max(1, bounds.Height - barInset * 2)), bar / 2);
+            e.Graphics.FillPath(accent, barPath);
+        }
 
         string text = _siteList.Items[e.Index]?.ToString() ?? string.Empty;
         TextRenderer.DrawText(
@@ -2076,9 +2118,7 @@ public sealed partial class MainForm : Form
 
             int totalHosts = _sites.Sum(site =>
                 site.Hosts.Count(address => GetHostOptions(site, address).Enabled));
-            _siteList.Items.Add(new SiteListItem(
-                null,
-                "All sites"));
+            _allSitesButton.Text = $"All sites · {totalHosts} {(totalHosts == 1 ? "host" : "hosts")}";
 
             foreach (var site in _sites
                 .OrderBy(site => site.FolderPath, StringComparer.OrdinalIgnoreCase)
@@ -2089,11 +2129,11 @@ public sealed partial class MainForm : Form
                     FormatSiteDisplayPath(site)));
             }
 
-            int selectedIndex = 0;
+            int selectedIndex = -1;
 
             if (selectedName is not null)
             {
-                for (int i = 1; i < _siteList.Items.Count; i++)
+                for (int i = 0; i < _siteList.Items.Count; i++)
                 {
                     if (_siteList.Items[i] is SiteListItem item &&
                         item.SiteName?.Equals(selectedName, StringComparison.OrdinalIgnoreCase) == true)
@@ -2105,6 +2145,9 @@ public sealed partial class MainForm : Form
             }
 
             _siteList.SelectedIndex = selectedIndex;
+            _allSitesButton.Selected = selectedIndex < 0;
+            _allSitesButton.AccessibleDescription = selectedIndex < 0 ? "Selected" : null;
+            _allSitesButton.Invalidate();
         }
         finally
         {
@@ -2119,9 +2162,15 @@ public sealed partial class MainForm : Form
         if (_ignoreSiteSelection || _siteList.SelectedIndex < 0)
             return;
 
+        SelectSiteScope((_siteList.SelectedItem as SiteListItem)?.SiteName);
+    }
+
+    // null means every site; the pinned All sites button and the site list both route here.
+    private void SelectSiteScope(string? siteName)
+    {
         PersistCurrentEditor();
         SaveSites();
-        _selectedSiteName = (_siteList.SelectedItem as SiteListItem)?.SiteName;
+        _selectedSiteName = siteName;
         ReconcileMonitoringWithConfig();
 
         RefreshSiteList(_selectedSiteName);
