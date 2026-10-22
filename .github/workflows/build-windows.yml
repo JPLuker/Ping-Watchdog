@@ -158,9 +158,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Pasting names works from remote sessions, chat and web copies: the clipboard is retried, any text format is accepted, hidden characters are removed, and a busy clipboard says so.
-          - Quick Add opens on the site you are viewing and lets you type a new site name to create it.
-          - Sites header uses a + button for Add site.
+          - Show & in site and host names ("Women & Children's Center") instead of turning it into an underline.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

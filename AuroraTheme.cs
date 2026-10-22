@@ -196,6 +196,8 @@ internal static class AuroraTheme
                 tree.LineColor = p.Muted;
                 break;
             case Label label:
+                // Names like "Women & Children's Center" must show their &, not underline the next letter.
+                label.UseMnemonic = false;
                 label.BackColor = Color.Transparent;
                 label.ForeColor = role switch
                 {
@@ -244,6 +246,12 @@ internal static class AuroraTheme
         }
         return p.Muted;
     }
+
+    // Menu items treat & as a shortcut marker; double it so names display as typed.
+    internal static string MenuText(string text) => text.Replace("&", "&&");
+
+    // Owner-drawn names: no shortcut markers, single line, ellipsis at the end.
+    internal const TextFormatFlags NameTextFlags = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
 
     internal static void ApplyMenu(ToolStrip menu)
     {

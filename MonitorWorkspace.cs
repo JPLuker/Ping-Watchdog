@@ -222,7 +222,7 @@ public sealed partial class MainForm
         if (index < 0 || index >= _siteList.Items.Count) return false;
         int available = Math.Max(1, _siteList.ClientSize.Width - 8 - 18);
         string text = _siteList.Items[index]?.ToString() ?? string.Empty;
-        return TextRenderer.MeasureText(text, _siteItemFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.SingleLine).Width > available;
+        return TextRenderer.MeasureText(text, _siteItemFont, new Size(int.MaxValue, int.MaxValue), AuroraTheme.NameTextFlags).Width > available;
     }
 
     // Full site names on hover when the row shows an ellipsis.
