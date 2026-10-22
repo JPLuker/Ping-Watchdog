@@ -944,6 +944,7 @@ public sealed partial class MainForm : Form
             _siteActionsMenu.Dispose();
             _columnsMenu.Dispose();
             _siteItemFont.Dispose();
+            _siteListTip.Dispose();
             _statusCellFont.Dispose();
             _appIcon.Dispose();
             _brandBitmap.Dispose();
@@ -1155,6 +1156,35 @@ public sealed partial class MainForm : Form
                 Check(size.Height >= required.Height + 6);
             }
         }
+
+        // Many sites must not pile up: headings and host cells never collide, every host stays reachable.
+        foreach (var (siteCount, viewport, expectHeadings) in new[]
+        {
+            (24, new Size(1600, 1000), true),
+            (24, new Size(900, 650), true),
+            (60, new Size(900, 650), false)
+        })
+        {
+            var denseSites = Enumerable.Range(0, siteCount).Select(s => new WallboardSiteSnapshot(
+                $"Site {s:00} " + (s % 5 == 0 ? "with a very long branch office name" : ""),
+                Enumerable.Range(0, 2 + s % 4).Select(h => new WallboardHostSnapshot(
+                    $"Site {s:00}",
+                    h == 0 && s % 3 == 0 ? $"2001:db8:abcd:{s:x4}:5678:90ab:cdef:{h:x4}" : $"10.{s}.0.{h + 1}",
+                    h % 2 == 0 ? "" : "Switch",
+                    HostState.Online, 1, null)).ToArray())).ToArray();
+            using var dense = new WallboardCanvas { Size = viewport, ShowCli = false,
+                Snapshot = new WallboardSnapshot(true, DateTime.Now, denseSites,
+                    Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) };
+            using var denseBitmap = new Bitmap(viewport.Width, viewport.Height);
+            dense.DrawToBitmap(denseBitmap, new Rectangle(Point.Empty, viewport));
+            int denseHosts = denseSites.Sum(site => site.Hosts.Count);
+            Check(dense.AllHostNodesFit && dense.VisibleHostCount == denseHosts, $"{siteCount} sites at {viewport} lost hosts.");
+            Check(!dense.TopologyRegionsOverlap(), $"{siteCount} sites at {viewport} overlap.");
+            if (expectHeadings)
+                Check(dense.DrawnSiteHeadings.Count == siteCount, $"{siteCount} sites at {viewport} dropped site names.");
+        }
+
+        Check(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
 
         var snoozeNow = DateTimeOffset.UtcNow;
         var snoozeOptions = new HostOptions { SnoozedUntilUtc = snoozeNow.AddHours(1) };
@@ -1519,6 +1549,26 @@ public sealed partial class MainForm : Form
                     Check(scoped._hosts.Count == 2, "All sites did not restore both targets.");
                     scoped.StopMonitoring();
                     Check(scoped._hostTokens.Count == 0, "Stop left workers active.");
+                }
+
+                using (var sorted = new MainForm(false, true, false))
+                {
+                    string longName = "Northside regional distribution warehouse loading dock " + new string('x', 60);
+                    sorted.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, Sites = new()
+                    {
+                        new SiteDefinition { Name = "Zulu", Hosts = new() { "192.0.2.10" } },
+                        new SiteDefinition { Name = "alpha", Hosts = new() { "192.0.2.11" } },
+                        new SiteDefinition { Name = longName, Hosts = new() { "192.0.2.12" } },
+                        new SiteDefinition { Name = "Mike", Hosts = new() { "192.0.2.13" } }
+                    } });
+                    var mapOrder = sorted.BuildWallboardSnapshot().Sites.Select(x => x.Name).ToArray();
+                    Check(mapOrder.SequenceEqual(new[] { "alpha", "Mike", longName, "Zulu" }, StringComparer.Ordinal), "Map sites are not alphabetical.");
+                    var listOrder = sorted._siteList.Items.Cast<SiteListItem>().Skip(1).Select(x => x.SiteName).ToArray();
+                    Check(listOrder.SequenceEqual(mapOrder, StringComparer.Ordinal), "Map and site list order differ.");
+                    int longIndex = sorted._siteList.Items.Cast<SiteListItem>().ToList().FindIndex(x => x.SiteName == longName);
+                    Check(sorted.IsSiteNameTruncated(longIndex), "A truncated site name has no full-name tooltip.");
+                    if (sorted._siteList.ClientSize.Width > 150)
+                        Check(!sorted.IsSiteNameTruncated(longIndex - 1), "A short site name was treated as truncated.");
                 }
                 form.SetWorkspaceView(true);
                 WindowsBranding.RunShortcutSmokeTest(output);
@@ -3659,9 +3709,12 @@ public sealed partial class MainForm : Form
             }
         }
 
+        // Same order as the site list: folder, then name.
         var sites = _sites
             .Where(site => _selectedSiteName is null || site.Name.Equals(_selectedSiteName, StringComparison.OrdinalIgnoreCase))
             .Where(site => site.Hosts.Any(address => GetHostOptions(site, address).Enabled))
+            .OrderBy(site => site.FolderPath, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(site => site.Name, StringComparer.OrdinalIgnoreCase)
             .Select(site =>
             {
                 var hosts = site.Hosts

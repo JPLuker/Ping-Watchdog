@@ -1094,6 +1094,7 @@ internal sealed partial class WallboardCanvas : Control
 
         _hostHitRegions.Clear();
         _hostCaptionRegions.Clear();
+        _siteHeadingRegions.Clear();
         _sidebarHitRegions.Clear();
         DrawBackground(g);
         DrawHeader(g, snapshot);

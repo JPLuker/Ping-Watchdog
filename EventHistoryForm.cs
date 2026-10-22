@@ -4,6 +4,8 @@ namespace PingWatchdog;
 
 internal sealed class EventHistoryForm : Form
 {
+    // Event type text is read, so it sits at the 13 logical-px floor (9.75pt), not below it.
+    internal static readonly Font KindFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
     private readonly Func<IReadOnlyList<StateEventRecord>> _eventProvider;
     private readonly Func<EventHistoryPreferences> _preferencesProvider;
     private readonly Action<int, bool> _preferencesChanged;
@@ -264,7 +266,7 @@ internal sealed class EventHistoryForm : Form
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(13, 20, 28);
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(22, 31, 42);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = muted;
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+        _grid.ColumnHeadersDefaultCellStyle.Font = KindFont;
         _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(22, 31, 42);
     }
 
@@ -329,8 +331,7 @@ internal sealed class EventHistoryForm : Form
         foreach (DataGridViewRow row in _grid.Rows)
         {
             string kind = row.Cells["KindColumn"].Value?.ToString() ?? string.Empty;
-            row.Cells["KindColumn"].Style.Font =
-                new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+            row.Cells["KindColumn"].Style.Font = KindFont;
             row.Cells["KindColumn"].Style.ForeColor = kind switch
             {
                 "DOWN" => Color.FromArgb(255, 110, 119),
