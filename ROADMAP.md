@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.17**.
+Current published Windows build: **v1.18.18**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -147,3 +147,4 @@ v1.18.16 follow-up: Joseph's v1.18.15 photo showed two-tone rows. DrawSiteItem f
 
 v1.18.17 follow-up from Joseph's v1.18.16 photos: the native dark scrollbar is replaced by a thin, draggable indicator drawn in the well; All sites is outlined when unselected; the map weighs site-name width in its layout; host rows cap at a natural height and stack from the top. Validation run 39812671262 passed, including a standalone 50-row scroll-indicator test, lone-host stacking and twelve real-length site names fitting at 1600×1000.
 
+v1.18.18 softens the All sites outline to the quietest per-theme color that keeps 3:1 contrast (validation 39817568151, build 39817898861). Joseph confirmed the v1.18.17 sidebar; #5 is closed. The Sites/Add site header moves to the Hosts overhaul (#7).
