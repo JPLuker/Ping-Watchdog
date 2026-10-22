@@ -178,3 +178,15 @@ Publication: build run 39804394546 passed published startup/UI, independent reco
 v1.18.15: pinned All sites scope, inset site-list well, divider, four sidebar actions, front-trimmed map addresses. Evidence: Windows validation run 39808709209 (self-tests and UI regressions). Not established: rendered capture inspection, Joseph's visual confirmation, physical DPI/large text/screen reader.
 
 Publication: build run 39809105132 published v1.18.15 as latest with installer, portable ZIP, full **and delta** packages, RELEASES and feed. The v1.18.14 delta omission therefore looks transient, but the silent-failure path still needs hardening.
+
+
+## Release hardening — 2026-10-22 (v1.19.4)
+
+Implemented: commit-SHA pins for checkout v4.4.0, setup-dotnet v4.3.1 and upload-artifact v4.6.2 in build-windows.yml and validate-windows.yml; a pre-build version guard; `dotnet list package --vulnerable --include-transitive` gates; three-attempt previous-release download; required-asset verification; SHA256SUMS.txt asset; an unsigned-build notice on the GitHub release page only (Velopack notes unchanged); Dependabot for github-actions and nuget at the repository root.
+
+Decisions: (1) A missing delta warns and notes it on the release page rather than failing, because full-package updates remain valid and blocking iterative releases on a transient download error is worse. (2) Publication stays push-to-main, not tag-driven: Joseph requires an updater release after each passing implementation build (AGENTS.md), and the version guard enforces uniqueness. (3) Linux workflows are untouched (separate beta track). (4) Major action upgrades (checkout v6, setup-dotnet v6, upload-artifact v6) are left to Dependabot PRs so behaviour changes are reviewed individually.
+
+Evidence: validation run 39846013708 (pinned actions, vulnerable-package check, self-tests, UI regressions) and build run 39846402344 (version guard, vulnerability gate, delta download, asset verification, publication). SHA256SUMS.txt for v1.19.4 matches releases.win.json hashes for the full and delta packages.
+
+Still open in this section: updater integrity under corrupt downloads (Velopack verifies package hashes; no corrupt-download test yet), update-check cadence and managed-policy controls, and owner-managed repository security settings.
+
