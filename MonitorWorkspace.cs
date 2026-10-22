@@ -50,7 +50,7 @@ public sealed partial class MainForm
         _allSitesButton.Margin = new Padding(0, 0, 0, 8);
         _allSitesButton.Click += (_, _) => { if (_selectedSiteName is not null) SelectSiteScope(null); };
         navigation.Controls.Add(_allSitesButton, 0, 1);
-        _siteWell = new AuroraWell { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(4, 6, 4, 6), Tag = "well" };
+        _siteWell = new AuroraWell { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(4, 6, 14, 6), Tag = "well" };
         _siteList.Tag = "well";
         _siteWell.Controls.Add(_siteList);
         navigation.Controls.Add(_siteWell, 0, 2);
@@ -230,6 +230,10 @@ public sealed partial class MainForm
     {
         _allSitesButton.Height = (int)(40 * DeviceDpi / 96f);
         _allSitesButton.Padding = new Padding(12, 4, 12, 4);
+        float wellScale = DeviceDpi / 96f;
+        // Right padding holds the scroll indicator at any scale.
+        if (_siteWell is not null)
+            _siteWell.Padding = new Padding((int)(4 * wellScale), (int)(6 * wellScale), (int)(14 * wellScale), (int)(6 * wellScale));
         if (_headerActionsPanel is null) return;
         foreach (var button in _headerActionsPanel.Controls.OfType<Button>())
         {

@@ -527,7 +527,7 @@ public sealed partial class MainForm : Form
 
     private readonly Button _addSiteButton = new AuroraButton() { Text = "+ Add Site", AutoSize = true };
     // Pinned scope: stays visible above the scrolling site list and is never one of its rows.
-    private readonly AuroraButton _allSitesButton = new() { Text = "All sites", AccessibleName = "All sites", AutoSize = false, Ghost = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly AuroraButton _allSitesButton = new() { Text = "All sites", AccessibleName = "All sites", AutoSize = false, Ghost = true, Outline = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button _organizeButton = new AuroraButton() { Text = "Organize", AutoSize = true };
     private readonly Button _renameSiteButton = new AuroraButton() { Text = "Rename Site", AutoSize = true };
     private readonly Button _deleteSiteButton = new AuroraButton() { Text = "Delete Site", AutoSize = true };
@@ -1194,6 +1194,41 @@ public sealed partial class MainForm : Form
 
         Expect(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
 
+        // A lone host stacks under its site at a natural row height instead of floating mid-block.
+        using (var lone = new WallboardCanvas { Size = new Size(1600, 1000), ShowCli = false,
+            Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                new[] { new WallboardSiteSnapshot("Camp Hidden Falls", new[] { new WallboardHostSnapshot("Camp Hidden Falls", "10.233.100.5", "Server", HostState.Online, 1, null) }) },
+                Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) })
+        using (var loneBitmap = new Bitmap(1600, 1000))
+        {
+            lone.DrawToBitmap(loneBitmap, new Rectangle(0, 0, 1600, 1000));
+            var heading = lone.SiteHeadingBounds.Single().Bounds;
+            var cell = lone.HostCellBounds.Single();
+            using var g = Graphics.FromImage(loneBitmap);
+            float lineHeight = lone.HostAddressFont.GetHeight(g), dpi = lone.DeviceDpi / 96f;
+            Expect(cell.Height <= lineHeight * 2 + 16 * dpi + 1, $"Lone host row is {cell.Height}px tall.");
+            Expect(cell.Top - heading.Bottom <= 8 * dpi, $"Lone host floats {cell.Top - heading.Bottom}px below its site.");
+        }
+
+        // With room to spare, every site name shows in full.
+        using (var named = new WallboardCanvas { Size = new Size(1600, 1000), ShowCli = false,
+            Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                new[] { "Clarksville Thrift Store", "Richmond 360 Life Center", "Eagle Creek - Booth Manor", "Carpenter Apartments", "Michigan City Corps", "New Albany Corps",
+                        "Camp Hidden Falls", "Terre Haute Corps", "Shelbyville Corps", "Johnson County Center", "Indy Eagle Creek Corps", "Lafayette Corps" }
+                    .Select((name, i) => new WallboardSiteSnapshot(name, new[] { new WallboardHostSnapshot(name, $"10.233.{i}.5", "", HostState.Online, 1, null) })).ToArray(),
+                Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) })
+        using (var namedBitmap = new Bitmap(1600, 1000))
+        {
+            named.DrawToBitmap(namedBitmap, new Rectangle(0, 0, 1600, 1000));
+            using var g = Graphics.FromImage(namedBitmap);
+            foreach (var (bounds, site) in named.SiteHeadingBounds)
+            {
+                float needed = g.MeasureString(site, named.SiteNameFont, int.MaxValue, StringFormat.GenericTypographic).Width;
+                Expect(needed <= bounds.Width + 1, $"Site name '{site}' is cut off ({needed:0} > {bounds.Width}).");
+            }
+            Expect(named.SiteHeadingBounds.Count == 12, "Named sites lost headings.");
+        }
+
         // Truncated map addresses keep their distinguishing end, never just the shared prefix.
         using (var trimBitmap = new Bitmap(200, 50))
         using (var trimGraphics = Graphics.FromImage(trimBitmap))
@@ -1568,6 +1603,8 @@ public sealed partial class MainForm : Form
                     Check(form._allSitesButton.Bottom <= form._siteWell.Top && form._sectionDivider!.Bottom <= form._headerActionsPanel!.Top,
                         "Sidebar sections overlap.");
                     CheckSiteWellBlends(form);
+                    Check(form._siteList.ClientSize.Width == form._siteList.Width, "Site list still shows a native scrollbar.");
+                    Check(form._allSitesButton.Outline, "All sites lost its outline.");
                     foreach (Control setting in form._settingsFlowPanel!.Controls.Cast<Control>().Where(control => control.Visible))
                         Check(setting.Bottom <= form._settingsFlowPanel.ClientSize.Height, "Wrapped monitoring control is clipped.");
                     Capture(form, "main-" + width);
@@ -1583,6 +1620,31 @@ public sealed partial class MainForm : Form
                     Check(form._wallboardButton.Width >= form._wallboardButton.PreferredSize.Width,
                         "Wallboard button is clipped with larger UI text.");
                     form._wallboardButton.Font = buttonFont;
+                }
+
+                // Themed scroll indicator: present only when rows overflow, follows scrolling, never overlaps the list.
+                using (var scrollHost = new Form { ClientSize = new Size(240, 320), StartPosition = FormStartPosition.Manual, Location = new Point(40, 40), ShowInTaskbar = false })
+                {
+                    var scrollWell = new AuroraWell { Dock = DockStyle.Fill, Padding = new Padding(4, 6, 14, 6) };
+                    var scrollList = new AuroraListBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false, ItemHeight = 40, DrawMode = DrawMode.OwnerDrawFixed };
+                    scrollWell.Controls.Add(scrollList);
+                    scrollHost.Controls.Add(scrollWell);
+                    scrollHost.Show();
+                    for (int i = 0; i < 3; i++) scrollList.Items.Add($"Site {i}");
+                    Check(scrollWell.ScrollThumb is null, "Scroll indicator shown when every row fits.");
+                    for (int i = 3; i < 50; i++) scrollList.Items.Add($"Site {i}");
+                    Check(scrollList.ClientSize.Width == scrollList.Width, "Themed list kept a native scrollbar.");
+                    var startThumb = scrollWell.ScrollThumb;
+                    Check(startThumb is Rectangle && startThumb.Value.Left >= scrollList.Right, "Scroll indicator overlaps the list.");
+                    scrollList.ScrollBy(10);
+                    var movedThumb = scrollWell.ScrollThumb;
+                    Check(scrollList.TopIndex == 10 && movedThumb!.Value.Top > startThumb!.Value.Top, "Scroll indicator did not follow scrolling.");
+                    scrollList.ScrollBy(1000);
+                    Check(scrollList.TopIndex >= 50 - scrollList.VisibleRows - 1 && scrollWell.ScrollThumb!.Value.Bottom <= scrollWell.ScrollTrack!.Value.Bottom,
+                        "Scrolling past the end escaped the track.");
+                    scrollList.ScrollBy(-1000);
+                    Check(scrollList.TopIndex == 0, "Scrolling back did not reach the first row.");
+                    scrollHost.Close();
                 }
 
                 using (var scoped = new MainForm(false, true, false))

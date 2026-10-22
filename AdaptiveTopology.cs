@@ -8,6 +8,10 @@ internal sealed partial class WallboardCanvas
     internal int VisibleHostCount => _hostCaptionRegions.Count;
     private readonly List<(Rectangle Bounds, string Site)> _siteHeadingRegions = new();
     internal IReadOnlyList<string> DrawnSiteHeadings => _siteHeadingRegions.Select(r => r.Site).ToList();
+    internal IReadOnlyList<(Rectangle Bounds, string Site)> SiteHeadingBounds => _siteHeadingRegions.ToList();
+    internal IReadOnlyList<Rectangle> HostCellBounds => _hostCaptionRegions.Select(r => r.Bounds).ToList();
+    internal Font SiteNameFont => _siteFont;
+    internal Font HostAddressFont => _hostIpFont;
     // Headings must not collide with each other or with any host cell.
     internal bool TopologyRegionsOverlap() =>
         _siteHeadingRegions.SelectMany((a, i) => _siteHeadingRegions.Skip(i + 1).Select(b => a.Bounds.IntersectsWith(b.Bounds))).Any(x => x)
@@ -58,6 +62,8 @@ internal sealed partial class WallboardCanvas
         double bestScore = -1, relaxedScore = -1;
         float bestGutter = rowGutter, relaxedGutter = rowGutter;
         int[] bestColumns = new int[sites.Count], relaxedColumns = new int[sites.Count];
+        // Site names count too, so the layout trades a little host room for readable names.
+        var nameWidths = sites.Select(site => g.MeasureString(site.Name, _siteFont, int.MaxValue, StringFormat.GenericTypographic).Width + 4 * scale).ToArray();
         var addressWidths = sites.Select(site => site.Hosts.Select(host => g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max() + 40 * scale).ToArray();
         // Keep the accepted square-ish search; widen it only when captions no longer fit.
         for (int groupColumns = 1; groupColumns <= sites.Count; groupColumns++)
@@ -82,7 +88,8 @@ internal sealed partial class WallboardCanvas
                         (groupHeight - heading - padding) / rows / (line * 2 + 8 * scale));
                     if (fit > nodeScore) { nodeScore = fit; columns[i] = c; }
                 }
-                score = Math.Min(score, nodeScore);
+                double nameFit = (groupWidth - padding * 3) / nameWidths[i];
+                score = Math.Min(score, Math.Min(nodeScore, nameFit));
             }
             if (readable && score > bestScore) { bestScore = score; bestGroups = groupColumns; bestColumns = columns; bestGutter = gutter; }
             if (score > relaxedScore) { relaxedScore = score; relaxedGroups = groupColumns; relaxedColumns = columns; relaxedGutter = gutter; }
@@ -129,7 +136,8 @@ internal sealed partial class WallboardCanvas
             int columns = Math.Max(1, bestColumns[i]);
             int hostRows = (int)Math.Ceiling(site.Hosts.Count / (double)columns);
             float cellWidth = Math.Max(1, (blockWidth - padding * 2) / columns);
-            float cellHeight = Math.Max(1, (blockHeight - siteHeading - blockPadding) / hostRows);
+            // Rows keep a natural height and stack from the top; spare room stays below the last host.
+            float cellHeight = Math.Min(line * 2 + 16 * scale, Math.Max(1, (blockHeight - siteHeading - blockPadding) / hostRows));
             float rootX = x + padding + 4 * scale, rootY = y + blockPadding;
             using var siteBrush = new SolidBrush(StateColor(AggregateSiteState(site), 255));
             g.FillEllipse(siteBrush, rootX - 4 * scale, rootY - 4 * scale, 8 * scale, 8 * scale);

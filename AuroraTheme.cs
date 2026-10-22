@@ -261,10 +261,57 @@ internal sealed class AuroraMenuColors : ProfessionalColorTable
 
 // Rounded inset that gives a scrolling region a visible edge against its surroundings.
 // The well, its list background and unselected rows all read this one token so they cannot drift apart.
+// It also draws the list's scroll indicator in its right padding instead of a native scrollbar.
 internal sealed class AuroraWell : Panel
 {
     internal static Color WellColor => AuroraTheme.Palette.Surface2;
-    public AuroraWell() { SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true); }
+    private bool _thumbHover, _dragging;
+    private int _dragOffset;
+    public AuroraWell()
+    {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
+        ControlAdded += (_, e) => { if (e.Control is AuroraListBox list) list.ScrollStateChanged += () => RefreshIndicator(list); };
+    }
+
+    private (int Top, int Count, int Rows) _lastScroll = (-1, -1, -1);
+    private void RefreshIndicator(AuroraListBox list)
+    {
+        var state = (list.TopIndex, list.Items.Count, list.VisibleRows);
+        if (state == _lastScroll) return;
+        _lastScroll = state;
+        Invalidate(new Rectangle(Math.Max(0, ClientSize.Width - (int)(14 * DeviceDpi / 96f)), 0, ClientSize.Width, ClientSize.Height));
+    }
+
+    private AuroraListBox? List => Controls.OfType<AuroraListBox>().FirstOrDefault();
+
+    // Track sits in the right padding beside the list; null when everything already fits.
+    internal Rectangle? ScrollTrack
+    {
+        get
+        {
+            var list = List;
+            if (list is null || list.Items.Count <= list.VisibleRows) return null;
+            float scale = DeviceDpi / 96f;
+            int width = Math.Max(3, (int)(4 * scale));
+            return new Rectangle(ClientSize.Width - (int)(8 * scale), list.Top + (int)(4 * scale), width, Math.Max(1, list.Height - (int)(8 * scale)));
+        }
+    }
+
+    internal Rectangle? ScrollThumb
+    {
+        get
+        {
+            var list = List;
+            if (list is null || ScrollTrack is not Rectangle track) return null;
+            int rows = list.Items.Count, visible = Math.Max(1, list.VisibleRows);
+            int height = Math.Max((int)(24 * DeviceDpi / 96f), track.Height * visible / rows);
+            height = Math.Min(height, track.Height);
+            int range = Math.Max(1, rows - visible);
+            int top = track.Y + (track.Height - height) * Math.Clamp(list.TopIndex, 0, range) / range;
+            return new Rectangle(track.X, top, track.Width, height);
+        }
+    }
+
     protected override void OnPaintBackground(PaintEventArgs e)
     {
         e.Graphics.Clear(Parent?.BackColor ?? AuroraTheme.Palette.Surface);
@@ -273,13 +320,73 @@ internal sealed class AuroraWell : Panel
         using var path = WallboardStyle.Rounded(new Rectangle(0, 0, ClientSize.Width - 1, ClientSize.Height - 1), AuroraTheme.RadiusMedium);
         using var fill = new SolidBrush(WellColor);
         e.Graphics.FillPath(fill, path);
+        if (ScrollThumb is Rectangle thumb)
+        {
+            var p = AuroraTheme.Palette;
+            using var thumbBrush = new SolidBrush(_thumbHover || _dragging ? p.Secondary : p.Muted);
+            using var thumbPath = WallboardStyle.Rounded(thumb, Math.Max(1, thumb.Width / 2));
+            e.Graphics.FillPath(thumbBrush, thumbPath);
+        }
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left || ScrollTrack is not Rectangle track || ScrollThumb is not Rectangle thumb) return;
+        var hit = Rectangle.Inflate(track, (int)(4 * DeviceDpi / 96f), 0);
+        if (!hit.Contains(e.Location)) return;
+        _dragging = true;
+        _dragOffset = thumb.Contains(e.Location) ? e.Y - thumb.Y : thumb.Height / 2;
+        ScrollToPointer(e.Y);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_dragging) { ScrollToPointer(e.Y); return; }
+        bool hover = ScrollTrack is Rectangle track && Rectangle.Inflate(track, (int)(4 * DeviceDpi / 96f), 0).Contains(e.Location);
+        if (hover != _thumbHover) { _thumbHover = hover; Invalidate(); }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); _dragging = false; Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); if (!_dragging) { _thumbHover = false; Invalidate(); } }
+
+    private void ScrollToPointer(int y)
+    {
+        var list = List;
+        if (list is null || ScrollTrack is not Rectangle track || ScrollThumb is not Rectangle thumb) return;
+        int range = Math.Max(1, list.Items.Count - list.VisibleRows);
+        float travel = Math.Max(1, track.Height - thumb.Height);
+        list.TopIndex = Math.Clamp((int)Math.Round((y - _dragOffset - track.Y) / travel * range), 0, range);
+        Invalidate();
     }
 }
 
-// Windows can erase a themed list's empty space with its own color; paint it from BackColor instead.
+// Site list without a native scrollbar: the well draws a themed indicator, and the list scrolls itself.
+// It also paints its own erase background so Windows cannot substitute a themed color.
 internal sealed class AuroraListBox : ListBox
 {
-    private const int WmEraseBackground = 0x0014;
+    private const int WmEraseBackground = 0x0014, WmSize = 0x0005, WmKeyDown = 0x0100, WmTimer = 0x0113, WmVScroll = 0x0115,
+        WmMouseMove = 0x0200, WmLButtonDown = 0x0201, WmMouseWheel = 0x020A, LbAddString = 0x0180, LbResetContent = 0x0184,
+        LbSetCurSel = 0x0186, LbSetTopIndex = 0x0197, LbInsertString = 0x0181, LbDeleteString = 0x0182, WsVScroll = 0x00200000;
+    private int _wheelRemainder;
+    internal event Action? ScrollStateChanged;
+
+    protected override CreateParams CreateParams
+    {
+        get { var cp = base.CreateParams; cp.Style &= ~WsVScroll; return cp; }
+    }
+
+    internal int VisibleRows => ItemHeight <= 0 ? 0 : ClientSize.Height / ItemHeight;
+
+    // Moves the view by whole rows; positive scrolls down.
+    internal void ScrollBy(int rows)
+    {
+        int range = Math.Max(0, Items.Count - VisibleRows);
+        TopIndex = Math.Clamp(TopIndex + rows, 0, range);
+        ScrollStateChanged?.Invoke();
+    }
+
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == WmEraseBackground && m.WParam != IntPtr.Zero)
@@ -290,7 +397,19 @@ internal sealed class AuroraListBox : ListBox
             m.Result = (IntPtr)1;
             return;
         }
+        if (m.Msg == WmMouseWheel)
+        {
+            int delta = (short)((long)m.WParam >> 16 & 0xFFFF) + _wheelRemainder;
+            int notches = delta / 120;
+            _wheelRemainder = delta - notches * 120;
+            if (notches != 0) ScrollBy(-notches * Math.Max(1, SystemInformation.MouseWheelScrollLines));
+            m.Result = IntPtr.Zero;
+            return;
+        }
         base.WndProc(ref m);
+        if (m.Msg is WmSize or WmKeyDown or WmTimer or WmVScroll or WmMouseMove or WmLButtonDown or LbAddString
+            or LbInsertString or LbDeleteString or LbResetContent or LbSetCurSel or LbSetTopIndex)
+            ScrollStateChanged?.Invoke();
     }
 }
 
@@ -301,6 +420,8 @@ internal class AuroraButton : Button
     internal bool Destructive { get; set; }
     internal bool Ghost { get; set; }
     internal bool Selected { get; set; }
+    // Outline keeps a ghost button recognizable as a control when it is not selected.
+    internal bool Outline { get; set; }
     private bool _hover, _pressed;
     public AuroraButton()
     {
@@ -394,6 +515,11 @@ internal class AuroraButton : Button
         var fillColor = Primary && Enabled ? (Destructive ? p.Danger : p.Accent) : Selected || _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
         using var fill = new SolidBrush(fillColor);
         e.Graphics.FillPath(fill, path);
+        if (Outline && Ghost && !Selected && !_pressed && !(_hover && Enabled))
+        {
+            using var edge = new Pen(p.Muted, Math.Max(1, DeviceDpi / 96f));
+            e.Graphics.DrawPath(edge, path);
+        }
         if (Focused && ShowFocusCues)
         {
             using var focus = new Pen(p.Accent, 2 * DeviceDpi / 96f);
