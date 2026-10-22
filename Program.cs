@@ -1867,6 +1867,7 @@ public sealed partial class MainForm : Form
                 form.SelectHostsForTest(form.HostSnapshot().First().Address);
                 await Task.Delay(50);
                 Check(form.SelectionBarShowing, "Selecting a host did not show the action bar.");
+                Check(form.FiltersShownWithSelection, "Filter chips disappeared while a host was selected.");
                 Capture(form, "list-selection");
                 form.SelectHostsForTest();
 
