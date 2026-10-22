@@ -158,8 +158,10 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Site list rows blend into their panel; only the selected site shows a pill.
-          - Fix the two-tone site list caused by rows painting the sidebar color behind each pill.
+          - Replace the dark scrollbar strip in the site list with a thin indicator in the panel color; drag it or use the wheel.
+          - Outline All sites when it is not selected so it still reads as a button.
+          - Map: site names count toward the layout so fewer are cut off.
+          - Map: hosts stack from the top at a natural row height instead of floating in tall blocks.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
