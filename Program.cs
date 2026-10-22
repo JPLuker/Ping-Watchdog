@@ -1194,6 +1194,16 @@ public sealed partial class MainForm : Form
 
         Expect(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
 
+        // The All sites outline is quieter than muted text but still meets the 3:1 component floor.
+        foreach (bool dark in new[] { false, true })
+        {
+            var palette = AuroraPalette.Create(dark);
+            var outline = AuroraTheme.SoftOutline(palette, palette.Surface);
+            double outlineRatio = AuroraTheme.ContrastRatio(outline, palette.Surface);
+            Expect(outlineRatio >= 3.0, $"{(dark ? "Dark" : "Light")} outline contrast is {outlineRatio:0.00}:1.");
+            Expect(outlineRatio < AuroraTheme.ContrastRatio(palette.Muted, palette.Surface), $"{(dark ? "Dark" : "Light")} outline is not softer than muted.");
+        }
+
         // A lone host stacks under its site at a natural row height instead of floating mid-block.
         using (var lone = new WallboardCanvas { Size = new Size(1600, 1000), ShowCli = false,
             Snapshot = new WallboardSnapshot(true, DateTime.Now,

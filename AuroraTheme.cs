@@ -218,6 +218,33 @@ internal static class AuroraTheme
             foreach (Control child in control.Controls) ApplyControl(child);
     }
 
+    internal static double ContrastRatio(Color a, Color b)
+    {
+        static double Channel(byte component)
+        {
+            double value = component / 255.0;
+            return value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4);
+        }
+        static double Luminance(Color c) => .2126 * Channel(c.R) + .7152 * Channel(c.G) + .0722 * Channel(c.B);
+        double x = Luminance(a), y = Luminance(b);
+        return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);
+    }
+
+    // Quietest outline that still meets the 3:1 UI-component floor against its background.
+    internal static Color SoftOutline(AuroraPalette p, Color background)
+    {
+        if (SystemInformation.HighContrast) return p.Text;
+        for (double t = .5; t > 0; t -= .05)
+        {
+            var c = Color.FromArgb(
+                (int)Math.Round(p.Muted.R + (background.R - p.Muted.R) * t),
+                (int)Math.Round(p.Muted.G + (background.G - p.Muted.G) * t),
+                (int)Math.Round(p.Muted.B + (background.B - p.Muted.B) * t));
+            if (ContrastRatio(c, background) >= 3.1) return c;
+        }
+        return p.Muted;
+    }
+
     internal static void ApplyMenu(ToolStrip menu)
     {
         menu.BackColor = Palette.Surface; menu.ForeColor = Palette.Text;
@@ -517,7 +544,7 @@ internal class AuroraButton : Button
         e.Graphics.FillPath(fill, path);
         if (Outline && Ghost && !Selected && !_pressed && !(_hover && Enabled))
         {
-            using var edge = new Pen(p.Muted, Math.Max(1, DeviceDpi / 96f));
+            using var edge = new Pen(AuroraTheme.SoftOutline(p, Parent?.BackColor ?? p.Surface), Math.Max(1, DeviceDpi / 96f));
             e.Graphics.DrawPath(edge, path);
         }
         if (Focused && ShowFocusCues)

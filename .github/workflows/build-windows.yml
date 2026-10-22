@@ -158,10 +158,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Replace the dark scrollbar strip in the site list with a thin indicator in the panel color; drag it or use the wheel.
-          - Outline All sites when it is not selected so it still reads as a button.
-          - Map: site names count toward the layout so fewer are cut off.
-          - Map: hosts stack from the top at a natural row height instead of floating in tall blocks.
+          - Soften the All sites outline while keeping it at the 3:1 contrast needed to read as a button.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
