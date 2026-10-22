@@ -1349,9 +1349,14 @@ public sealed partial class MainForm : Form
             Check(accessible.GetChild(0)!.Name!.Contains("192.0.2.1") && accessible.GetChild(0)!.Name!.Contains("Online"));
             WallboardHostSnapshot? actionHost = null;
             canvas.HostRightClicked += (target, _) => actionHost = target;
+            // No highlight until a key is used; keys show it; it fades but the selection stays.
+            Expect(!canvas.KeyboardHighlightVisible, "Map highlighted a host before any key press.");
             canvas.HandleHostKey(Keys.Home);
             canvas.HandleHostKey(Keys.Right);
             Check(canvas.SelectedHost?.Address == "192.0.2.2");
+            Expect(canvas.KeyboardHighlightVisible && WallboardCanvas.KeyboardHighlightDuration == TimeSpan.FromSeconds(8), "Keyboard use did not show the highlight.");
+            canvas.ExpireKeyboardHighlightForTest();
+            Expect(!canvas.KeyboardHighlightVisible && canvas.SelectedHost?.Address == "192.0.2.2", "Highlight timeout lost the selection or kept the box.");
             canvas.HandleHostKey(Keys.Shift | Keys.F10);
             Check(actionHost?.Address == "192.0.2.2");
             accessible.GetChild(7)!.DoDefaultAction();
