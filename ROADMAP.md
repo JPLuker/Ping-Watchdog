@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.4**.
+Current published Windows build: **v1.19.5**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -42,7 +42,7 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 
 - [x] Immutable Windows Actions (commit-SHA pins), version-checked releases, dependency governance (Dependabot, vulnerable-package gate) (v1.19.4). Tag-driven publication is a recorded deviation; see RELEASE-AUDIT.md.
 - [x] Checksums (SHA256SUMS.txt), complete asset checks, delta retry with visible warning, unsigned notice (v1.19.4). Landing-page downloads remain under public readiness.
-- [ ] Verify normal/recovery updater integrity, package-specific behavior, daily checks and managed controls.
+- [x] Daily checks and managed controls (v1.19.5). Package-specific behavior and download verification are recorded deviations/evidence in RELEASE-AUDIT.md; a corrupt-download test remains open.
 - [x] Dependency vulnerability gate (v1.19.4) and owner-managed security settings (Dependabot alerts and security updates, secret scanning, push protection; confirmed by Joseph). Third-party license review remains under public readiness.
 
 ## 5. Public readiness
@@ -171,4 +171,6 @@ v1.19.2: Joseph could not find the filter. In v1.19.1 the action bar replaced th
 ## Wallboard highlight and release hardening — 2026-10-22
 
 v1.19.3 fades the map/Wallboard keyboard highlight after 8 seconds and shows it only after key use (#8). v1.19.4 hardens publication: actions pinned to commit SHAs, a guard that stops when the version is already published, vulnerable-package gates in build and validation, three-attempt delta download with a visible warning instead of a silent gap, required-asset verification, SHA256SUMS.txt, and an unsigned-build notice on the release page. Dependabot proposes weekly Actions and NuGet updates. Build 39846402344 exercised every new step; the published SHA256SUMS.txt matches the update feed's package hashes.
+
+v1.19.5 aligns updates with DATA-AND-UPDATES 3.2/3.3: automatic checks at most once a day (persisted across restarts, rearmed if the clock moves back) and an IT policy (HKLM\Software\Policies\PingWatchdog DisableUpdates = 1, or PINGWATCHDOG_DISABLE_UPDATES=1) that stops all checks, hides the sidebar action and shows "Updates are managed by your organization" in Settings. The publish guard now lets workflow-only pushes (such as Dependabot action updates) build and test without publishing; build 39849289579 confirmed that path.
 

@@ -192,3 +192,12 @@ Still open in this section: updater integrity under corrupt downloads (Velopack 
 
 Owner-managed repository security, confirmed by Joseph on 2026-10-22: Dependabot alerts on, Dependabot security updates on, secret scanning and push protection on. The session's integration cannot read these settings, so this rests on Joseph's confirmation.
 
+
+## Update cadence and managed controls — 2026-10-22 (v1.19.5)
+
+Implemented per InternalDesignGuidelines DATA-AND-UPDATES 3.2/3.3 (commit 63eae9e): at most one automatic check a day, kept in preferences (LastUpdateCheckUtc); HKLM\Software\Policies\PingWatchdog DisableUpdates and PINGWATCHDOG_DISABLE_UPDATES disable all checks, hide the sidebar action and replace the Settings controls with "Updates are managed by your organization". Validation 39847814987 and build 39848145060.
+
+Deviations: (1) The portable ZIP keeps Velopack in-place self-update rather than notify-only, per the Focused Windows distribution deviation in AGENTS.md; portable data lives outside the replaced app folders. (2) Download verification is Velopack's own hash check against the feed (SHA1/SHA256 in releases.win.json); SHA256SUMS.txt covers manual downloads. A test that a corrupted package is rejected and discarded is still open. (3) Updates download automatically after a check and install only when the user chooses Restart, which meets "never install without consent".
+
+Publish guard refinement: a push that reuses a published version fails only when app files changed; workflow-only pushes run every build and test step and skip packaging and publication (build 39849289579). This lets Dependabot action updates merge without a version bump.
+
