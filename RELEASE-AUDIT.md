@@ -177,3 +177,4 @@ Publication: build run 39804394546 passed published startup/UI, independent reco
 
 v1.18.15: pinned All sites scope, inset site-list well, divider, four sidebar actions, front-trimmed map addresses. Evidence: Windows validation run 39808709209 (self-tests and UI regressions). Not established: rendered capture inspection, Joseph's visual confirmation, physical DPI/large text/screen reader.
 
+Publication: build run 39809105132 published v1.18.15 as latest with installer, portable ZIP, full **and delta** packages, RELEASES and feed. The v1.18.14 delta omission therefore looks transient, but the silent-failure path still needs hardening.
