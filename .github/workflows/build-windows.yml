@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 2
 
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -35,15 +37,22 @@ jobs:
           $version = ([xml](Get-Content PingWatchdog.csproj -Raw)).Project.PropertyGroup.Version
           "WATCHDOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # Never reuse a published version: stop before building if this tag already exists.
+      # Never reuse a published version. App changes without a new version fail here; a push that only
+      # changes this workflow (for example a Dependabot action update) still builds and tests, then skips publishing.
       - name: Check version is unpublished
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           & gh release view "v$env:WATCHDOG_VERSION" --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) { throw "v$env:WATCHDOG_VERSION is already published. Increment Version in PingWatchdog.csproj." }
+          $published = $LASTEXITCODE -eq 0
           $global:LASTEXITCODE = 0
+          if (-not $published) { exit 0 }
+          $changed = @(git diff --name-only HEAD~1 HEAD)
+          $app = @($changed | Where-Object { $_ -notlike ".github/*" -and $_ -notlike "linux/*" -and ($_ -like "*.cs" -or $_ -like "Shared/*" -or $_ -like "Assets/*" -or $_ -in @("PingWatchdog.csproj", "default.pingwatch.json", "README-FIRST.txt")) })
+          if ($app.Count -gt 0) { throw "v$env:WATCHDOG_VERSION is already published but app files changed ($($app -join ', ')). Increment Version in PingWatchdog.csproj." }
+          Write-Output "::notice title=Not published::v$env:WATCHDOG_VERSION already exists and only build files changed; building and testing without publishing."
+          "SKIP_PUBLISH=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Check for vulnerable packages
         shell: pwsh
@@ -186,6 +195,7 @@ jobs:
 
       # Retried: a silent failure here drops the small delta update (seen once in v1.18.14).
       - name: Download previous Velopack release for delta generation
+        if: env.SKIP_PUBLISH != '1'
         continue-on-error: true
         shell: pwsh
         env:
@@ -200,12 +210,14 @@ jobs:
           exit 1
 
       - name: Build installer, portable package, and update feed
+        if: env.SKIP_PUBLISH != '1'
         shell: pwsh
         run: |
           .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\WatchdogIcon.ico --releaseNotes release-notes.md --channel win --outputDir Releases
 
       # Every required asset must exist; a missing delta is a visible warning, not a silent gap.
       - name: Verify assets and write checksums
+        if: env.SKIP_PUBLISH != '1'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -227,6 +239,7 @@ jobs:
           Get-Content "Releases\SHA256SUMS.txt"
 
       - name: Upload release bundle artifact
+        if: env.SKIP_PUBLISH != '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-${{ env.WATCHDOG_VERSION }}
@@ -235,6 +248,7 @@ jobs:
 
       # Publish passing builds for user testing; final-release acceptance is tracked separately.
       - name: Publish release to GitHub
+        if: env.SKIP_PUBLISH != '1'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
