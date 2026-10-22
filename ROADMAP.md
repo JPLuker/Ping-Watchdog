@@ -1,8 +1,8 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.13**.
+Current published Windows build: **v1.18.14**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
-Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. Remaining supporting UI, release work and manual acceptance remain open.
+Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
 The accepted dashboard and connected topology remain the visual baseline. Wallboard now omits the visible top toolbar at Joseph's request; keyboard and host context actions remain. Features are frozen. Work is limited to finishing existing functionality, correctness, accessibility, data safety, release security and documentation.
 
@@ -21,12 +21,12 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 - [x] Record approved design deviations and preserve the proprietary license.
 - [x] Open the maintenance checklist and establish implementation order.
 
-## 2. Data protection and essential access — next
+## 2. Data protection and essential access — implemented; acceptance pending
 
 - [x] Atomic config saves, three rolling backups, visible write errors and damaged config/site-list protection (v1.17.4). Preferences/history and Settings save feedback remain separate.
 - [x] Reject newer unsupported configs before applying/rewriting; test original preservation and backup retention (v1.17.4). No schema migration was introduced; future migrations still need their own acceptance.
 - [x] Keyboard and accessible topology/outage host actions; full identity/state in accessible names and keyboard details, with distinct marker shapes (v1.18.2). Real screen-reader acceptance remains pending.
-- [ ] Readable font floor, long addresses/IPv6 and constrained-height behavior.
+- [x] Readable font floor, long addresses/IPv6 and constrained-height behavior (v1.18.14). Many-site map layout, full site names on hover, History text at the floor; physical DPI/large-text acceptance remains pending.
 
 ## 3. Supporting UI and data controls
 
@@ -126,3 +126,13 @@ Joseph clarified that the visible Wallboard top toolbar must be removed. The can
 Windows run 39615057833 passed self-tests, published startup/UI, independent recovery including a new process-level deletion-retry crash case, packaging and publication. Tests cover explicit routing, package-root/current layout, preserved originals, rejected destination collisions and installed-mode activation, unsupported portable markers, interrupted/locked deletion retry, empty post-deletion inventory, retained external/installation/inactive data, exact confirmation and cancellation. Light/dark Settings and deletion-confirmation renders, plus the toolbar-free Wallboard, were inspected. Installer, portable, full/delta packages and both feeds were verified.
 
 The v1.18.10 UI gate withheld publication after finding the direct Form child did not settle to full-window bounds. v1.18.11 returned to a one-cell layout, passed/published and was inspected; v1.18.12 additionally protected recovery after a deletion retry. v1.18.13 corrects light-mode destructive text contrast and adds 4.5:1 text-pair tests for both themes and interactive surfaces. Human installed/portable migration, actual portable package updates, read-only drives, real concurrent copies, deletion/restart acceptance and the final desktop/workday trials remain pending.
+
+
+## Many-site map, long names and font floor — 2026-10-22
+
+v1.18.14 answers issue #5. Map sites now follow the site list order (folder, then name), so both views are alphabetical. The fitted topology keeps its accepted square-ish search but widens to more site columns when captions stop fitting, and row gutters shrink past three rows. When a window cannot label every site, site headings are dropped and hosts use the whole block, so blocks never overlap. Every host stays drawn and reachable by mouse, keyboard and accessible name.
+
+The site list shows the full name on hover when a row is truncated. History event-type and header text was 8.5pt (about 11px, under the 12px absolute minimum) and is now 9.75pt (13 logical px).
+
+Regression checks cover 24 sites at 1600×1000 and 900×650 (all names drawn) and 60 sites at 900×650, with IPv6 and long names: no heading or host overlap, every host present. They also cover map/list order, truncation detection and the History font floor. Windows validation run 39803989941 passed self-tests and UI regressions. The first run (39803642344) failed to compile a test helper call and was corrected. Rendered captures from this run were not inspected: the session could not download artifacts. Joseph's visual check with his real site list, physical DPI and large-text acceptance remain open.
+

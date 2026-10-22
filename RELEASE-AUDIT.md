@@ -162,3 +162,11 @@ Joseph clarified that the visible Wallboard top toolbar must be removed. The can
 Windows run 39615057833 passed self-tests, published startup/UI, independent recovery including a new process-level deletion-retry crash case, packaging and publication. Tests cover explicit routing, package-root/current layout, preserved originals, rejected destination collisions and installed-mode activation, unsupported portable markers, interrupted/locked deletion retry, empty post-deletion inventory, retained external/installation/inactive data, exact confirmation and cancellation. Light/dark Settings and deletion-confirmation renders, plus the toolbar-free Wallboard, were inspected. Installer, portable, full/delta packages and both feeds were verified.
 
 The v1.18.10 UI gate withheld publication after finding the direct Form child did not settle to full-window bounds. v1.18.11 returned to a one-cell layout, passed/published and was inspected; v1.18.12 additionally protected recovery after a deletion retry. v1.18.13 corrects light-mode destructive text contrast and adds 4.5:1 text-pair tests for both themes and interactive surfaces. Human installed/portable migration, actual portable package updates, read-only drives, real concurrent copies, deletion/restart acceptance and the final desktop/workday trials remain pending.
+
+
+## Many-site map, long names and font floor — 2026-10-22
+
+Implemented in v1.18.14 (A2/A3 code gaps; issue #5). Map site order matches the site list. Topology layout widens past the square bound only when captions no longer fit, shrinks gutters past three rows, and drops headings instead of overlapping when a window cannot label every site. Truncated site-list names show the full name on hover. History event-type and header text raised from 8.5pt to 9.75pt.
+
+Evidence: Windows validation run 39803989941 passed self-tests (dense 24/60-site topology without heading or host overlap, all hosts reachable, IPv6/long names, map/list order, truncation detection, History font floor) and UI regressions. Not established: inspection of rendered captures from this run (artifacts were unreachable from the session), physical scaling/large-text/screen-reader behavior, or Joseph's confirmation with his real site list.
+

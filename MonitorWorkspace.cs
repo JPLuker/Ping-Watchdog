@@ -49,6 +49,8 @@ public sealed partial class MainForm
         _siteList.ContextMenuStrip = _siteActionsMenu;
         _siteActionsMenu.Opening += (_, _) => PopulateSiteActions();
         _siteList.MouseDown += (_, e) => { if (e.Button == MouseButtons.Right) { int index = _siteList.IndexFromPoint(e.Location); if (index >= 0) _siteList.SelectedIndex = index; } };
+        _siteList.MouseMove += (_, e) => UpdateSiteListTip(_siteList.IndexFromPoint(e.Location));
+        _siteList.MouseLeave += (_, _) => UpdateSiteListTip(-1);
 
         var utilities = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty, Tag = "nav" };
         _headerActionsPanel = utilities;
@@ -173,6 +175,26 @@ public sealed partial class MainForm
         int height = _dashboardSplit.ClientSize.Height;
         int logHeight = Math.Min((int)(144 * DeviceDpi / 96f), height / 4);
         _dashboardSplit.SplitterDistance = Math.Max(1, height - logHeight - _dashboardSplit.SplitterWidth);
+    }
+
+    private readonly ToolTip _siteListTip = new();
+    private int _siteTipIndex = -1;
+
+    // The row text area matches DrawSiteItem: 4px inset each side, 12px lead, 6px trail.
+    internal bool IsSiteNameTruncated(int index)
+    {
+        if (index < 0 || index >= _siteList.Items.Count) return false;
+        int available = Math.Max(1, _siteList.ClientSize.Width - 8 - 18);
+        string text = _siteList.Items[index]?.ToString() ?? string.Empty;
+        return TextRenderer.MeasureText(text, _siteItemFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.SingleLine).Width > available;
+    }
+
+    // Full site names on hover when the row shows an ellipsis.
+    private void UpdateSiteListTip(int index)
+    {
+        if (index == _siteTipIndex) return;
+        _siteTipIndex = index;
+        _siteListTip.SetToolTip(_siteList, IsSiteNameTruncated(index) ? _siteList.Items[index]?.ToString() : null);
     }
 
     private void SizeNavigationActions()
