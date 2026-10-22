@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "8.0.x"
 
@@ -34,6 +34,24 @@ jobs:
         run: |
           $version = ([xml](Get-Content PingWatchdog.csproj -Raw)).Project.PropertyGroup.Version
           "WATCHDOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      # Never reuse a published version: stop before building if this tag already exists.
+      - name: Check version is unpublished
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          & gh release view "v$env:WATCHDOG_VERSION" --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) { throw "v$env:WATCHDOG_VERSION is already published. Increment Version in PingWatchdog.csproj." }
+          $global:LASTEXITCODE = 0
+
+      - name: Check for vulnerable packages
+        shell: pwsh
+        run: |
+          dotnet restore PingWatchdog.csproj
+          $report = dotnet list PingWatchdog.csproj package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Output $report
+          if ($report -match "has the following vulnerable packages") { throw "Vulnerable NuGet packages found; update them before publishing." }
 
       - name: Install matching Velopack CLI
         shell: pwsh
@@ -125,7 +143,7 @@ jobs:
 
       - name: Upload UI smoke-test screenshots and results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-UI-${{ env.WATCHDOG_VERSION }}
           path: ui-smoke-test/*
@@ -147,7 +165,7 @@ jobs:
 
       - name: Upload recovery screenshots and reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-Recovery-${{ env.WATCHDOG_VERSION }}
           path: ui-smoke-test/recovery/**
@@ -159,27 +177,56 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Wallboard and map: the keyboard highlight appears only after you use the arrow keys and fades after 8 seconds.
+          - Release process: each release now includes SHA256SUMS.txt, pinned build actions and a vulnerable-package check. No app changes.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
           "@ | Set-Content release-notes.md
 
+      # Retried: a silent failure here drops the small delta update (seen once in v1.18.14).
       - name: Download previous Velopack release for delta generation
         continue-on-error: true
         shell: pwsh
         env:
           VPK_TOKEN: ${{ github.token }}
         run: |
-          .\.tools\vpk.exe download github --repoUrl https://github.com/JPLuker/Ping-Watchdog --token $env:VPK_TOKEN --channel win --outputDir Releases
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            .\.tools\vpk.exe download github --repoUrl https://github.com/JPLuker/Ping-Watchdog --token $env:VPK_TOKEN --channel win --outputDir Releases
+            if ($LASTEXITCODE -eq 0 -and (Get-ChildItem Releases -Filter "*-full.nupkg" -ErrorAction SilentlyContinue)) { exit 0 }
+            Write-Output "Previous release download attempt $attempt failed; retrying."
+            Start-Sleep -Seconds (10 * $attempt)
+          }
+          exit 1
 
       - name: Build installer, portable package, and update feed
         shell: pwsh
         run: |
           .\.tools\vpk.exe pack --packId PingWatchdog --packVersion $env:WATCHDOG_VERSION --packDir publish --mainExe PingWatchdog.exe --packTitle "Ping Watchdog" --packAuthors "Joseph Luker" --runtime win-x64 --icon Assets\WatchdogIcon.ico --releaseNotes release-notes.md --channel win --outputDir Releases
 
+      # Every required asset must exist; a missing delta is a visible warning, not a silent gap.
+      - name: Verify assets and write checksums
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = $env:WATCHDOG_VERSION
+          $required = @("PingWatchdog-$v-full.nupkg", "PingWatchdog-win-Setup.exe", "PingWatchdog-win-Portable.zip", "RELEASES", "releases.win.json")
+          $missing = @($required | Where-Object { -not (Test-Path "Releases\$_") })
+          if ($missing.Count -gt 0) { throw "Missing release assets: $($missing -join ', ')" }
+          $previous = & gh release list --repo "${{ github.repository }}" --limit 1 --json tagName --jq length
+          $deltaNote = ""
+          if (-not (Test-Path "Releases\PingWatchdog-$v-delta.nupkg") -and $previous -ne "0") {
+            Write-Output "::warning title=No delta package::v$v ships without a delta; updates download the full package."
+            $deltaNote = "This update downloads the full package (no delta was produced)."
+          }
+          "DELTA_NOTE=$deltaNote" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $files = @($required + "PingWatchdog-$v-delta.nupkg") | Where-Object { Test-Path "Releases\$_" }
+          $lines = $files | ForEach-Object { "{0}  {1}" -f (Get-FileHash "Releases\$_" -Algorithm SHA256).Hash.ToLowerInvariant(), $_ }
+          Set-Content -Path "Releases\SHA256SUMS.txt" -Value $lines -Encoding ascii
+          Get-Content "Releases\SHA256SUMS.txt"
+
       - name: Upload release bundle artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-${{ env.WATCHDOG_VERSION }}
           path: Releases/*
@@ -192,20 +239,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v$env:WATCHDOG_VERSION"
+          # The GitHub page adds the unsigned-build notice; the in-app update notes stay as written.
+          $body = (Get-Content release-notes.md -Raw).TrimEnd()
+          if ($env:DELTA_NOTE) { $body += "`n`n$env:DELTA_NOTE" }
+          $body += "`n`n---`nThese builds are not code-signed, so Windows SmartScreen may warn the first time you run the installer. Compare downloads with SHA256SUMS.txt: ``Get-FileHash .\PingWatchdog-win-Setup.exe -Algorithm SHA256``."
+          Set-Content -Path release-body.md -Value $body -Encoding utf8
           $assets = @(
             "Releases\PingWatchdog-$env:WATCHDOG_VERSION-full.nupkg",
             "Releases\PingWatchdog-$env:WATCHDOG_VERSION-delta.nupkg",
             "Releases\PingWatchdog-win-Setup.exe",
             "Releases\PingWatchdog-win-Portable.zip",
             "Releases\RELEASES",
-            "Releases\releases.win.json"
+            "Releases\releases.win.json",
+            "Releases\SHA256SUMS.txt"
           ) | Where-Object { Test-Path $_ }
 
           if ($assets.Count -lt 4) {
             throw "Expected Velopack release assets were not generated. Found $($assets.Count)."
           }
 
-          & gh release create $tag @assets --repo "${{ github.repository }}" --title "Ping Watchdog $tag" --notes-file release-notes.md --target "${{ github.sha }}"
+          & gh release create $tag @assets --repo "${{ github.repository }}" --title "Ping Watchdog $tag" --notes-file release-body.md --target "${{ github.sha }}"
           if ($LASTEXITCODE -ne 0) {
             throw "GitHub CLI could not publish release $tag."
           }
