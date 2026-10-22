@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.18.16**.
+Current published Windows build: **v1.18.17**.
 Proposed final feature release: **v1.19.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -144,4 +144,6 @@ Joseph's screenshots showed the real #5 problem: the site list and the sidebar a
 Windows validation run 39808709209 passed self-tests and UI regressions, including pinned-scope selection both ways, the host count, four sidebar actions, non-overlapping sidebar sections and IPv4/IPv6 address trimming. Rendered captures were not inspected from the session; Joseph's visual check remains the acceptance step.
 
 v1.18.16 follow-up: Joseph's v1.18.15 photo showed two-tone rows. DrawSiteItem filled each row with the sidebar Surface color before drawing the pill in the well color. Rows, gaps, empty list space and the well now paint one token; only the selected site draws a pill, and the list paints its own erase background. Validation run 39810357378 passed, including a new UI check that samples rendered pixels (row gap, unselected row, empty space, well padding) against the well color.
+
+v1.18.17 follow-up from Joseph's v1.18.16 photos: the native dark scrollbar is replaced by a thin, draggable indicator drawn in the well; All sites is outlined when unselected; the map weighs site-name width in its layout; host rows cap at a natural height and stack from the top. Validation run 39812671262 passed, including a standalone 50-row scroll-indicator test, lone-host stacking and twelve real-length site names fitting at 1600×1000.
 
