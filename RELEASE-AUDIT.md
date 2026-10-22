@@ -190,3 +190,5 @@ Evidence: validation run 39846013708 (pinned actions, vulnerable-package check, 
 
 Still open in this section: updater integrity under corrupt downloads (Velopack verifies package hashes; no corrupt-download test yet), update-check cadence and managed-policy controls, and owner-managed repository security settings.
 
+Owner-managed repository security, confirmed by Joseph on 2026-10-22: Dependabot alerts on, Dependabot security updates on, secret scanning and push protection on. The session's integration cannot read these settings, so this rests on Joseph's confirmation.
+

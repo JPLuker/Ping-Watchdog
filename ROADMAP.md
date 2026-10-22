@@ -43,7 +43,7 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 - [x] Immutable Windows Actions (commit-SHA pins), version-checked releases, dependency governance (Dependabot, vulnerable-package gate) (v1.19.4). Tag-driven publication is a recorded deviation; see RELEASE-AUDIT.md.
 - [x] Checksums (SHA256SUMS.txt), complete asset checks, delta retry with visible warning, unsigned notice (v1.19.4). Landing-page downloads remain under public readiness.
 - [ ] Verify normal/recovery updater integrity, package-specific behavior, daily checks and managed controls.
-- [ ] Verify dependency vulnerabilities/licenses and owner-managed repository security settings.
+- [x] Dependency vulnerability gate (v1.19.4) and owner-managed security settings (Dependabot alerts and security updates, secret scanning, push protection; confirmed by Joseph). Third-party license review remains under public readiness.
 
 ## 5. Public readiness
 
