@@ -244,8 +244,9 @@ internal sealed class NicknameDialog : Form
 
 internal sealed class SiteNameDialog : Form
 {
-    private readonly TextBox _box = new() { Dock = DockStyle.Fill };
-    public string SiteName => _box.Text.Trim();
+    private readonly PlainTextBox _box = new() { Dock = DockStyle.Fill };
+    private readonly Label _prompt = new() { Text = "Site / group name:", AutoSize = true, ForeColor = Color.FromArgb(139, 148, 158) };
+    public string SiteName => ClipboardText.NormalizeLine(_box.Text);
 
     public SiteNameDialog(string title, string actionText, string current = "")
     {
@@ -304,13 +305,11 @@ internal sealed class SiteNameDialog : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label
-        {
-            Text = "Site / group name:",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 148, 158)
-        }, 0, 0);
+        layout.Controls.Add(_prompt, 0, 0);
         layout.Controls.Add(_box, 0, 1);
+        // A busy clipboard is said out loud instead of pasting nothing.
+        _box.PasteBusy += () => { _prompt.Text = "Clipboard busy, try again"; _prompt.Tag = "statSuspect"; AuroraTheme.Apply(this); };
+        _box.TextChanged += (_, _) => { if (_prompt.Tag is not null) { _prompt.Text = "Site / group name:"; _prompt.Tag = null; AuroraTheme.Apply(this); } };
         layout.Controls.Add(buttons, 0, 2);
 
         Controls.Add(layout);
@@ -947,6 +946,7 @@ public sealed partial class MainForm : Form
             _columnsMenu.Dispose();
             _siteItemFont.Dispose();
             _siteListTip.Dispose();
+            _addSiteTip.Dispose();
             _statusCellFont.Dispose();
             _appIcon.Dispose();
             _brandBitmap.Dispose();
@@ -1237,6 +1237,22 @@ public sealed partial class MainForm : Form
                 Expect(needed <= bounds.Width + 1, $"Site name '{site}' is cut off ({needed:0} > {bounds.Width}).");
             }
             Expect(named.SiteHeadingBounds.Count == 12, "Named sites lost headings.");
+        }
+
+        // Paste: hidden characters, line breaks and HTML-only copies still become clean names; a busy clipboard is reported.
+        Expect(ClipboardText.NormalizeLine("  Anderson\u00A0Corps\u200B\r\n") == "Anderson Corps", "Pasted name kept hidden characters.");
+        Expect(ClipboardText.NormalizeMultiline("10.0.0.1\tPrinter\u200B\r\n10.0.0.2") == "10.0.0.1\tPrinter\r\n10.0.0.2", "Multi-line paste lost its rows or kept hidden characters.");
+        var htmlOnly = new DataObject();
+        htmlOnly.SetData(DataFormats.Html, "Version:0.9\r\nStartHTML:0\r\n<html><body><!--StartFragment--><b>Camp&nbsp;Hidden Falls</b><!--EndFragment--></body></html>");
+        Expect(ClipboardText.NormalizeLine(ClipboardText.Extract(htmlOnly) ?? "") == "Camp Hidden Falls", "HTML-only clipboard pasted nothing.");
+        var plain = new DataObject(DataFormats.UnicodeText, "Gary\r\n");
+        Expect(ClipboardText.Read(() => plain).Text == "Gary\r\n", "Plain clipboard text was not read.");
+        var busy = ClipboardText.Read(() => throw new System.Runtime.InteropServices.ExternalException("busy"), attempts: 2);
+        Expect(busy.Busy && busy.Text is null, "A busy clipboard was not reported.");
+        using (var pasteBox = new PlainTextBox())
+        {
+            pasteBox.PasteText("Eagle Creek -\r\nBooth Manor\u200B");
+            Expect(pasteBox.Text == "Eagle Creek - Booth Manor", $"Single-line paste produced '{pasteBox.Text}'.");
         }
 
         // Truncated map addresses keep their distinguishing end, never just the shared prefix.
@@ -1712,6 +1728,26 @@ public sealed partial class MainForm : Form
                     Check(sorted._selectedSiteName is null && sorted._allSitesButton.Selected, "All sites did not restore the full scope.");
                     Check(sorted._sectionDivider?.Parent is not null, "Site list and actions have no divider.");
                     Check(sorted._headerActionsPanel?.Controls.Count == 4, "Sidebar actions were not reduced to four.");
+                    Check(sorted._addSiteButton.Text == "+" && sorted._addSiteButton.AccessibleName == "Add site", "Sites header lost its add action.");
+
+                    // Quick Add opens on the site in view, accepts typed and pasted names, and creates new sites.
+                    var siteNames = sorted._sites.Select(x => x.Name).ToList();
+                    using (var onMike = new QuickAddForm(siteNames, "Mike", sorted.HostSnapshot, sorted.ImportManagedHosts, false, name => SiteNameError(name, sorted._sites, null)))
+                        Check(onMike.SiteTextForTest == "Mike", "Quick Add ignored the site in view.");
+                    using (var onAll = new QuickAddForm(siteNames, null, sorted.HostSnapshot, sorted.ImportManagedHosts, false, name => SiteNameError(name, sorted._sites, null)))
+                    {
+                        Check(onAll.SiteTextForTest == "" && onAll.SiteStatusForTest == "Choose or type a site", "Quick Add guessed a site for All sites.");
+                        onAll.SiteTextForTest = "mike";
+                        Check(onAll.SiteStatusForTest == "", "An existing site in different case was treated as new.");
+                        onAll.SiteTextForTest = "All Sites";
+                        Check(onAll.SiteStatusForTest.Contains("reserved"), "Reserved site name was accepted.");
+                        onAll.SiteTextForTest = "Brand\u00A0New Site\u200B";
+                        Check(onAll.SiteStatusForTest == "Creates site \u201cBrand New Site\u201d", $"New site status was '{onAll.SiteStatusForTest}'.");
+                        onAll.PreviewForTest("192.0.2.200");
+                        onAll.ImportForTest();
+                    }
+                    Check(sorted.FindSite("Brand New Site")?.Hosts.Contains("192.0.2.200") == true, "Quick Add did not create the typed site with its host.");
+                    Check(sorted._siteList.Items.Cast<SiteListItem>().Any(x => x.SiteName == "Brand New Site"), "New site missing from the site list.");
                 }
                 form.SetWorkspaceView(true);
                 WindowsBranding.RunShortcutSmokeTest(output);
@@ -3239,44 +3275,22 @@ public sealed partial class MainForm : Form
         UpdateActionState();
     }
 
+    // Shared rules so dialogs and Quick Add report the same problems.
+    internal static string? SiteNameError(string name, IEnumerable<SiteDefinition> sites, string? existingSiteName)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "Enter a site name first.";
+        if (name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase)) return "\"All Sites\" is reserved for the combined view.";
+        bool duplicate = sites.Any(s =>
+            s.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
+            (existingSiteName is null || !s.Name.Equals(existingSiteName, StringComparison.OrdinalIgnoreCase)));
+        return duplicate ? "A site with that name already exists." : null;
+    }
+
     private bool ValidateNewSiteName(string name, string? existingSiteName)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            MessageBox.Show(
-                "Enter a site name first.",
-                "Ping Watchdog",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return false;
-        }
-
-        if (name.Equals(AllSitesLabel, StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show(
-                "\"All Sites\" is reserved for the combined view.",
-                "Ping Watchdog",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return false;
-        }
-
-        bool duplicate = _sites.Any(s =>
-            s.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
-            (existingSiteName is null ||
-             !s.Name.Equals(existingSiteName, StringComparison.OrdinalIgnoreCase)));
-
-        if (duplicate)
-        {
-            MessageBox.Show(
-                "A site with that name already exists.",
-                "Ping Watchdog",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return false;
-        }
-
-        return true;
+        if (SiteNameError(name, _sites, existingSiteName) is not string error) return true;
+        MessageBox.Show(error, "Ping Watchdog", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return false;
     }
 
     private void UpdateActionState()

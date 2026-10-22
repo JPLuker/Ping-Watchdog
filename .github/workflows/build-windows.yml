@@ -158,7 +158,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Soften the All sites outline while keeping it at the 3:1 contrast needed to read as a button.
+          - Pasting names works from remote sessions, chat and web copies: the clipboard is retried, any text format is accepted, hidden characters are removed, and a busy clipboard says so.
+          - Quick Add opens on the site you are viewing and lets you type a new site name to create it.
+          - Sites header uses a + button for Add site.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

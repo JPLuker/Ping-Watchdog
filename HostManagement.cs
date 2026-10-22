@@ -175,14 +175,16 @@ public sealed partial class MainForm
     private void OpenHostManager(Form? owner)
     {
         if (_hostManager is { IsDisposed: false }) { _hostManager.RefreshNow(); _hostManager.Activate(); return; }
-        _hostManager = new HostManagerForm(HostSnapshot, SaveManagedHosts, DeleteManagedHosts, OpenQuickAdd, SaveTemporaryHosts, () => _sites.Select(s => s.Name).ToList());
+        _hostManager = new HostManagerForm(HostSnapshot, SaveManagedHosts, DeleteManagedHosts, (temporary, site) => OpenQuickAdd(temporary, site ?? _selectedSiteName), SaveTemporaryHosts, () => _sites.Select(s => s.Name).ToList());
         _hostManager.FormClosed += (_, _) => _hostManager = null;
         _hostManager.Show(owner ?? this);
     }
-    private void OpenQuickAdd(bool temporary)
+    private void OpenQuickAdd(bool temporary) => OpenQuickAdd(temporary, _selectedSiteName);
+    // site: the site in view where Quick Add was opened (main sidebar or Hosts filter); null for All sites.
+    private void OpenQuickAdd(bool temporary, string? site)
     {
-        using var form = new QuickAddForm(_sites.Where(s => !s.Temporary).Select(s => s.Name), _selectedSiteName,
-            HostSnapshot, ImportManagedHosts, temporary);
+        using var form = new QuickAddForm(_sites.Where(s => !s.Temporary).Select(s => s.Name), site,
+            HostSnapshot, ImportManagedHosts, temporary, name => SiteNameError(name, _sites, null));
         form.ShowDialog(_hostManager is { IsDisposed: false } ? _hostManager : this);
     }
     private void ImportManagedHosts(List<ManagedHost> hosts, bool temporary)
@@ -197,7 +199,15 @@ public sealed partial class MainForm
         }
         foreach (var host in hosts)
         {
-            var site = transient ?? FindSite(host.Site); if (site == null) continue;
+            var site = transient ?? FindSite(host.Site);
+            // Quick Add can name a new site; create it once, using the same rules as Add site.
+            if (site == null && !temporary && SiteNameError(host.Site, _sites, null) is null)
+            {
+                site = new SiteDefinition { Name = host.Site, FolderPath = string.Empty };
+                _sites.Add(site);
+                _selectedSiteName = site.Name;
+            }
+            if (site == null) continue;
             if (site.Hosts.Contains(host.Address, StringComparer.OrdinalIgnoreCase)) continue;
             site.Hosts.Add(host.Address); site.HostDetails[host.Address] = host.Options.Copy();
             SetNicknameValue(site.Name, host.Address, host.Label); SetCategoryValue(site.Name, host.Address, host.Group);
