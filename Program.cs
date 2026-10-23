@@ -2041,7 +2041,8 @@ public sealed partial class MainForm : Form
                             Capture(add, "dialog-quick-" + temporary + "-" + width + "-" + appearance);
                             add.CheckLayout();
                         }
-                        Check(add.PreviewRowCount == 4 && !imported, "Preview changed the inventory before confirmation.");
+                        Check(add.PreviewRowCount == 4 && add.PastedLineCountForTest == 4 && !imported,
+                            "Preview lost pasted lines or changed the inventory before confirmation.");
                         DismissWithEscape(add);
                     }
                     using (var label = new NicknameDialog("2001:db8::1234", "Printer & scanner"))

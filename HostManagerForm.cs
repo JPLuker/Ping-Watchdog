@@ -203,7 +203,9 @@ internal sealed class QuickAddForm : Form
     {
         CompactDialog.CheckBounds(this);
         if (_grid.Height < 150) throw new InvalidOperationException("Host preview lost usable height.");
-        if (_grid.Top - _assignGroup.Bottom > 100)
+        int previewTop = RectangleToClient(_grid.RectangleToScreen(_grid.ClientRectangle)).Top;
+        int actionBottom = RectangleToClient(_assignGroup.RectangleToScreen(_assignGroup.ClientRectangle)).Bottom;
+        if (previewTop - actionBottom > 100)
             throw new InvalidOperationException("Destination layout reserved excess blank space above the preview.");
         foreach (DataGridViewRow row in _grid.Rows)
             if (AuroraTheme.ContrastRatio(row.Cells[5].Style.ForeColor, AuroraTheme.Palette.Surface) < 4.5)
@@ -212,6 +214,7 @@ internal sealed class QuickAddForm : Form
 
     internal void PreviewForTest(string text) => _paste.Text = text;
     internal int PreviewRowCount => _grid.Rows.Count;
+    internal int PastedLineCountForTest => _paste.Lines.Length;
     internal string SiteTextForTest { get => _site.Text; set => _site.Text = value; }
     internal string SiteStatusForTest => _siteStatus.Text;
     internal void ImportForTest() => Import();
@@ -240,7 +243,8 @@ internal sealed class QuickAddForm : Form
         string normalized = current.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
         if (normalized != current)
         {
-            int caret = _paste.SelectionStart;
+            int caret = current[..Math.Min(_paste.SelectionStart, current.Length)]
+                .Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine).Length;
             _normalizingPaste = true;
             try { _paste.Text = normalized; _paste.SelectionStart = Math.Min(caret, normalized.Length); }
             finally { _normalizingPaste = false; }
