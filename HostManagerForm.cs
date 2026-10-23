@@ -47,6 +47,7 @@ internal sealed class QuickAddForm : Form
     private readonly Action<List<ManagedHost>, bool> _import;
     private readonly bool _temporary;
     private bool _updating;
+    private bool _normalizingPaste;
     internal QuickAddForm(IEnumerable<string> sites, string? selected, Func<List<ManagedHost>> provider,
         Action<List<ManagedHost>, bool> import, bool temporary = false, Func<string, string?>? siteNameError = null)
     {
@@ -61,11 +62,12 @@ internal sealed class QuickAddForm : Form
         _summary.Dock = DockStyle.Fill;
         var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 7
+            Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 8
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 120));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -106,10 +108,6 @@ internal sealed class QuickAddForm : Form
         if (selected is not null)
             _site.Text = _site.Items.Cast<string>().FirstOrDefault(n => n.Equals(selected, StringComparison.OrdinalIgnoreCase)) ?? "";
         ClipboardText.AttachPlainPaste(_site, () => ShowSiteStatus("Clipboard busy, try again", "statSuspect"));
-        var destinations = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 2, TabIndex = 2 };
-        destinations.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        destinations.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        destinations.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var fields = ActionRow();
         if (!temporary) fields.Controls.Add(FieldGroup("Site", _site, 240));
         fields.Controls.Add(FieldGroup("Group", _group, 180));
@@ -119,9 +117,8 @@ internal sealed class QuickAddForm : Form
         });
         _assignGroup.Margin = new Padding(4, 24, 0, 4);
         fields.Controls.Add(_assignGroup);
-        destinations.Controls.Add(fields, 0, 0);
-        if (!temporary) destinations.Controls.Add(_siteStatus, 0, 1);
-        root.Controls.Add(destinations, 0, 3);
+        root.Controls.Add(fields, 0, 3);
+        if (!temporary) root.Controls.Add(_siteStatus, 0, 4);
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Include", HeaderText = "Use", FillWeight = 35 });
         foreach (var name in new[] { "Address", "Label", "Site", "Group", "Status" }) _grid.Columns.Add(name, name);
         _grid.Columns[1].FillWeight = 120;
@@ -130,8 +127,8 @@ internal sealed class QuickAddForm : Form
         _grid.Columns[3].ReadOnly = true;
         _grid.Columns[3].Visible = !temporary;
         _grid.Columns[5].ReadOnly = true;
-        root.Controls.Add(_grid, 0, 4);
-        root.Controls.Add(_summary, 0, 5);
+        root.Controls.Add(_grid, 0, 5);
+        root.Controls.Add(_summary, 0, 6);
         var footer = ActionRow();
         footer.FlowDirection = FlowDirection.RightToLeft;
         footer.TabIndex = 4;
@@ -142,13 +139,13 @@ internal sealed class QuickAddForm : Form
         footer.Controls.Add(_importButton);
         footer.Controls.Add(cancel);
         CancelButton = cancel;
-        root.Controls.Add(footer, 0, 6);
+        root.Controls.Add(footer, 0, 7);
         Controls.Add(root);
         AuroraTheme.Register(this);
         AuroraTheme.Changed += ApplyPreviewColors;
         Disposed += (_, _) => AuroraTheme.Changed -= ApplyPreviewColors;
         _grid.SelectionChanged += (_, _) => _assignGroup.Enabled = _grid.SelectedRows.Count > 0;
-        _paste.TextChanged += (_, _) => Parse(); _site.SelectedIndexChanged += (_, _) => ValidateRows(); _site.TextChanged += (_, _) => ValidateRows();
+        _paste.TextChanged += (_, _) => NormalizeAndParse(); _site.SelectedIndexChanged += (_, _) => ValidateRows(); _site.TextChanged += (_, _) => ValidateRows();
         _grid.CellValueChanged += (_, _) => { if (!_updating) ValidateRows(); };
         _grid.CurrentCellDirtyStateChanged += (_, _) => { if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
         _grid.DataError += (_, e) => e.ThrowException = false;
@@ -192,6 +189,10 @@ internal sealed class QuickAddForm : Form
         foreach (DataGridViewRow row in _grid.Rows)
         {
             string status = Cell(row, 5);
+            row.DefaultCellStyle.BackColor = palette.Surface;
+            row.DefaultCellStyle.ForeColor = palette.Text;
+            row.DefaultCellStyle.SelectionBackColor = palette.Surface3;
+            row.DefaultCellStyle.SelectionForeColor = palette.Text;
             row.Cells[5].Style.ForeColor = palette.StatusText(status == "New" ? palette.Success :
                 status.StartsWith("Invalid", StringComparison.OrdinalIgnoreCase) ? palette.Danger : palette.Warning);
             row.Cells[5].Style.SelectionForeColor = palette.Text;
@@ -201,7 +202,9 @@ internal sealed class QuickAddForm : Form
     internal void CheckLayout()
     {
         CompactDialog.CheckBounds(this);
-        if (_grid.Height < 80) throw new InvalidOperationException("Host preview lost usable height.");
+        if (_grid.Height < 150) throw new InvalidOperationException("Host preview lost usable height.");
+        if (_grid.Top - _assignGroup.Bottom > 100)
+            throw new InvalidOperationException("Destination layout reserved excess blank space above the preview.");
         foreach (DataGridViewRow row in _grid.Rows)
             if (AuroraTheme.ContrastRatio(row.Cells[5].Style.ForeColor, AuroraTheme.Palette.Surface) < 4.5)
                 throw new InvalidOperationException("Import status text does not meet contrast.");
@@ -230,6 +233,21 @@ internal sealed class QuickAddForm : Form
         var p = AuroraTheme.Palette;
         _siteStatus.ForeColor = role == "accentText" ? p.Accent : role == "statSuspect" ? p.StatusText(p.Warning) : p.Secondary;
     }
+    private void NormalizeAndParse()
+    {
+        if (_normalizingPaste) return;
+        string current = _paste.Text;
+        string normalized = current.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
+        if (normalized != current)
+        {
+            int caret = _paste.SelectionStart;
+            _normalizingPaste = true;
+            try { _paste.Text = normalized; _paste.SelectionStart = Math.Min(caret, normalized.Length); }
+            finally { _normalizingPaste = false; }
+        }
+        Parse();
+    }
+
     private void Parse()
     {
         _updating = true;

@@ -193,7 +193,7 @@ jobs:
           # Ping Watchdog $env:WATCHDOG_VERSION
 
           - Quick Add and Quick Monitor separate paste actions, destination fields, preview and confirmation; invalid-only selections cannot be added.
-          - Preview status colors follow the selected theme, and editable fields have visible labels.
+          - Preview rows and status colors follow the selected theme; imported/pasted lines display on separate lines and destination fields leave space for the preview.
           - Label, site-name and folder dialogs size their fields and buttons from content, with native confirm/cancel and keyboard behavior.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
