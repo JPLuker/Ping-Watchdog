@@ -210,3 +210,18 @@ v1.19.7 replaces the generic Yes/No restart prompt with Restart now / Later. Ent
 Windows release run 39961911594 passed dependency vulnerability checks, self-tests (including protected-config restart persistence), published startup/UI and isolated recovery tests. Light/dark update-confirmation captures were downloaded and inspected; the actions and wrapped text fit. Installer, portable, full/delta, update feeds and SHA256SUMS.txt are published; latest is v1.19.7. The first candidate v1.19.6 was not published: its new self-test exposed a guard-order bug in test mode, corrected before this passing run.
 
 Remaining: physical keyboard/DPI/screen-reader acceptance, real installed/portable restart and upgrade, corrupt-download tests, broader supporting-window review, public docs and final maintenance acceptance. Issue #12 has no screenshot; the existing update toast says Dismiss, so this batch does not establish reproduction or resolution of the specific reported “okay” state.
+
+
+## Update integrity and recovery lifetime — 2026-10-23
+
+v1.19.8 adds tests of the actual pinned Velopack 1.2.161 UpdateManager download path. Isolated fixtures advertise a valid SHA-256/SHA-1 and size, then deliver same-length corrupted bytes, a truncated package, or an interrupted transfer after writing partial bytes. Each must throw the expected checksum/IO exception, leave no full or partial package, and report no pending restart. Retrying the same manager/update with valid bytes must download again, stage exactly the original package and report it ready. This runs in the Windows self-test gate.
+
+The recovery UI also runs its real RecoveryUpdates adapter against the verifier: a corrupted package leaves installation unavailable, preserves the original crash details and keeps Check for updates usable; a valid retry offers installation. A test factory supplies the isolated manager without replacing verification. No executable updater is included or launched, no real feed/network is contacted, and no installed app or user data is touched by these fixtures.
+
+Recovery now rejects check/download completions after the window closes, even if the transport ignores cancellation. Queued progress is limited to its active attempt so it cannot replace the final ready/error status. Additional recovery regressions cover closing during both the check and download phases.
+
+Windows release run 39964182359 passed dependency checks, real integrity/self-tests, published startup/UI and isolated recovery regression gates. Installer, portable ZIP, full/delta, RELEASES, releases.win.json and SHA256SUMS.txt were verified on the published v1.19.8 latest release. This batch changes no layout. It establishes full-package verification/cleanup/retry and recovery state handling, not live GitHub transport reliability, delta application, installed/portable upgrade, physical accessibility or final maintenance acceptance.
+
+Verifier source reviewed: [UpdateManager.cs at 1.2.161](https://github.com/velopack/velopack/blob/1.2.161/src/lib-csharp/UpdateManager.cs), including DownloadUpdatesAsync, VerifyPackageChecksumAsync and CleanPackagesExcept. The transport fixture is intentionally synthetic; verification and cache cleanup run in the library itself.
+
+Next: remaining supporting-window focus/ownership/Escape/layout review, then release documentation and hands-on candidate acceptance. Include an owner-close cancellation check with an open Settings draft; the main FormClosing handler currently performs shutdown work without inspecting an inherited cancellation flag.
