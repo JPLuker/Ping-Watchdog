@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.8**.
+Current published Windows build: **v1.19.13**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -30,7 +30,8 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 
 ## 3. Supporting UI and data controls
 
-- [ ] Complete Settings/Hosts/History/Organization/dialog/About/updater/recovery review in both themes.
+- [x] Review History, Organization and category dialog at tested desktop widths in both themes; implement canceled-exit protection (v1.19.13). Physical/dense-folder acceptance remains open.
+- [ ] Review Quick Add (including temporary Quick Monitor), label/site-name and folder-picker dialogs in both themes; finish remaining supporting-window states.
 - [x] Preserve staged Settings save/discard/cancel and Ctrl+S with visible persistence failure feedback (v1.18.4).
 - [x] Add Settings > About, bundled license review, report-issue access and reviewable diagnostic copying (v1.18.6).
 - [ ] Complete dialog ownership, focus, keyboard and independent recovery acceptance across remaining supporting windows.
@@ -198,3 +199,16 @@ Windows release run 39964182359 passed dependency checks, real integrity/self-te
 Verifier source reviewed: [UpdateManager.cs at 1.2.161](https://github.com/velopack/velopack/blob/1.2.161/src/lib-csharp/UpdateManager.cs), including DownloadUpdatesAsync, VerifyPackageChecksumAsync and CleanPackagesExcept. The transport fixture is intentionally synthetic; verification and cache cleanup run in the library itself.
 
 Next: remaining supporting-window focus/ownership/Escape/layout review, then release documentation and hands-on candidate acceptance. Include an owner-close cancellation check with an open Settings draft; the main FormClosing handler currently performs shutdown work without inspecting an inherited cancellation flag.
+
+
+## Supporting windows and canceled exit — 2026-10-23
+
+v1.19.13 fixes the owner-close path: Main honors a canceled owned-window close before shutdown, and explicitly resolves Settings opened from the independent Wallboard before closing windows or stopping workers. Explicit Settings discard reloads its committed baseline so owner preflight does not ask again. Tests cover retaining the draft on Cancel/failed save, resolving discard, and a native main-window close veto with Settings owned by Main or Wallboard while a localhost monitoring session is active.
+
+History now uses wrapping paired filters, accessible filter names and readable theme-based event colors instead of hard-coded dark row colors. It disables export when empty, owns export error dialogs, supports Escape, and reserves native dropdown height. Read-only dropdown values draw with the current palette while retaining native selection/keyboard semantics. Organization uses the shared buttons, wrapping actions, a compact header, named tree and Escape. Category uses content-sized rows, DPI scaling and native confirm/cancel actions with visible bounds.
+
+Windows run 39968819793 passed vulnerability/self-tests, published startup/UI and isolated recovery gates. Both-theme History populated/empty captures (820/1080 widths), Organization root/disabled-action captures (620/900 widths), and category captures were inspected. Geometric checks cover parent and full-window bounds; History event text contrast is checked. All installer/portable/full/delta/feed/checksum assets were verified on the v1.19.13 latest release.
+
+Earlier v1.19.9/10 candidates were withheld by the UI gate for a native History dropdown height/clipping defect. v1.19.11/12 passed and published as authorized iterations; visual review then exposed white native fields in dark mode. The final follow-up restores category field styling and explicitly draws the read-only History values using theme colors. These iterations do not establish physical DPI, open-dropdown/high-contrast/Narrator acceptance, dense-folder behavior or every supporting window as complete.
+
+Next: review Quick Add (including temporary Quick Monitor), label/site-name and folder-picker dialogs, then public documentation/notices and exact-candidate manual acceptance. Preserve the accepted dashboard/topology and display-only Wallboard.
