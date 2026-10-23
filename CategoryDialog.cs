@@ -10,7 +10,7 @@ internal sealed class CategoryDialog : Form
     };
     private readonly ComboBox _box = new()
     {
-        Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDown,
+        Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDown, FlatStyle = FlatStyle.Flat,
         AutoCompleteMode = AutoCompleteMode.SuggestAppend,
         AutoCompleteSource = AutoCompleteSource.ListItems,
         AccessibleName = "Category", TabIndex = 0

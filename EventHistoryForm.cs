@@ -14,13 +14,13 @@ internal sealed class EventHistoryForm : Form
 
     private readonly ComboBox _windowCombo = new()
     {
-        DropDownStyle = ComboBoxStyle.DropDownList,
+        DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
         Width = 140, AccessibleName = "History range", TabIndex = 0
     };
 
     private readonly ComboBox _siteCombo = new()
     {
-        DropDownStyle = ComboBoxStyle.DropDownList,
+        DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
         Width = 170, AccessibleName = "History site", TabIndex = 0
     };
 

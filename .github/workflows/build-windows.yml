@@ -194,7 +194,7 @@ jobs:
 
           - Canceling exit from Settings keeps monitoring and Wallboard running; choosing Discard no longer prompts twice.
           - History filters and Organization actions wrap at narrow widths; Escape closes both windows.
-          - History event colors follow the selected theme, empty history disables export, and category actions fit their dialog.
+          - History event colors and History/category input fields follow the selected theme; empty history disables export and category actions fit their dialog.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
