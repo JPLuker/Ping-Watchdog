@@ -161,6 +161,7 @@ internal sealed class EventHistoryForm : Form
             Padding = new Padding(AuroraTheme.Space4),
             Margin = new Padding(0)
         };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -209,9 +210,12 @@ internal sealed class EventHistoryForm : Form
 
     private static TableLayoutPanel FilterGroup(string label, ComboBox combo, int tabIndex)
     {
+        combo.Font = AuroraTheme.LabelFont;
         var group = new TableLayoutPanel
         {
             AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(0, combo.PreferredHeight + combo.Margin.Vertical + 8),
+            Padding = new Padding(0, 0, 0, 8),
             ColumnCount = 2, RowCount = 1,
             Margin = new Padding(0, 0, 12, 4), TabIndex = tabIndex
         };
@@ -256,7 +260,8 @@ internal sealed class EventHistoryForm : Form
         PerformLayout();
         foreach (Control control in new Control[] { _windowCombo, _siteCombo, _hideSuspects, _exportButton })
         {
-            if (!control.Visible || !control.Parent!.ClientRectangle.Contains(control.Bounds))
+            if (!control.Visible || !control.Parent!.ClientRectangle.Contains(control.Bounds) ||
+                !ClientRectangle.Contains(RectangleToClient(control.RectangleToScreen(control.ClientRectangle))))
                 throw new InvalidOperationException($"History filter/action is clipped: {control.Text}; visible={control.Visible}, bounds={control.Bounds}, parent={control.Parent?.ClientRectangle}.");
             var group = control.Parent!;
             if (group.Parent is FlowLayoutPanel && !group.Parent.ClientRectangle.Contains(group.Bounds))

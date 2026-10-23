@@ -64,7 +64,8 @@ internal sealed class CategoryDialog : Form
         PerformLayout();
         foreach (var button in Controls.OfType<TableLayoutPanel>().Single().Controls
             .OfType<FlowLayoutPanel>().Single().Controls.OfType<Button>())
-            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds))
+            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds) ||
+                !ClientRectangle.Contains(RectangleToClient(button.RectangleToScreen(button.ClientRectangle))))
                 throw new InvalidOperationException("Category action is clipped.");
     }
 }

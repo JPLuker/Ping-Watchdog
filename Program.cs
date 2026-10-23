@@ -2145,14 +2145,16 @@ public sealed partial class MainForm : Form
                     foreach (int width in new[] { 620, 900 })
                     {
                         form._organizationForm!.Width = width;
-                        form._organizationForm.CheckLayout();
+                        await Task.Delay(50);
                         Capture(form._organizationForm, "dialog-organization-" + width + "-" + appearance);
+                        form._organizationForm.CheckLayout();
                     }
                     DismissWithEscape(form._organizationForm!);
                     using (var category = new CategoryDialog("2001:db8:1234::1234", "Infrastructure"))
                     {
                         category.Show(form);
                         await Task.Delay(50);
+                        Capture(category, "dialog-category-" + appearance);
                         category.CheckLayout();
                         Check(category.CancelButton is Button { DialogResult: DialogResult.Cancel } &&
                             category.AcceptButton is Button { DialogResult: DialogResult.OK },

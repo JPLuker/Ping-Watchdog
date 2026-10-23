@@ -159,6 +159,7 @@ internal sealed class OrganizationForm : Form
             Padding = new Padding(16),
             Margin = new Padding(0)
         };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -168,7 +169,7 @@ internal sealed class OrganizationForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
-            WrapContents = false, AutoSize = true,
+            WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
         };
         header.Controls.Add(new Label
@@ -182,7 +183,7 @@ internal sealed class OrganizationForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true, AutoSize = true, TabIndex = 0,
+            WrapContents = true, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, TabIndex = 0,
             Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
         };
         foreach (var button in new[]
@@ -224,8 +225,9 @@ internal sealed class OrganizationForm : Form
     {
         PerformLayout();
         foreach (var button in new[] { _newSiteButton, _newFolderButton, _renameButton, _moveButton, _deleteButton, _openButton })
-            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds))
-                throw new InvalidOperationException("Organization action is clipped: " + button.Text);
+            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds) ||
+                !ClientRectangle.Contains(RectangleToClient(button.RectangleToScreen(button.ClientRectangle))))
+                throw new InvalidOperationException($"Organization action is clipped: {button.Text}; bounds={button.Bounds}, parent={button.Parent?.ClientRectangle}.");
     }
 
     private void WireActions()
