@@ -941,13 +941,20 @@ public sealed partial class MainForm : Form
 
         DpiChanged += (_, _) => BeginInvoke(ApplyResponsiveLayout);
 
-        FormClosing += (_, _) =>
+        FormClosing += (_, e) =>
         {
+            // WinForms propagates an owned window's canceled close before this event.
+            if (e.Cancel) return;
+            var settings = _settingsForm;
+            if (settings is { IsDisposed: false })
+            {
+                settings.Close();
+                if (!settings.IsDisposed) { e.Cancel = true; return; }
+            }
             _closingApplication = true;
             _hostQuickMenu.Close();
             _wallboardForm?.Close();
             _eventHistoryForm?.Close();
-            _settingsForm?.Close();
             _organizationForm?.Close();
             PersistCurrentEditor();
             SaveSites();
@@ -1653,6 +1660,14 @@ public sealed partial class MainForm : Form
             bitmap.Save(Path.Combine(output, name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
         }
 
+        void DismissWithEscape(Form window)
+        {
+            var escape = typeof(Form).GetMethod("ProcessDialogKey",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Check((bool)escape.Invoke(window, new object[] { Keys.Escape })! && window.IsDisposed,
+                window.Text + ": Escape did not dismiss the window.");
+        }
+
         async Task CheckHostMenu(Control surface)
         {
             var host = form.HostSnapshot().First();
@@ -2049,6 +2064,33 @@ public sealed partial class MainForm : Form
                     Check(!canvas.CaptionsOverlap(), "Dense Wallboard captions overlap.");
                 }
 
+                var configBeforeCloseTest = form.BuildConfig(captureEditor: false);
+                form.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, Sites = new()
+                {
+                    new SiteDefinition { Name = "Close guard", Hosts = new() { "127.0.0.1" } }
+                } });
+                form.StartMonitoring();
+                Check(form._cts is not null, "Close-guard test requires active monitoring.");
+                foreach (Form owner in new Form[] { form, form._wallboardForm! })
+                {
+                    form.OpenSettings(owner);
+                    await Task.Delay(50);
+                    var settings = form._settingsForm!;
+                    var monitoringBeforeClose = form._cts;
+                    FormClosingEventHandler veto = (_, e) => e.Cancel = true;
+                    settings.FormClosing += veto;
+                    form.Close();
+                    Check(!form.IsDisposed && !form._closingApplication && !settings.IsDisposed,
+                        "Canceling Settings close did not preserve the main session.");
+                    Check(ReferenceEquals(form._cts, monitoringBeforeClose) &&
+                        form._wallboardForm is { Visible: true, IsDisposed: false },
+                        "Canceled exit stopped monitoring or closed Wallboard.");
+                    settings.FormClosing -= veto;
+                    settings.Close();
+                }
+                form.StopMonitoring();
+                form.ApplyConfig(configBeforeCloseTest);
+
                 form._wallboardForm!.Close();
                 await Task.Delay(100);
                 Check(form.Visible, "Closing Wallboard did not restore the main window.");
@@ -2075,6 +2117,48 @@ public sealed partial class MainForm : Form
                     await form._settingsForm!.CaptureAboutReview(output, appearance.ToString());
                     await form._settingsForm!.CaptureDataReview(output, appearance.ToString());
                     form._settingsForm!.Close();
+
+                    IReadOnlyList<StateEventRecord> events = Enumerable.Range(0, 60).Select(i =>
+                        new StateEventRecord(DateTime.Now.AddMinutes(-i), "Office & Warehouse", $"192.0.2.{i + 1}",
+                            "Controller with a long name", i % 3 == 0 ? "DOWN" : i % 3 == 1 ? "RECOVERED" : "SUSPECT",
+                            "Availability changed")).ToArray();
+                    using (var history = new EventHistoryForm(() => events,
+                        () => new EventHistoryPreferences(24, false), (_, _) => { }))
+                    {
+                        history.Show(form);
+                        await Task.Delay(50);
+                        foreach (int width in new[] { 820, 1080 })
+                        {
+                            history.Width = width;
+                            history.CheckLayout();
+                            Capture(history, "dialog-history-" + width + "-" + appearance);
+                        }
+                        events = Array.Empty<StateEventRecord>();
+                        history.RefreshNow();
+                        history.CheckLayout();
+                        Capture(history, "dialog-history-empty-" + appearance);
+                        DismissWithEscape(history);
+                    }
+                    form.OpenOrganization();
+                    await Task.Delay(50);
+                    foreach (int width in new[] { 620, 900 })
+                    {
+                        form._organizationForm!.Width = width;
+                        form._organizationForm.CheckLayout();
+                        Capture(form._organizationForm, "dialog-organization-" + width + "-" + appearance);
+                    }
+                    DismissWithEscape(form._organizationForm!);
+                    using (var category = new CategoryDialog("2001:db8:1234::1234", "Infrastructure"))
+                    {
+                        category.Show(form);
+                        await Task.Delay(50);
+                        category.CheckLayout();
+                        Check(category.CancelButton is Button { DialogResult: DialogResult.Cancel } &&
+                            category.AcceptButton is Button { DialogResult: DialogResult.OK },
+                            "Category lost its native confirm/cancel actions.");
+                        Capture(category, "dialog-category-" + appearance);
+                        category.Close();
+                    }
                 }
                 AuroraTheme.SetMode(appearanceBefore);
                 File.WriteAllText(Path.Combine(output, "passed.txt"), "UI smoke test passed.");

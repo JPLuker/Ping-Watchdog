@@ -146,6 +146,9 @@ jobs:
           foreach ($name in @("support-about-Light", "support-about-Dark", "support-diagnostics-Light", "support-diagnostics-Dark")) {
             Write-Output ("SUPPORT_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SUPPORT_IMAGE_END")
           }
+          foreach ($file in Get-ChildItem "ui-smoke-test/dialog-*.png" | Sort-Object Name) {
+            Write-Output ("DIALOG_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName)) + "DIALOG_IMAGE_END")
+          }
           foreach ($name in @("data-settings-Light", "data-settings-Dark", "data-delete-Light", "data-delete-Dark", "data-confirm-Light", "data-confirm-Dark")) {
             Write-Output ("DATA_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "DATA_IMAGE_END")
           }
@@ -189,8 +192,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Startup recovery ignores update results after its window closes, and old download progress no longer overwrites the ready status.
-          - Added real updater checks for corrupted and interrupted downloads, cleanup, and successful retry, including the recovery window.
+          - Canceling exit from Settings keeps monitoring and Wallboard running; choosing Discard no longer prompts twice.
+          - History filters and Organization actions wrap at narrow widths; Escape closes both windows.
+          - History event colors follow the selected theme, empty history disables export, and category actions fit their dialog.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

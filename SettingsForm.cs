@@ -127,11 +127,10 @@ internal sealed class SettingsForm : Form
         KeyDown += (_, e) => { if (e.Control && e.KeyCode == Keys.S) { SaveSettings(); e.SuppressKeyPress = true; } };
         FormClosing += (_, e) =>
         {
-            if (!HasChanges()) return;
+            if (e.Cancel || !HasChanges()) return;
             var answer = MessageBox.Show(this, "Save your settings before closing?", "Unsaved settings",
                 MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-            if (answer == DialogResult.Cancel) e.Cancel = true;
-            else if (answer == DialogResult.Yes) { SaveSettings(); e.Cancel = HasChanges(); }
+            ResolveCloseDecision(e, answer);
         };
         _resetButton.Click += (_, _) => RestoreDefaults();
         _saveButton.Click += (_, _) => SaveSettings();
@@ -738,6 +737,13 @@ internal sealed class SettingsForm : Form
         _saveStatus.AccessibleDescription = _saveError;
         _saveDetails.Visible = _saveError != null;
     }
+    private void ResolveCloseDecision(FormClosingEventArgs e, DialogResult answer)
+    {
+        if (answer == DialogResult.Cancel) e.Cancel = true;
+        else if (answer == DialogResult.Yes) { SaveSettings(); e.Cancel = HasChanges(); }
+        else if (answer == DialogResult.No) LoadSettings(); // Resolve discard before owner preflight asks again.
+    }
+
     private bool SaveSettings()
     {
         if (_loading || !HasChanges()) return true;
@@ -801,6 +807,20 @@ internal sealed class SettingsForm : Form
         form.LoadSettings(); // Discarding a draft reloads the actual committed values.
         if (form.HasChanges() || form._autoStart.Checked != current.StartMonitoringOnLaunch)
             throw new InvalidOperationException("Settings discard did not restore committed values.");
+        form._autoStart.Checked = !current.StartMonitoringOnLaunch;
+        var canceled = new FormClosingEventArgs(CloseReason.FormOwnerClosing, false);
+        form.ResolveCloseDecision(canceled, DialogResult.Cancel);
+        if (!canceled.Cancel || !form.HasChanges())
+            throw new InvalidOperationException("Canceling owner close lost the Settings draft.");
+        fail = true;
+        var failed = new FormClosingEventArgs(CloseReason.FormOwnerClosing, false);
+        form.ResolveCloseDecision(failed, DialogResult.Yes);
+        if (!failed.Cancel || !form.HasChanges())
+            throw new InvalidOperationException("Failed Settings save allowed owner shutdown.");
+        var discarded = new FormClosingEventArgs(CloseReason.FormOwnerClosing, false);
+        form.ResolveCloseDecision(discarded, DialogResult.No);
+        if (discarded.Cancel || form.HasChanges() || form._autoStart.Checked != current.StartMonitoringOnLaunch)
+            throw new InvalidOperationException("Explicit discard was not resolved before owner shutdown.");
     }
 
     internal static async Task CaptureSaveFailureReview(AppSettingsSnapshot initial, Form owner, string path)

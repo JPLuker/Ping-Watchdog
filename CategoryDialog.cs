@@ -2,114 +2,69 @@ namespace PingWatchdog;
 
 internal sealed class CategoryDialog : Form
 {
+    // FOCAL: category field. Compact native dialog, sized from its content.
     private static readonly string[] SuggestedCategories =
     {
-        "AP",
-        "Firewall",
-        "Switch",
-        "Router",
-        "Server",
-        "Printer",
-        "Camera",
-        "UPS",
-        "Workstation",
-        "IoT",
-        "Other"
+        "AP", "Firewall", "Switch", "Router", "Server", "Printer",
+        "Camera", "UPS", "Workstation", "IoT", "Other"
     };
-
     private readonly ComboBox _box = new()
     {
-        Dock = DockStyle.Fill,
-        DropDownStyle = ComboBoxStyle.DropDown,
+        Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDown,
         AutoCompleteMode = AutoCompleteMode.SuggestAppend,
-        AutoCompleteSource = AutoCompleteSource.ListItems
+        AutoCompleteSource = AutoCompleteSource.ListItems,
+        AccessibleName = "Category", TabIndex = 0
     };
-
     public string Category => _box.Text.Trim();
 
     public CategoryDialog(string host, string current)
     {
         Text = $"Set category • {host}";
-        Width = 430;
-        Height = 170;
-        MinimizeBox = false;
-        MaximizeBox = false;
+        ClientSize = new Size(420, 180);
+        MinimumSize = new Size(400, 220);
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        Font = AuroraTheme.LabelFont;
+        MinimizeBox = MaximizeBox = false;
+        ShowInTaskbar = false;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
-        BackColor = Color.FromArgb(13, 17, 23);
-        ForeColor = Color.FromArgb(230, 237, 243);
-        Font = new Font("Segoe UI", 9.5f);
-
         _box.Items.AddRange(SuggestedCategories);
         _box.Text = current;
-        _box.BackColor = Color.FromArgb(22, 27, 34);
-        _box.ForeColor = Color.FromArgb(230, 237, 243);
-        _box.FlatStyle = FlatStyle.Flat;
-
-        var ok = new Button
-        {
-            Text = "Save Category",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(35, 134, 96),
-            ForeColor = Color.White
-        };
-
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(22, 27, 34),
-            ForeColor = Color.White
-        };
-
+        var save = new AuroraButton { Text = "Save category", DialogResult = DialogResult.OK, AutoSize = true, TabIndex = 1 };
+        var cancel = new AuroraButton { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true, TabIndex = 0 };
         var buttons = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false
+            AutoSize = true, Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft, WrapContents = true,
+            Margin = new Padding(0, 16, 0, 0), TabIndex = 1
         };
-        buttons.Controls.Add(ok);
+        buttons.Controls.Add(save);
         buttons.Controls.Add(cancel);
-
-        var layout = new TableLayoutPanel
+        var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 4,
-            Padding = new Padding(12)
+            Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3,
+            Padding = new Padding(AuroraTheme.Space4)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label
-        {
-            Text = "Category:",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 148, 158)
-        }, 0, 0);
-        layout.Controls.Add(_box, 0, 1);
-        layout.Controls.Add(new Label
-        {
-            Text = "Choose a common device type or enter your own category.",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 148, 158),
-            Padding = new Padding(0, 5, 0, 0)
-        }, 0, 2);
-        layout.Controls.Add(buttons, 0, 3);
-
-        Controls.Add(layout);
-        AcceptButton = ok;
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (int i = 0; i < 3; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.Controls.Add(new Label { Text = "Category", AutoSize = true, Margin = new Padding(0, 0, 0, 8) }, 0, 0);
+        root.Controls.Add(_box, 0, 1);
+        root.Controls.Add(buttons, 0, 2);
+        Controls.Add(root);
+        AcceptButton = save;
         CancelButton = cancel;
+        AuroraTheme.Register(this);
+        Shown += (_, _) => { _box.Focus(); _box.SelectAll(); };
+    }
 
-        Shown += (_, _) =>
-        {
-            _box.Focus();
-            _box.SelectAll();
-        };
+    internal void CheckLayout()
+    {
+        PerformLayout();
+        foreach (var button in Controls.OfType<TableLayoutPanel>().Single().Controls
+            .OfType<FlowLayoutPanel>().Single().Controls.OfType<Button>())
+            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds))
+                throw new InvalidOperationException("Category action is clipped.");
     }
 }

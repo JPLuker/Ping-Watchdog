@@ -2,6 +2,7 @@ namespace PingWatchdog;
 
 internal sealed class OrganizationForm : Form
 {
+    // FOCAL: sites and folders. Compact native tree with a wrapping action row.
     private readonly Func<OrganizationSnapshot> _provider;
     private readonly OrganizationActions _actions;
     private readonly TreeView _tree = new()
@@ -13,15 +14,16 @@ internal sealed class OrganizationForm : Form
         ShowLines = true,
         ShowPlusMinus = true,
         ShowRootLines = true,
-        Font = new Font("Segoe UI", 9.5f)
+        Font = AuroraTheme.LabelFont, AccessibleName = "Sites and folders",
+        ShowNodeToolTips = true, TabIndex = 1
     };
 
-    private readonly Button _newSiteButton = Button("New Site");
-    private readonly Button _newFolderButton = Button("New Folder");
+    private readonly Button _newSiteButton = Button("Add site");
+    private readonly Button _newFolderButton = Button("Add folder");
     private readonly Button _renameButton = Button("Rename");
-    private readonly Button _moveButton = Button("Move...");
+    private readonly Button _moveButton = Button("Move…");
     private readonly Button _deleteButton = Button("Delete");
-    private readonly Button _openButton = Button("Open Site");
+    private readonly Button _openButton = Button("Open site");
     private readonly Label _detail = new()
     {
         AutoSize = false,
@@ -43,12 +45,12 @@ internal sealed class OrganizationForm : Form
         MinimumSize = new Size(620, 460);
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = new Font("Segoe UI", 9.5f);
+        Font = AuroraTheme.LabelFont;
         BackColor = Color.FromArgb(10, 14, 20);
         ForeColor = Color.FromArgb(234, 240, 246);
 
         BuildLayout();
-        ApplyTheme();
+        AuroraTheme.Register(this);
         WireActions();
 
         Shown += (_, _) => RefreshNow();
@@ -157,8 +159,8 @@ internal sealed class OrganizationForm : Form
             Padding = new Padding(16),
             Margin = new Padding(0)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
 
@@ -166,29 +168,22 @@ internal sealed class OrganizationForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Margin = new Padding(0)
+            WrapContents = false, AutoSize = true,
+            Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
         };
         header.Controls.Add(new Label
         {
-            Text = "Site Organization",
+            Text = "Site organization", Tag = "title",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 18, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold),
             ForeColor = Color.White
         });
-        header.Controls.Add(new Label
-        {
-            Text = "Folders can contain subfolders and sites. Empty folders are saved.",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 153, 169)
-        });
-
         var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Margin = new Padding(0)
+            WrapContents = true, AutoSize = true, TabIndex = 0,
+            Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
         };
         foreach (var button in new[]
         {
@@ -212,43 +207,25 @@ internal sealed class OrganizationForm : Form
 
     private static Button Button(string text)
     {
-        return new Button
+        return new AuroraButton
         {
-            Text = text,
-            AutoSize = true,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-            Margin = new Padding(0, 4, 7, 4)
+            Text = text, AutoSize = true, MinimumSize = new Size(0, 32),
+            Margin = new Padding(0, 0, 8, 4)
         };
     }
 
-    private void ApplyTheme()
+    protected override bool ProcessDialogKey(Keys keyData)
     {
-        var card = Color.FromArgb(14, 20, 28);
-        var text = Color.FromArgb(234, 240, 246);
-        var muted = Color.FromArgb(139, 153, 169);
-        var border = Color.FromArgb(39, 49, 61);
+        if (keyData == Keys.Escape) { Close(); return true; }
+        return base.ProcessDialogKey(keyData);
+    }
 
-        _tree.BackColor = card;
-        _tree.ForeColor = text;
-        _tree.LineColor = Color.FromArgb(70, 85, 101);
-        _detail.BackColor = Color.FromArgb(12, 18, 26);
-        _detail.ForeColor = muted;
-
-        foreach (var button in new[]
-        {
-            _newSiteButton,
-            _newFolderButton,
-            _renameButton,
-            _moveButton,
-            _deleteButton,
-            _openButton
-        })
-        {
-            button.BackColor = Color.FromArgb(25, 34, 45);
-            button.ForeColor = text;
-            button.FlatAppearance.BorderColor = border;
-        }
+    internal void CheckLayout()
+    {
+        PerformLayout();
+        foreach (var button in new[] { _newSiteButton, _newFolderButton, _renameButton, _moveButton, _deleteButton, _openButton })
+            if (!button.Visible || !button.Parent!.ClientRectangle.Contains(button.Bounds))
+                throw new InvalidOperationException("Organization action is clipped: " + button.Text);
     }
 
     private void WireActions()

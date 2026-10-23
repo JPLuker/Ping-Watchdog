@@ -4,6 +4,7 @@ namespace PingWatchdog;
 
 internal sealed class EventHistoryForm : Form
 {
+    // FOCAL: outage records. Compact opaque surface with wrapping filters.
     // Event type text is read, so it sits at the 13 logical-px floor (9.75pt), not below it.
     internal static readonly Font KindFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
     private readonly Func<IReadOnlyList<StateEventRecord>> _eventProvider;
@@ -14,19 +15,19 @@ internal sealed class EventHistoryForm : Form
     private readonly ComboBox _windowCombo = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 140
+        Width = 140, AccessibleName = "History range", TabIndex = 0
     };
 
     private readonly ComboBox _siteCombo = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 170
+        Width = 170, AccessibleName = "History site", TabIndex = 0
     };
 
     private readonly CheckBox _hideSuspects = new()
     {
         Text = "Hide suspect events",
-        AutoSize = true
+        AutoSize = true, TabIndex = 2
     };
 
     private readonly Label _countLabel = new()
@@ -35,15 +36,16 @@ internal sealed class EventHistoryForm : Form
         TextAlign = ContentAlignment.MiddleRight
     };
 
-    private readonly Button _exportButton = new()
+    private readonly Button _exportButton = new AuroraButton()
     {
         Text = "Export CSV",
-        AutoSize = true
+        AutoSize = true, TabIndex = 3
     };
 
     private readonly DataGridView _grid = new()
     {
         Dock = DockStyle.Fill,
+        AccessibleName = "Outage history", TabIndex = 2,
         ReadOnly = true,
         AllowUserToAddRows = false,
         AllowUserToDeleteRows = false,
@@ -68,19 +70,21 @@ internal sealed class EventHistoryForm : Form
         _preferencesProvider = preferencesProvider;
         _preferencesChanged = preferencesChanged;
 
-        Text = "Outage History • Ping Watchdog";
+        Text = "Outage history • Ping Watchdog";
         Width = 1080;
         Height = 650;
         MinimumSize = new Size(820, 480);
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = new Font("Segoe UI", 9.5f);
+        Font = AuroraTheme.LabelFont;
         BackColor = Color.FromArgb(11, 16, 23);
         ForeColor = Color.FromArgb(232, 238, 245);
 
         BuildGrid();
         BuildLayout();
-        ApplyTheme();
+        AuroraTheme.Register(this);
+        AuroraTheme.Changed += ApplyEventColors;
+        Disposed += (_, _) => AuroraTheme.Changed -= ApplyEventColors;
 
         _windowCombo.Items.AddRange(Presentation.HistoryRanges.Cast<object>().ToArray());
 
@@ -154,11 +158,11 @@ internal sealed class EventHistoryForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 3,
-            Padding = new Padding(18),
+            Padding = new Padding(AuroraTheme.Space4),
             Margin = new Padding(0)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var titlePanel = new TableLayoutPanel
@@ -171,45 +175,28 @@ internal sealed class EventHistoryForm : Form
         titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        var titleStack = new FlowLayoutPanel
+        titlePanel.AutoSize = true;
+        titlePanel.Margin = new Padding(0, 0, 0, AuroraTheme.Space3);
+        titlePanel.Controls.Add(new Label
         {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Margin = new Padding(0)
-        };
-        titleStack.Controls.Add(new Label
-        {
-            Text = "Outage History",
-            AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 18, FontStyle.Bold),
-            ForeColor = Color.White
-        });
-        titleStack.Controls.Add(new Label
-        {
-            Text = "Persistent availability events across monitoring sessions",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 153, 169)
-        });
-
-        _countLabel.Margin = new Padding(12, 20, 0, 0);
-        titlePanel.Controls.Add(titleStack, 0, 0);
+            Text = "Outage history", AutoSize = true, Tag = "title",
+            Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold), Margin = Padding.Empty
+        }, 0, 0);
+        _countLabel.Margin = new Padding(12, 4, 0, 0);
         titlePanel.Controls.Add(_countLabel, 1, 0);
 
         var filters = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Padding = new Padding(0, 8, 0, 7),
-            Margin = new Padding(0)
+            WrapContents = true, AutoSize = true, TabIndex = 1,
+            Padding = Padding.Empty,
+            Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
         };
 
-        filters.Controls.Add(FilterLabel("Range"));
-        filters.Controls.Add(_windowCombo);
-        filters.Controls.Add(FilterLabel("Site"));
-        filters.Controls.Add(_siteCombo);
-        _hideSuspects.Margin = new Padding(14, 8, 14, 0);
+        filters.Controls.Add(FilterGroup("Range", _windowCombo, 0));
+        filters.Controls.Add(FilterGroup("Site", _siteCombo, 1));
+        _hideSuspects.Margin = new Padding(0, 8, 12, 4);
         filters.Controls.Add(_hideSuspects);
         _exportButton.Margin = new Padding(4, 2, 0, 0);
         filters.Controls.Add(_exportButton);
@@ -220,54 +207,62 @@ internal sealed class EventHistoryForm : Form
         Controls.Add(root);
     }
 
-    private static Label FilterLabel(string text)
+    private static FlowLayoutPanel FilterGroup(string label, ComboBox combo, int tabIndex)
     {
-        return new Label
+        var group = new FlowLayoutPanel
         {
-            Text = text,
-            AutoSize = true,
-            Padding = new Padding(0, 8, 4, 0),
-            ForeColor = Color.FromArgb(139, 153, 169)
+            AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 12, 4),
+            TabIndex = tabIndex
         };
+        group.Controls.Add(new Label
+        {
+            Text = label, AutoSize = true, Padding = new Padding(0, 8, 4, 0)
+        });
+        group.Controls.Add(combo);
+        return group;
     }
 
-    private void ApplyTheme()
+    protected override bool ProcessDialogKey(Keys keyData)
     {
-        var card = Color.FromArgb(15, 22, 30);
-        var input = Color.FromArgb(20, 28, 38);
-        var text = Color.FromArgb(232, 238, 245);
-        var muted = Color.FromArgb(139, 153, 169);
-        var border = Color.FromArgb(39, 49, 61);
+        if (keyData == Keys.Escape) { Close(); return true; }
+        return base.ProcessDialogKey(keyData);
+    }
 
-        foreach (var combo in new[] { _windowCombo, _siteCombo })
+    private void ApplyEventColors()
+    {
+        if (IsDisposed || Disposing) return;
+        var palette = AuroraTheme.Palette;
+        foreach (DataGridViewRow row in _grid.Rows)
         {
-            combo.BackColor = input;
-            combo.ForeColor = text;
-            combo.FlatStyle = FlatStyle.Flat;
+            string kind = row.Cells["KindColumn"].Value?.ToString()?.ToUpperInvariant() ?? string.Empty;
+            var cell = row.Cells["KindColumn"];
+            cell.Style.Font = KindFont;
+            cell.Style.ForeColor = palette.StatusText(kind switch
+            {
+                "DOWN" => palette.Danger, "RECOVERED" => palette.Success,
+                "SUSPECT" => palette.Warning, _ => palette.Secondary
+            });
+            cell.Style.SelectionForeColor = palette.Text;
+            row.DefaultCellStyle.BackColor = palette.Surface;
         }
+    }
 
-        _hideSuspects.ForeColor = text;
-
-        _exportButton.FlatStyle = FlatStyle.Flat;
-        _exportButton.FlatAppearance.BorderColor = border;
-        _exportButton.BackColor = Color.FromArgb(25, 34, 45);
-        _exportButton.ForeColor = text;
-
-        _countLabel.ForeColor = muted;
-
-        _grid.EnableHeadersVisualStyles = false;
-        _grid.BackgroundColor = card;
-        _grid.GridColor = Color.FromArgb(31, 40, 50);
-        _grid.DefaultCellStyle.BackColor = card;
-        _grid.DefaultCellStyle.ForeColor = text;
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 73, 108);
-        _grid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
-        _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(13, 20, 28);
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(22, 31, 42);
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = muted;
-        _grid.ColumnHeadersDefaultCellStyle.Font = KindFont;
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(22, 31, 42);
+    internal void CheckLayout()
+    {
+        PerformLayout();
+        foreach (Control control in new Control[] { _windowCombo, _siteCombo, _hideSuspects, _exportButton })
+        {
+            if (!control.Visible || !control.Parent!.ClientRectangle.Contains(control.Bounds))
+                throw new InvalidOperationException("History filter/action is clipped: " + control.Text);
+            var group = control.Parent!;
+            if (group.Parent is FlowLayoutPanel && !group.Parent.ClientRectangle.Contains(group.Bounds))
+                throw new InvalidOperationException("History filter group is clipped.");
+        }
+        if (_exportButton.Enabled != (_grid.Rows.Count > 0))
+            throw new InvalidOperationException("History export must reflect whether any events are shown.");
+        foreach (DataGridViewRow row in _grid.Rows)
+            if (AuroraTheme.ContrastRatio(row.Cells["KindColumn"].Style.ForeColor, row.DefaultCellStyle.BackColor) < 4.5)
+                throw new InvalidOperationException("History event text does not meet contrast.");
     }
 
     private void SavePreferences()
@@ -328,21 +323,8 @@ internal sealed class EventHistoryForm : Form
                 e.Message))
             .ToList();
 
-        foreach (DataGridViewRow row in _grid.Rows)
-        {
-            string kind = row.Cells["KindColumn"].Value?.ToString() ?? string.Empty;
-            row.Cells["KindColumn"].Style.Font = KindFont;
-            row.Cells["KindColumn"].Style.ForeColor = kind switch
-            {
-                "DOWN" => Color.FromArgb(255, 110, 119),
-                "RECOVERED" => Color.FromArgb(87, 207, 142),
-                "SUSPECT" => Color.FromArgb(245, 191, 71),
-                _ => Color.FromArgb(160, 176, 192)
-            };
-
-            if (kind == "DOWN")
-                row.DefaultCellStyle.BackColor = Color.FromArgb(39, 24, 29);
-        }
+        ApplyEventColors();
+        _exportButton.Enabled = filtered.Count > 0;
 
         _countLabel.Text = $"{filtered.Count:N0} shown • {all.Count:N0} stored";
     }
@@ -435,6 +417,7 @@ internal sealed class EventHistoryForm : Form
         catch (Exception ex)
         {
             MessageBox.Show(
+                this,
                 $"Could not export outage history.\r\n\r\n{ex.Message}",
                 "Ping Watchdog",
                 MessageBoxButtons.OK,
