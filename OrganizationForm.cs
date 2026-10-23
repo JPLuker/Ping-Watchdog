@@ -522,100 +522,19 @@ internal sealed class FolderPickerDialog : Form
 {
     private readonly ComboBox _combo = new()
     {
-        DropDownStyle = ComboBoxStyle.DropDownList,
-        Dock = DockStyle.Top
+        DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Destination folder"
     };
+    public string SelectedFolder => _combo.SelectedIndex <= 0 ? string.Empty : _combo.SelectedItem?.ToString() ?? string.Empty;
 
-    public string SelectedFolder =>
-        _combo.SelectedIndex <= 0
-            ? string.Empty
-            : _combo.SelectedItem?.ToString() ?? string.Empty;
-
-    public FolderPickerDialog(
-        string title,
-        IReadOnlyList<string> folders,
-        string currentFolder)
+    public FolderPickerDialog(string title, IReadOnlyList<string> folders, string currentFolder)
     {
-        Text = title;
-        Width = 480;
-        Height = 180;
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        BackColor = Color.FromArgb(13, 17, 23);
-        ForeColor = Color.FromArgb(230, 237, 243);
-        Font = new Font("Segoe UI", 9.5f);
-
         _combo.Items.Add("(Root)");
-        foreach (var folder in folders)
-            _combo.Items.Add(folder);
-
-        int index = 0;
+        foreach (string folder in folders) _combo.Items.Add(folder);
+        int selected = 0;
         for (int i = 1; i < _combo.Items.Count; i++)
-        {
-            if (string.Equals(
-                _combo.Items[i]?.ToString(),
-                currentFolder,
-                StringComparison.OrdinalIgnoreCase))
-            {
-                index = i;
-                break;
-            }
-        }
-        _combo.SelectedIndex = index;
-        _combo.BackColor = Color.FromArgb(22, 27, 34);
-        _combo.ForeColor = ForeColor;
-
-        var ok = new Button
-        {
-            Text = "Move",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(35, 134, 96),
-            ForeColor = Color.White
-        };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(22, 27, 34),
-            ForeColor = Color.White
-        };
-
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 44,
-            FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(10, 6, 10, 6)
-        };
-        buttons.Controls.Add(ok);
-        buttons.Controls.Add(cancel);
-
-        var label = new Label
-        {
-            Text = "Destination folder:",
-            Dock = DockStyle.Top,
-            Height = 30,
-            Padding = new Padding(12, 10, 0, 0)
-        };
-
-        var panel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(12, 6, 12, 6)
-        };
-        panel.Controls.Add(_combo);
-
-        Controls.Add(panel);
-        Controls.Add(label);
-        Controls.Add(buttons);
-
-        AcceptButton = ok;
-        CancelButton = cancel;
+            if (string.Equals(_combo.Items[i]?.ToString(), currentFolder, StringComparison.OrdinalIgnoreCase)) { selected = i; break; }
+        _combo.SelectedIndex = selected;
+        CompactDialog.StylePicker(_combo);
+        CompactDialog.Build(this, title, new Label { Text = "Destination folder" }, _combo, "Move", 480);
     }
 }

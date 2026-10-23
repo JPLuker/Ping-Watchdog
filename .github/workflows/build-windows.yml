@@ -192,9 +192,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Canceling exit from Settings keeps monitoring and Wallboard running; choosing Discard no longer prompts twice.
-          - History filters and Organization actions wrap at narrow widths; Escape closes both windows.
-          - History event colors and History/category input fields follow the selected theme; empty history disables export and category actions fit their dialog.
+          - Quick Add and Quick Monitor separate paste actions, destination fields, preview and confirmation; invalid-only selections cannot be added.
+          - Preview status colors follow the selected theme, and editable fields have visible labels.
+          - Label, site-name and folder dialogs size their fields and buttons from content, with native confirm/cancel and keyboard behavior.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

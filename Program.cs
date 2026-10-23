@@ -171,161 +171,31 @@ internal sealed class WatchdogConfig
 
 internal sealed class NicknameDialog : Form
 {
-    private readonly TextBox _box = new() { Dock = DockStyle.Fill };
-
+    private readonly PlainTextBox _box = new() { AccessibleName = "Label", BorderStyle = BorderStyle.FixedSingle };
     public string Nickname => _box.Text.Trim();
 
     public NicknameDialog(string host, string current)
     {
-        Text = $"Set label • {host}";
-        Width = 430;
-        Height = 150;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        BackColor = Color.FromArgb(13, 17, 23);
-        ForeColor = Color.FromArgb(230, 237, 243);
-
         _box.Text = current;
-        _box.BackColor = Color.FromArgb(22, 27, 34);
-        _box.ForeColor = Color.FromArgb(230, 237, 243);
-        _box.BorderStyle = BorderStyle.FixedSingle;
-        _box.SelectAll();
-
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false
-        };
-
-        var ok = new AuroraButton
-        {
-            Text = "Save Label",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(35, 134, 96),
-            ForeColor = Color.White
-        };
-
-        var cancel = new AuroraButton
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(22, 27, 34),
-            ForeColor = Color.White
-        };
-
-        buttons.Controls.Add(ok);
-        buttons.Controls.Add(cancel);
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
-            Padding = new Padding(12)
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label
-        {
-            Text = "Nickname / label:",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(139, 148, 158)
-        }, 0, 0);
-        layout.Controls.Add(_box, 0, 1);
-        layout.Controls.Add(buttons, 0, 2);
-
-        Controls.Add(layout);
-        AcceptButton = ok;
-        CancelButton = cancel;
+        CompactDialog.Build(this, $"Set label • {host}", new Label { Text = "Label" }, _box, "Save label");
     }
 }
 
 internal sealed class SiteNameDialog : Form
 {
-    private readonly PlainTextBox _box = new() { Dock = DockStyle.Fill };
-    private readonly Label _prompt = new() { Text = "Site / group name:", AutoSize = true, ForeColor = Color.FromArgb(139, 148, 158) };
+    private readonly PlainTextBox _box = new() { AccessibleName = "Site or group name", BorderStyle = BorderStyle.FixedSingle };
+    private readonly Label _prompt = new() { Text = "Site / group name" };
     public string SiteName => ClipboardText.NormalizeLine(_box.Text);
 
     public SiteNameDialog(string title, string actionText, string current = "")
     {
-        Text = title;
-        Width = 430;
-        Height = 150;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        BackColor = Color.FromArgb(13, 17, 23);
-        ForeColor = Color.FromArgb(230, 237, 243);
-
         _box.Text = current;
-        _box.BackColor = Color.FromArgb(22, 27, 34);
-        _box.ForeColor = Color.FromArgb(230, 237, 243);
-        _box.BorderStyle = BorderStyle.FixedSingle;
-        _box.SelectAll();
-
-        var ok = new AuroraButton
-        {
-            Text = actionText,
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(35, 134, 96),
-            ForeColor = Color.White
-        };
-
-        var cancel = new AuroraButton
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(22, 27, 34),
-            ForeColor = Color.White
-        };
-
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false
-        };
-        buttons.Controls.Add(ok);
-        buttons.Controls.Add(cancel);
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
-            Padding = new Padding(12)
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(_prompt, 0, 0);
-        layout.Controls.Add(_box, 0, 1);
-        // A busy clipboard is said out loud instead of pasting nothing.
+        CompactDialog.Build(this, title, _prompt, _box, actionText);
         _box.PasteBusy += () => { _prompt.Text = "Clipboard busy, try again"; _prompt.Tag = "statSuspect"; AuroraTheme.Apply(this); };
-        _box.TextChanged += (_, _) => { if (_prompt.Tag is not null) { _prompt.Text = "Site / group name:"; _prompt.Tag = null; AuroraTheme.Apply(this); } };
-        layout.Controls.Add(buttons, 0, 2);
-
-        Controls.Add(layout);
-        AcceptButton = ok;
-        CancelButton = cancel;
-
-        Shown += (_, _) =>
+        _box.TextChanged += (_, _) =>
         {
-            _box.Focus();
-            _box.SelectAll();
+            if (_prompt.Tag is null) return;
+            _prompt.Text = "Site / group name"; _prompt.Tag = null; AuroraTheme.Apply(this);
         };
     }
 }
@@ -2150,6 +2020,59 @@ public sealed partial class MainForm : Form
                         form._organizationForm.CheckLayout();
                     }
                     DismissWithEscape(form._organizationForm!);
+                    foreach (bool temporary in new[] { false, true })
+                    {
+                        bool imported = false;
+                        using var add = new QuickAddForm(new[] { "Office & Warehouse" }, "Office & Warehouse",
+                            () => new List<ManagedHost>
+                            {
+                                new("Office & Warehouse", "192.0.2.10", "Existing router", "", new HostOptions(), "Unknown")
+                            }, (_, _) => imported = true, temporary);
+                        add.Show(form);
+                        await Task.Delay(50);
+                        add.Width = 850;
+                        Capture(add, "dialog-quick-" + temporary + "-empty-" + appearance);
+                        add.CheckLayout();
+                        add.PreviewForTest("192.0.2.10\tExisting router\n192.0.2.20\tPrinter & scanner\n192.0.2.20\tDuplicate\n192.0.2.999\tInvalid");
+                        foreach (int width in new[] { 850, 1100 })
+                        {
+                            add.Width = width;
+                            await Task.Delay(50);
+                            Capture(add, "dialog-quick-" + temporary + "-" + width + "-" + appearance);
+                            add.CheckLayout();
+                        }
+                        Check(add.PreviewRowCount == 4 && !imported, "Preview changed the inventory before confirmation.");
+                        DismissWithEscape(add);
+                    }
+                    using (var label = new NicknameDialog("2001:db8::1234", "Printer & scanner"))
+                    {
+                        label.Show(form);
+                        await Task.Delay(50);
+                        Capture(label, "dialog-label-" + appearance);
+                        CompactDialog.CheckBounds(label);
+                        Check(label.Nickname == "Printer & scanner", "Label review changed the current value.");
+                        DismissWithEscape(label);
+                    }
+                    using (var name = new SiteNameDialog("Rename site", "Rename", "Office & Warehouse"))
+                    {
+                        name.Show(form);
+                        await Task.Delay(50);
+                        Capture(name, "dialog-site-name-" + appearance);
+                        CompactDialog.CheckBounds(name);
+                        Check(name.SiteName == "Office & Warehouse", "Site review changed the current value.");
+                        DismissWithEscape(name);
+                    }
+                    using (var folder = new FolderPickerDialog("Move site",
+                        new[] { "Region/Office & Warehouse", "Region/Remote offices" }, "Region/Office & Warehouse"))
+                    {
+                        folder.Show(form);
+                        await Task.Delay(50);
+                        Capture(folder, "dialog-folder-" + appearance);
+                        CompactDialog.CheckBounds(folder);
+                        Check(folder.SelectedFolder == "Region/Office & Warehouse", "Folder picker lost its current selection.");
+                        DismissWithEscape(folder);
+                    }
+
                     using (var category = new CategoryDialog("2001:db8:1234::1234", "Infrastructure"))
                     {
                         category.Show(form);
