@@ -53,7 +53,10 @@ internal static class Program
             if (args.Contains("--ui-smoke-test"))
                 MainForm.RunUiSmokeTest();
             else
+            {
+                UpdateIntegrityTests.RunAsync().GetAwaiter().GetResult();
                 MainForm.RunSelfTests();
+            }
         }
         catch (Exception ex)
         {

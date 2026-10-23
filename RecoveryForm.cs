@@ -16,12 +16,16 @@ internal sealed class RecoveryUpdates : IRecoveryUpdates
 {
     private UpdateManager? _manager;
     private UpdateInfo? _update;
+    private readonly Func<UpdateManager> _createManager;
+
+    internal RecoveryUpdates(Func<UpdateManager>? createManager = null) =>
+        _createManager = createManager ?? (() => new UpdateManager(new GithubSource(
+            "https://github.com/JPLuker/Ping-Watchdog", accessToken: null, prerelease: false)));
 
     public async Task<string?> CheckAsync(CancellationToken cancellation)
     {
         Program.InitializeUpdater(Array.Empty<string>());
-        _manager = new UpdateManager(new GithubSource("https://github.com/JPLuker/Ping-Watchdog",
-            accessToken: null, prerelease: false));
+        _manager = _createManager();
         if (!_manager.IsInstalled)
             throw new InvalidOperationException("This copy cannot update itself. Use Open downloads to install the current Windows release.");
         _update = await _manager.CheckForUpdatesAsync().WaitAsync(cancellation);
@@ -49,6 +53,7 @@ internal sealed class RecoveryForm : Form
     };
     private readonly Button _retry = new() { Text = "Retry startup", AutoSize = true };
     private bool _busy;
+    private int _updateAttempt;
     private bool _resourcesDisposed;
     internal bool UpdateReady { get; private set; }
 
@@ -121,7 +126,8 @@ internal sealed class RecoveryForm : Form
 
     internal async Task UpdateClickedAsync()
     {
-        if (_busy) return;
+        if (_busy || IsDisposed || Disposing) return;
+        int attempt = ++_updateAttempt;
         _busy = true;
         UpdateButton.Enabled = _retry.Enabled = false;
         try
@@ -134,6 +140,7 @@ internal sealed class RecoveryForm : Form
             }
             StatusLabel.Text = "Checking for a newer Windows release…";
             string? version = await _updates.CheckAsync(_lifetime.Token);
+            if (IsDisposed || Disposing || _lifetime.IsCancellationRequested) return;
             if (version is null)
             {
                 StatusLabel.Text = "No newer Windows release is available. You can retry startup or download an installer from the release page.";
@@ -143,9 +150,14 @@ internal sealed class RecoveryForm : Form
             await _updates.DownloadAsync(progress =>
             {
                 if (IsDisposed || !IsHandleCreated) return;
-                try { BeginInvoke(() => { if (!IsDisposed) StatusLabel.Text = $"Downloading version {version}: {progress}%"; }); }
+                try { BeginInvoke(() =>
+                {
+                    if (!IsDisposed && !Disposing && _busy && _updateAttempt == attempt && !UpdateReady)
+                        StatusLabel.Text = $"Downloading version {version}: {progress}%";
+                }); }
                 catch (InvalidOperationException) { }
             }, _lifetime.Token);
+            if (IsDisposed || Disposing || _lifetime.IsCancellationRequested) return;
             UpdateReady = true;
             UpdateButton.Text = "Install update and restart";
             StatusLabel.Text = $"Version {version} is ready. Install it to restart Ping Watchdog.";

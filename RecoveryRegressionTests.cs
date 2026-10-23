@@ -139,7 +139,45 @@ internal static class RecoveryRegressionTests
                     }
                     test.Close();
                 }
-                File.WriteAllText(Path.Combine(directory, "recovery-passed.txt"), "Recovery shown; update success, no-update, unmanaged, and failure paths passed.");
+                // Exercise the recovery adapter and UI with the real pinned verifier, not FakeUpdates.
+                using (var fixture = new UpdateIntegrityFixture { Fault = DownloadFault.SameSizeCorruption })
+                using (var test = new RecoveryForm("Original startup exception", "test-report.txt",
+                    new RecoveryUpdates(() => fixture.Manager)))
+                {
+                    test.Show(form);
+                    await test.UpdateClickedAsync();
+                    Check(!test.UpdateReady && test.UpdateButton.Enabled && test.StatusLabel.Text.StartsWith("Update failed:"),
+                        "Corrupt recovery download offered installation or lost its retry action.");
+                    fixture.CheckNotStaged();
+                    Check(test.Details.Text == "Original startup exception", "Corrupt update overwrote crash details.");
+                    fixture.Fault = DownloadFault.None;
+                    await test.UpdateClickedAsync();
+                    await Task.Delay(25); // Flush queued progress; it must not overwrite the ready state.
+                    Check(test.UpdateReady && test.UpdateButton.Enabled &&
+                        test.StatusLabel.Text.Contains("is ready"),
+                        "Valid recovery retry did not retain its install action and ready status.");
+                    fixture.CheckValidStaged();
+                    Check(fixture.DownloadCalls == 2, "Recovery retry reused the corrupt package.");
+                    test.Close();
+                }
+
+                // Simulate a transport that ignores cancellation and completes after the window closes.
+                foreach (bool delayCheck in new[] { true, false })
+                {
+                    var delayed = new DelayedUpdates(delayCheck);
+                    using var closing = new RecoveryForm("Original startup exception", "test-report.txt", delayed);
+                    closing.Show(form);
+                    Task pending = closing.UpdateClickedAsync();
+                    closing.Close();
+                    delayed.DownloadCompletion.TrySetResult(true);
+                    delayed.CheckCompletion.TrySetResult("9.9.9");
+                    await pending;
+                    Check(!closing.UpdateReady, "Closed recovery window accepted a late download.");
+                    Check(delayed.DownloadCalls == (delayCheck ? 0 : 1),
+                        "Closed recovery window started another download after a late check.");
+                }
+                File.WriteAllText(Path.Combine(directory, "recovery-passed.txt"),
+                    "Recovery success/failure/retry, real checksum rejection, and late completion after close passed.");
             }
             catch (Exception ex)
             {
@@ -148,6 +186,21 @@ internal static class RecoveryRegressionTests
             }
             finally { form.Close(); }
         };
+    }
+
+    private sealed class DelayedUpdates(bool delayCheck) : IRecoveryUpdates
+    {
+        internal readonly TaskCompletionSource<string?> CheckCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<bool> DownloadCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int DownloadCalls;
+        public Task<string?> CheckAsync(CancellationToken cancellation) =>
+            delayCheck ? CheckCompletion.Task : Task.FromResult<string?>("9.9.9");
+        public Task DownloadAsync(Action<int> progress, CancellationToken cancellation)
+        {
+            DownloadCalls++;
+            return DownloadCompletion.Task;
+        }
+        public void Apply() => throw new InvalidOperationException("Late-completion test must never apply an update.");
     }
 
     private sealed class FakeUpdates(string scenario) : IRecoveryUpdates

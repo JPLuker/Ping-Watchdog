@@ -189,9 +189,8 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Update restart confirmation uses Restart now and Later, with Later as the keyboard default.
-          - Updates review unsaved Settings and stop before restarting when your configuration cannot be saved.
-          - Update restart dialogs stay with Settings or Wallboard; Escape closes the independent recovery window.
+          - Startup recovery ignores update results after its window closes, and old download progress no longer overwrites the ready status.
+          - Added real updater checks for corrupted and interrupted downloads, cleanup, and successful retry, including the recovery window.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
