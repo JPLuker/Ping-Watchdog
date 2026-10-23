@@ -2369,8 +2369,8 @@ public sealed partial class MainForm : Form
 
     private bool TrySaveSites()
     {
-        if (!_persistSites) return true;
         if (_configWriteBlocked || _restoreRequiresRestart) return false;
+        if (!_persistSites) return true;
 
         try
         {
