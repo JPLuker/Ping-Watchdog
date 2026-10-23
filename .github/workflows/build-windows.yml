@@ -140,6 +140,9 @@ jobs:
           foreach ($name in @("appearance-settings-Light", "appearance-settings-Dark", "settings-save-error-Light", "settings-save-error-Dark")) {
             Write-Output ("SETTINGS_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SETTINGS_IMAGE_END")
           }
+          foreach ($name in @("update-restart-Light", "update-restart-Dark")) {
+            Write-Output ("UPDATE_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "UPDATE_IMAGE_END")
+          }
           foreach ($name in @("support-about-Light", "support-about-Dark", "support-diagnostics-Light", "support-diagnostics-Dark")) {
             Write-Output ("SUPPORT_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes("ui-smoke-test/$name.png")) + "SUPPORT_IMAGE_END")
           }
@@ -186,8 +189,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Automatic update checks run at most once a day, including across restarts. Check for updates still works any time.
-          - IT can turn updates off with HKLM\Software\Policies\PingWatchdog DisableUpdates = 1 or PINGWATCHDOG_DISABLE_UPDATES=1; Settings then says updates are managed by your organization.
+          - Update restart confirmation uses Restart now and Later, with Later as the keyboard default.
+          - Updates review unsaved Settings and stop before restarting when your configuration cannot be saved.
+          - Update restart dialogs stay with Settings or Wallboard; Escape closes the independent recovery window.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

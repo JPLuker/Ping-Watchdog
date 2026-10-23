@@ -1031,6 +1031,8 @@ public sealed partial class MainForm : Form
         DeleteDataDialog.RunTests();
         AuroraButton.RunDestructiveContrastTests();
         form._configWriteBlocked = true;
+        if (form.TrySaveSites())
+            throw new InvalidOperationException("Update persistence guard allowed a protected configuration.");
         bool protectedBackupRefused = false;
         try { form.CreateDataBackup(); }
         catch (InvalidOperationException) { protectedBackupRefused = true; }
@@ -2057,6 +2059,14 @@ public sealed partial class MainForm : Form
                     Check(form._settingsForm!.BackColor == AuroraTheme.Palette.Canvas, "Open Settings appearance did not update.");
                     Capture(form, "appearance-main-" + appearance);
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
+                    using (var restart = new UpdateRestartDialog("99.0.0", monitoring: true))
+                    {
+                        restart.Show(form._settingsForm);
+                        restart.PerformLayout();
+                        restart.CheckLayout();
+                        Capture(restart, "update-restart-" + appearance);
+                        restart.Close();
+                    }
                     await SettingsForm.CaptureSaveFailureReview(form.GetAppSettingsSnapshot(), form._settingsForm!,
                         Path.Combine(output, "settings-save-error-" + appearance + ".png"));
                     await form._settingsForm!.CaptureAboutReview(output, appearance.ToString());
@@ -2355,10 +2365,12 @@ public sealed partial class MainForm : Form
         }
     }
 
-    private void SaveSites()
+    private void SaveSites() => TrySaveSites();
+
+    private bool TrySaveSites()
     {
-        if (!_persistSites || _configWriteBlocked || _restoreRequiresRestart)
-            return;
+        if (!_persistSites) return true;
+        if (_configWriteBlocked || _restoreRequiresRestart) return false;
 
         try
         {
@@ -2369,10 +2381,12 @@ public sealed partial class MainForm : Form
                 new JsonSerializerOptions { WriteIndented = true }));
             _storageWarning = null;
             _storageWarningShown = false;
+            return true;
         }
         catch (Exception ex)
         {
             ReportStorageProblem("Changes could not be saved. Keep this window open and export the configuration to another location before closing.\r\n\r\n" + ex.Message);
+            return false;
         }
     }
 
@@ -4586,6 +4600,10 @@ public sealed partial class MainForm : Form
         _settingsForm?.RefreshRuntimeState();
     }
 
+    private Form UpdateDialogOwner =>
+        _settingsForm is { Visible: true, IsDisposed: false } ? _settingsForm :
+        _wallboardForm is { Visible: true, IsDisposed: false } ? _wallboardForm : this;
+
     private void RestartToApplyPendingUpdate()
     {
         if (_pendingUpdateManager is null || _pendingUpdateInfo is null)
@@ -4594,22 +4612,8 @@ public sealed partial class MainForm : Form
         string version = _pendingUpdateVersion ?? "the downloaded version";
         bool monitoring = _cts is not null;
 
-        IWin32Window owner =
-            _wallboardForm is not null && !_wallboardForm.IsDisposed
-                ? _wallboardForm
-                : this;
-
-        var result = MessageBox.Show(
-            owner,
-            monitoring
-                ? $"Version {version} is downloaded and ready.\r\n\r\nRestarting now will stop the current monitoring session, save your sites and settings, apply the update, and reopen Ping Watchdog.\r\n\r\nRestart now?"
-                : $"Version {version} is downloaded and ready.\r\n\r\nPing Watchdog will save your current setup, apply the update, and reopen automatically.\r\n\r\nRestart now?",
-            "Restart to Update",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Information,
-            MessageBoxDefaultButton.Button2);
-
-        if (result == DialogResult.Yes)
+        using var confirmation = new UpdateRestartDialog(version, monitoring);
+        if (confirmation.ShowDialog(UpdateDialogOwner) == DialogResult.OK)
             ApplyPendingUpdateAndRestart();
     }
 
@@ -4622,9 +4626,20 @@ public sealed partial class MainForm : Form
 
         try
         {
-            _wallboardForm?.Close();
+            // Closing Settings invokes its existing save/discard/cancel guard.
+            var settings = _settingsForm;
+            if (settings is { IsDisposed: false })
+            {
+                settings.Close();
+                if (!settings.IsDisposed) return;
+            }
             PersistCurrentEditor();
-            SaveSites();
+            if (!TrySaveSites())
+            {
+                SetUpdateStatus("Update postponed. Save or export your changes before restarting.", true, true);
+                return;
+            }
+            _wallboardForm?.Close();
 
             if (_cts is not null)
                 StopMonitoring();
@@ -4646,6 +4661,7 @@ public sealed partial class MainForm : Form
             _statusLabel.Text = "Update restart failed.";
 
             MessageBox.Show(
+                UpdateDialogOwner,
                 $"The update is still downloaded, but Ping Watchdog could not restart to apply it.\r\n\r\n{ex.Message}",
                 "Ping Watchdog Update",
                 MessageBoxButtons.OK,

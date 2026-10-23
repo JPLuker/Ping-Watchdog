@@ -87,7 +87,10 @@ internal sealed class RecoveryForm : Form
         var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, Margin = Padding.Empty };
         var downloads = new Button { Text = "Open downloads", AutoSize = true };
         var copy = new Button { Text = "Copy details", AutoSize = true };
-        var close = new Button { Text = "Close", AutoSize = true };
+        var close = new Button { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
+        CancelButton = close;
+        Details.AccessibleName = "Startup error details";
+        StatusLabel.AccessibleName = "Recovery status";
         foreach (var button in new[] { UpdateButton, downloads, copy, _retry, close })
         {
             button.Padding = new Padding(8, 4, 8, 4);

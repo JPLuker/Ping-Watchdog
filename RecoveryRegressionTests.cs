@@ -95,6 +95,8 @@ internal static class RecoveryRegressionTests
             {
                 await Task.Delay(100);
                 Check(form.Visible && form.IsHandleCreated, "Recovery window did not appear.");
+                Check(form.CancelButton is Button { Text: "Close", DialogResult: DialogResult.Cancel },
+                    "Escape must close the independent recovery window.");
                 Check(form.UpdateButton.Visible && form.UpdateButton.Enabled, "Recovery has no usable update action.");
                 Check(!string.IsNullOrWhiteSpace(form.Details.Text), "Recovery error details are empty.");
                 using (var bitmap = new Bitmap(form.Width, form.Height))
