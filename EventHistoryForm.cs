@@ -15,12 +15,14 @@ internal sealed class EventHistoryForm : Form
     private readonly ComboBox _windowCombo = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
+        DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 24,
         Width = 140, AccessibleName = "History range", TabIndex = 0
     };
 
     private readonly ComboBox _siteCombo = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
+        DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 24,
         Width = 170, AccessibleName = "History site", TabIndex = 0
     };
 
@@ -80,6 +82,8 @@ internal sealed class EventHistoryForm : Form
         BackColor = Color.FromArgb(11, 16, 23);
         ForeColor = Color.FromArgb(232, 238, 245);
 
+        _windowCombo.DrawItem += DrawFilterItem;
+        _siteCombo.DrawItem += DrawFilterItem;
         BuildGrid();
         BuildLayout();
         AuroraTheme.Register(this);
@@ -206,6 +210,22 @@ internal sealed class EventHistoryForm : Form
         root.Controls.Add(filters, 0, 1);
         root.Controls.Add(_grid, 0, 2);
         Controls.Add(root);
+    }
+
+    private static void DrawFilterItem(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not ComboBox combo) return;
+        var palette = AuroraTheme.Palette;
+        bool selected = (e.State & DrawItemState.Selected) != 0;
+        Color background = selected ? palette.Surface3 : palette.Surface;
+        Color foreground = selected && SystemInformation.HighContrast ? SystemColors.HighlightText : palette.Text;
+        using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
+        string text = e.Index >= 0 && e.Index < combo.Items.Count
+            ? combo.Items[e.Index]?.ToString() ?? "" : combo.Text;
+        TextRenderer.DrawText(e.Graphics, text, combo.Font, e.Bounds, foreground,
+            TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        if ((e.State & DrawItemState.Focus) != 0)
+            ControlPaint.DrawFocusRectangle(e.Graphics, e.Bounds, foreground, background);
     }
 
     private static TableLayoutPanel FilterGroup(string label, ComboBox combo, int tabIndex)
