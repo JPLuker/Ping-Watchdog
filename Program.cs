@@ -2130,8 +2130,9 @@ public sealed partial class MainForm : Form
                         foreach (int width in new[] { 820, 1080 })
                         {
                             history.Width = width;
-                            history.CheckLayout();
+                            await Task.Delay(50);
                             Capture(history, "dialog-history-" + width + "-" + appearance);
+                            history.CheckLayout();
                         }
                         events = Array.Empty<StateEventRecord>();
                         history.RefreshNow();

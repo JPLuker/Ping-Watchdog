@@ -189,7 +189,7 @@ internal sealed class EventHistoryForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true, AutoSize = true, TabIndex = 1,
+            WrapContents = true, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, TabIndex = 1,
             Padding = Padding.Empty,
             Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
         };
@@ -207,18 +207,22 @@ internal sealed class EventHistoryForm : Form
         Controls.Add(root);
     }
 
-    private static FlowLayoutPanel FilterGroup(string label, ComboBox combo, int tabIndex)
+    private static TableLayoutPanel FilterGroup(string label, ComboBox combo, int tabIndex)
     {
-        var group = new FlowLayoutPanel
+        var group = new TableLayoutPanel
         {
-            AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 12, 4),
-            TabIndex = tabIndex
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2, RowCount = 1,
+            Margin = new Padding(0, 0, 12, 4), TabIndex = tabIndex
         };
+        group.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, combo.Width + 8));
+        group.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         group.Controls.Add(new Label
         {
             Text = label, AutoSize = true, Padding = new Padding(0, 8, 4, 0)
-        });
-        group.Controls.Add(combo);
+        }, 0, 0);
+        group.Controls.Add(combo, 1, 0);
         return group;
     }
 
@@ -253,7 +257,7 @@ internal sealed class EventHistoryForm : Form
         foreach (Control control in new Control[] { _windowCombo, _siteCombo, _hideSuspects, _exportButton })
         {
             if (!control.Visible || !control.Parent!.ClientRectangle.Contains(control.Bounds))
-                throw new InvalidOperationException("History filter/action is clipped: " + control.Text);
+                throw new InvalidOperationException($"History filter/action is clipped: {control.Text}; visible={control.Visible}, bounds={control.Bounds}, parent={control.Parent?.ClientRectangle}.");
             var group = control.Parent!;
             if (group.Parent is FlowLayoutPanel && !group.Parent.ClientRectangle.Contains(group.Bounds))
                 throw new InvalidOperationException("History filter group is clipped.");
