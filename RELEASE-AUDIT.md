@@ -201,3 +201,12 @@ Deviations: (1) The portable ZIP keeps Velopack in-place self-update rather than
 
 Publish guard refinement: a push that reuses a published version fails only when app files changed; workflow-only pushes run every build and test step and skip packaging and publication (build 39849289579). This lets Dependabot action updates merge without a version bump.
 
+
+
+## Update restart safety — 2026-10-23
+
+v1.19.7 replaces the generic Yes/No restart prompt with Restart now / Later. Enter and Escape defer by default. The prompt follows an open Settings window or Wallboard; restart failures use the same owner. Restart first invokes Settings' existing save/discard/cancel protection and stops if Settings remains open or configuration persistence fails. Monitoring and Wallboard are not stopped until that guard succeeds. Independent recovery now supports Escape to close and names its details/status for accessibility.
+
+Windows release run 39961911594 passed dependency vulnerability checks, self-tests (including protected-config restart persistence), published startup/UI and isolated recovery tests. Light/dark update-confirmation captures were downloaded and inspected; the actions and wrapped text fit. Installer, portable, full/delta, update feeds and SHA256SUMS.txt are published; latest is v1.19.7. The first candidate v1.19.6 was not published: its new self-test exposed a guard-order bug in test mode, corrected before this passing run.
+
+Remaining: physical keyboard/DPI/screen-reader acceptance, real installed/portable restart and upgrade, corrupt-download tests, broader supporting-window review, public docs and final maintenance acceptance. Issue #12 has no screenshot; the existing update toast says Dismiss, so this batch does not establish reproduction or resolution of the specific reported “okay” state.

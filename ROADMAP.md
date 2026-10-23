@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.5**.
+Current published Windows build: **v1.19.7**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -174,3 +174,12 @@ v1.19.3 fades the map/Wallboard keyboard highlight after 8 seconds and shows it 
 
 v1.19.5 aligns updates with DATA-AND-UPDATES 3.2/3.3: automatic checks at most once a day (persisted across restarts, rearmed if the clock moves back) and an IT policy (HKLM\Software\Policies\PingWatchdog DisableUpdates = 1, or PINGWATCHDOG_DISABLE_UPDATES=1) that stops all checks, hides the sidebar action and shows "Updates are managed by your organization" in Settings. The publish guard now lets workflow-only pushes (such as Dependabot action updates) build and test without publishing; build 39849289579 confirmed that path.
 
+
+
+## Update restart safety — 2026-10-23
+
+v1.19.7 replaces the generic Yes/No restart prompt with Restart now / Later. Enter and Escape defer by default. The prompt follows an open Settings window or Wallboard; restart failures use the same owner. Restart first invokes Settings' existing save/discard/cancel protection and stops if Settings remains open or configuration persistence fails. Monitoring and Wallboard are not stopped until that guard succeeds. Independent recovery now supports Escape to close and names its details/status for accessibility.
+
+Windows release run 39961911594 passed dependency vulnerability checks, self-tests (including protected-config restart persistence), published startup/UI and isolated recovery tests. Light/dark update-confirmation captures were downloaded and inspected; the actions and wrapped text fit. Installer, portable, full/delta, update feeds and SHA256SUMS.txt are published; latest is v1.19.7. The first candidate v1.19.6 was not published: its new self-test exposed a guard-order bug in test mode, corrected before this passing run.
+
+Remaining: physical keyboard/DPI/screen-reader acceptance, real installed/portable restart and upgrade, corrupt-download tests, broader supporting-window review, public docs and final maintenance acceptance. Issue #12 has no screenshot; the existing update toast says Dismiss, so this batch does not establish reproduction or resolution of the specific reported “okay” state.
