@@ -238,3 +238,16 @@ Windows run 39968819793 passed vulnerability/self-tests, published startup/UI an
 Earlier v1.19.9/10 candidates were withheld by the UI gate for a native History dropdown height/clipping defect. v1.19.11/12 passed and published as authorized iterations; visual review then exposed white native fields in dark mode. The final follow-up restores category field styling and explicitly draws the read-only History values using theme colors. These iterations do not establish physical DPI, open-dropdown/high-contrast/Narrator acceptance, dense-folder behavior or every supporting window as complete.
 
 Next: review Quick Add (including temporary Quick Monitor), label/site-name and folder-picker dialogs, then public documentation/notices and exact-candidate manual acceptance. Preserve the accepted dashboard/topology and display-only Wallboard.
+
+
+## Quick Add and compact dialogs — 2026-10-23
+
+v1.19.16 completes the tested desktop-state review for Quick Add, temporary Quick Monitor, host label, site name and destination-folder dialogs. Quick Add separates paste/import actions, destination fields, editable preview and confirmation. Empty or invalid-only previews cannot be confirmed; theme-aware preview rows retain readable status words. Pasted LF/CRLF input displays as separate native editor lines, preserving the caret when normalization changes line endings. The label/site/folder dialogs share measured native layouts, accessible input names, initial focus and confirm/cancel actions.
+
+[Windows run 39996325322](https://github.com/JPLuker/Ping-Watchdog/actions/runs/39996325322) passed dependency vulnerability checks, self-tests, published startup/UI, isolated recovery, packaging and publication. Added UI assertions cover four displayed paste lines, mixed new/existing/duplicate/invalid previews, no inventory mutation before confirmation, Escape dismissal, preserved naming/folder values, control bounds, preview space and status-text contrast. Visual review covered both-theme mixed previews at 850px, light previews at 1100px, representative empty previews, and all three compact naming/folder dialogs in both themes. These screenshots do not establish physical DPI, open-dropdown, high-contrast, Narrator or complete tab-order acceptance.
+
+v1.19.14 passed and published as an authorized iteration; visual review then found excessive destination spacing, light-theme row artifacts and concatenated pasted lines. v1.19.15 was withheld by the new spacing assertion: it compared coordinates from different parents. v1.19.16 fixes that assertion in form coordinates and passes the additional native-line check.
+
+The [v1.19.16 release](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.19.16) is verified as latest with installer, portable ZIP, full/delta packages, RELEASES, releases.win.json and SHA256SUMS.txt. No main/Wallboard redesign or Linux change was introduced.
+
+Next: refresh public README and the packaged README-FIRST quick start, then privacy/security/support/maintenance material and download-page checks. The existing quick start contains obsolete UI and updater descriptions; public readiness remains unchecked. Final candidate installation/upgrade, physical accessibility, workday monitoring and license/notice acceptance remain open. Issue #12 has not been reproduced or closed by this dialog work.
