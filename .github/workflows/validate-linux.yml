@@ -22,15 +22,15 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
       - name: Validate Windows consumers of shared presentation code
         run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
       - name: Exercise Windows UI
         run: dotnet run --no-build --project PingWatchdog.csproj -c Release -- --ui-smoke-test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: windows-reference-ui
@@ -52,8 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
       - name: Install desktop test prerequisites
@@ -64,7 +64,7 @@ jobs:
         env:
           WATCHDOG_UI_PREVIEW: "1"
         run: timeout 120s dbus-run-session -- bash linux/test-desktop.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: linux-ui-${{ matrix.backend }}-${{ matrix.scale }}
