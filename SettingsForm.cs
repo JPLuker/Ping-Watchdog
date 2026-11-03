@@ -306,7 +306,7 @@ internal sealed class SettingsForm : Form
                     throw new InvalidOperationException("Settings label has no readable bounds: " + label.Text);
             var stack = (FlowLayoutPanel)_pages[category].Controls[1];
             if (stack.HorizontalScroll.Visible)
-                throw new InvalidOperationException(category + ": Settings requires horizontal scrolling.");
+                throw new InvalidOperationException(category + ": Settings requires horizontal scrolling. Client=" + stack.ClientSize + "; Display=" + stack.DisplayRectangle + "; " + string.Join("; ", stack.Controls.Cast<Control>().Select(c => c.GetType().Name + " " + c.Bounds + " min=" + c.MinimumSize + " max=" + c.MaximumSize)));
             using var bitmap = new Bitmap(Width, Height);
             DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             bitmap.Save(Path.Combine(output, "dialog-settings-" + category.Replace(' ', '-') + "-" + AuroraTheme.Mode + ".png"));
@@ -576,13 +576,24 @@ internal sealed class SettingsForm : Form
             AutoScroll = true,
             Margin = new Padding(0)
         };
+        bool fitting = false;
         void FitPage()
         {
+            if (fitting || stack.ClientSize.Width <= 0) return;
+            fitting = true;
+            try
+            {
             int width = Math.Max(100, stack.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 6);
             foreach (Control child in stack.Controls)
             {
-                child.MinimumSize = new Size(width, child.MinimumSize.Height);
-                child.MaximumSize = new Size(width, 0);
+                if (child.Width != width || child.MinimumSize.Width != width || child.MaximumSize.Width != width)
+                {
+                    int minimumHeight = child.MinimumSize.Height;
+                    child.MinimumSize = new Size(0, minimumHeight);
+                    child.MaximumSize = new Size(width, 0);
+                    child.MinimumSize = new Size(width, minimumHeight);
+                    child.Width = width;
+                }
                 void FitChildren(Control parent, int available)
                 {
                     foreach (Control nested in parent.Controls)
@@ -603,8 +614,11 @@ internal sealed class SettingsForm : Form
                 FitChildren(child, width - child.Padding.Horizontal);
             }
             foreach (var label in head.Controls.OfType<Label>()) label.MaximumSize = new Size(Math.Max(80, head.ClientSize.Width), 0);
+            }
+            finally { fitting = false; }
         }
-        stack.SizeChanged += (_, _) => FitPage();
+        stack.ClientSizeChanged += (_, _) => FitPage();
+        stack.Layout += (_, _) => FitPage();
         page.VisibleChanged += (_, _) => FitPage();
         page.Controls.Add(head, 0, 0);
         page.Controls.Add(stack, 0, 1);
