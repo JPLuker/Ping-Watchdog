@@ -270,7 +270,7 @@ internal sealed class EventHistoryForm : Form
                 "DOWN" => palette.Danger, "RECOVERED" => palette.Success,
                 "SUSPECT" => palette.Warning, _ => palette.Secondary
             });
-            cell.Style.SelectionForeColor = palette.Text;
+            cell.Style.SelectionForeColor = palette.SelectionText;
             row.DefaultCellStyle.BackColor = palette.Surface;
         }
     }

@@ -45,11 +45,17 @@ internal sealed class RecoveryForm : Form
     private readonly IRecoveryUpdates _updates;
     private readonly CancellationTokenSource _lifetime = new();
     internal readonly Button UpdateButton = new() { Text = "Check for updates", AutoSize = true };
-    internal readonly Label StatusLabel = new() { AutoSize = true, MaximumSize = new Size(680, 0) };
+    // Keep arbitrarily long errors readable without pushing details and actions off screen.
+    internal readonly TextBox StatusLabel = new()
+    {
+        ReadOnly = true, Multiline = true, WordWrap = true, ScrollBars = ScrollBars.Vertical,
+        Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Height = 64,
+        BackColor = SystemColors.Control, TabIndex = 1
+    };
     internal readonly TextBox Details = new()
     {
         Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
-        Dock = DockStyle.Fill, Font = new Font("Consolas", 9.75f)
+        Dock = DockStyle.Fill, Font = new Font("Consolas", 9.75f), TabIndex = 0
     };
     private readonly Button _retry = new() { Text = "Retry startup", AutoSize = true };
     private bool _busy;
@@ -73,7 +79,7 @@ internal sealed class RecoveryForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(new Label
         {
@@ -83,13 +89,13 @@ internal sealed class RecoveryForm : Form
         root.Controls.Add(new Label
         {
             Text = "The main app stopped unexpectedly. This recovery window can check for a newer release without opening the dashboard.\r\nYour saved sites and settings have not been reset.",
-            AutoSize = true, MaximumSize = new Size(680, 0), Margin = new Padding(0, 0, 0, 12)
+            AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 12)
         }, 0, 1);
         root.Controls.Add(Details, 0, 2);
         StatusLabel.Text = "Error report: " + reportPath;
         StatusLabel.Margin = new Padding(0, 10, 0, 10);
         root.Controls.Add(StatusLabel, 0, 3);
-        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, Margin = Padding.Empty };
+        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, Margin = Padding.Empty, TabIndex = 2 };
         var downloads = new Button { Text = "Open downloads", AutoSize = true };
         var copy = new Button { Text = "Copy details", AutoSize = true };
         var close = new Button { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
@@ -121,6 +127,7 @@ internal sealed class RecoveryForm : Form
             catch (Exception ex) { StatusLabel.Text = "Could not restart: " + ex.Message; }
         };
         close.Click += (_, _) => Close();
+        Shown += (_, _) => { Details.Focus(); Details.Select(0, 0); };
         FormClosed += (_, _) => _lifetime.Cancel();
     }
 

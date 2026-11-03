@@ -152,6 +152,7 @@ internal sealed class SettingsForm : Form
         {
             LoadSettings();
             _runtimeTimer.Start();
+            _nav.Focus();
         };
         _runtimeTimer.Tick += (_, _) => RefreshRuntimeState();
         FormClosed += (_, _) =>
@@ -281,6 +282,31 @@ internal sealed class SettingsForm : Form
         if (index >= 0) _nav.SelectedIndex = index;
     }
 
+    internal async Task ReviewNavigation(string output)
+    {
+        Size previous = Size;
+        Size = MinimumSize;
+        foreach (string category in _nav.Items)
+        {
+            SelectCategory(category);
+            await Task.Delay(50);
+            _nav.Focus();
+            if (!SelectNextControl(_nav, true, true, true, false) || !_content.ContainsFocus)
+                throw new InvalidOperationException(category + ": Tab did not enter the settings page.");
+            foreach (var input in DialogReviewTests.Descendants(_content).OfType<NumericUpDown>().Where(c => c.Visible))
+                if (string.IsNullOrWhiteSpace(input.AccessibleName))
+                    throw new InvalidOperationException("Monitoring input has no accessible name.");
+            foreach (var child in DialogReviewTests.Descendants(_content).Where(c => c.Visible && c is Label or Button or NumericUpDown or ComboBox))
+                if (child.Left < 0 || child.Right > child.Parent!.ClientSize.Width)
+                    throw new InvalidOperationException(category + ": content extends past its parent: " + child.Text);
+            using var bitmap = new Bitmap(Width, Height);
+            DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            bitmap.Save(Path.Combine(output, "dialog-settings-" + category.Replace(' ', '-') + "-" + AuroraTheme.Mode + ".png"));
+        }
+        Size = previous;
+        SelectCategory("General");
+    }
+
     private Control BuildGeneralPage()
     {
         var page = Page("General", "Application behavior and display defaults.");
@@ -313,7 +339,7 @@ internal sealed class SettingsForm : Form
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Windows notifications", _notifications,
             "Receive notifications when a host goes down or recovers. Monitoring and history continue when alerts are off."));
-        var soundActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        var soundActions = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = Padding.Empty };
         var choose = new AuroraButton { Text = "Choose sound…", AutoSize = true };
         var test = new AuroraButton { Text = "Test", AutoSize = true };
         var reset = new AuroraButton { Text = "Use Windows alarm", AutoSize = true, Ghost = true };
@@ -609,7 +635,7 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             MinimumSize = new Size(0, 48),
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             Padding = new Padding(0, 7, 0, 7),
             Margin = new Padding(0, 0, 0, 8)
         };
@@ -621,6 +647,7 @@ internal sealed class SettingsForm : Form
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Color.FromArgb(220, 228, 237)
         });
+        input.AccessibleName ??= label;
         input.Margin = new Padding(0, 2, 8, 0);
         row.Controls.Add(input);
         if (!string.IsNullOrWhiteSpace(suffix))
@@ -776,7 +803,7 @@ internal sealed class SettingsForm : Form
         }
         TextRenderer.DrawText(e.Graphics, _nav.Items[e.Index].ToString(), AuroraTheme.LabelFont,
             new Rectangle(bounds.X + 12, bounds.Y, Math.Max(1, bounds.Width - 24), bounds.Height),
-            selected ? AuroraTheme.Palette.Text : AuroraTheme.Palette.Secondary,
+            selected ? AuroraTheme.Palette.SelectionText : AuroraTheme.Palette.Secondary,
             TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         if ((e.State & DrawItemState.Focus) != 0 && _nav.Focused)
         {

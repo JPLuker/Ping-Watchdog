@@ -56,11 +56,12 @@ internal static class SupportInfo
         };
         var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(20)
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(20)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var explanation = new Label
         {
@@ -83,7 +84,7 @@ internal static class SupportInfo
         };
         var copyButton = new AuroraButton { Text = "Copy diagnostic info", AutoSize = true };
         var close = new AuroraButton { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
-        var status = new Label { AutoSize = true, Padding = new Padding(8, 8, 0, 0), AccessibleName = "Copy status" };
+        var status = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0), AccessibleName = "Copy status" };
         copyButton.Click += (_, _) =>
         {
             try
@@ -99,7 +100,7 @@ internal static class SupportInfo
         };
         if (allowCopy) footer.Controls.Add(copyButton);
         footer.Controls.Add(close);
-        footer.Controls.Add(status);
+        root.Controls.Add(status, 0, 3);
         root.Controls.Add(explanation, 0, 0);
         root.Controls.Add(text, 0, 1);
         root.Controls.Add(footer, 0, 2);
@@ -125,14 +126,14 @@ internal static class SupportInfo
         // Invoke the same action without showing or changing the real clipboard.
         review.Show();
         button.PerformClick();
-        if (copied != report || footer.Controls[2].Text != "Copied")
+        if (copied != report || root.GetControlFromPosition(0, 3)!.Text != "Copied")
             throw new InvalidOperationException("Diagnostic copying changed the report.");
         review.Close();
         using var failed = CreateReview("Diagnostics", report, true, _ => throw new IOException("Clipboard unavailable"));
         failed.Show();
         var failedFooter = (FlowLayoutPanel)((TableLayoutPanel)failed.Controls[0]).GetControlFromPosition(0, 2)!;
         ((Button)failedFooter.Controls[0]).PerformClick();
-        if (!failedFooter.Controls[2].Text.StartsWith("Could not copy"))
+        if (!((TableLayoutPanel)failed.Controls[0]).GetControlFromPosition(0, 3)!.Text.StartsWith("Could not copy"))
             throw new InvalidOperationException("Clipboard failure was not reported.");
         failed.Close();
     }

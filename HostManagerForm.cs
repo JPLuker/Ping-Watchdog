@@ -109,6 +109,7 @@ internal sealed class QuickAddForm : Form
             _site.Text = _site.Items.Cast<string>().FirstOrDefault(n => n.Equals(selected, StringComparison.OrdinalIgnoreCase)) ?? "";
         ClipboardText.AttachPlainPaste(_site, () => ShowSiteStatus("Clipboard busy, try again", "statSuspect"));
         var fields = ActionRow();
+        fields.TabIndex = 2;
         if (!temporary) fields.Controls.Add(FieldGroup("Site", _site, 240));
         fields.Controls.Add(FieldGroup("Group", _group, 180));
         _assignGroup = HostUi.Button("Assign group", () =>
@@ -136,9 +137,12 @@ internal sealed class QuickAddForm : Form
         ((AuroraButton)_importButton).Primary = true;
         var cancel = HostUi.Button("Cancel", Close);
         cancel.DialogResult = DialogResult.Cancel;
+        cancel.TabIndex = 0;
+        _importButton.TabIndex = 1;
         footer.Controls.Add(_importButton);
         footer.Controls.Add(cancel);
         CancelButton = cancel;
+        Shown += (_, _) => _paste.Focus();
         root.Controls.Add(footer, 0, 7);
         Controls.Add(root);
         AuroraTheme.Register(this);
@@ -192,10 +196,10 @@ internal sealed class QuickAddForm : Form
             row.DefaultCellStyle.BackColor = palette.Surface;
             row.DefaultCellStyle.ForeColor = palette.Text;
             row.DefaultCellStyle.SelectionBackColor = palette.Surface3;
-            row.DefaultCellStyle.SelectionForeColor = palette.Text;
+            row.DefaultCellStyle.SelectionForeColor = palette.SelectionText;
             row.Cells[5].Style.ForeColor = palette.StatusText(status == "New" ? palette.Success :
                 status.StartsWith("Invalid", StringComparison.OrdinalIgnoreCase) ? palette.Danger : palette.Warning);
-            row.Cells[5].Style.SelectionForeColor = palette.Text;
+            row.Cells[5].Style.SelectionForeColor = palette.SelectionText;
         }
     }
 
@@ -213,6 +217,22 @@ internal sealed class QuickAddForm : Form
     }
 
     internal void PreviewForTest(string text) => _paste.Text = text;
+    internal void CheckKeyboardNavigation()
+    {
+        if (!_paste.Focused) throw new InvalidOperationException("Quick Add did not focus the address editor.");
+        Control current = _paste;
+        foreach (string action in new[] { "Paste clipboard", "Import CSV", "Add manually" })
+        {
+            var next = DialogReviewTests.Descendants(this).OfType<Button>().Single(b => b.Text == action);
+            if (!SelectNextControl(current, true, true, true, false) || !next.Focused)
+                throw new InvalidOperationException("Quick Add tab order skipped " + action);
+            current = next;
+        }
+        var destination = _temporary ? (Control)_group : _site;
+        if (!SelectNextControl(current, true, true, true, false) || !destination.Focused)
+            throw new InvalidOperationException("Quick Add tab order skipped the destination field.");
+        _paste.Focus();
+    }
     internal int PreviewRowCount => _grid.Rows.Count;
     internal int PastedLineCountForTest => _paste.Lines.Length;
     internal string SiteTextForTest { get => _site.Text; set => _site.Text = value; }

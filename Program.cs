@@ -1974,6 +1974,8 @@ public sealed partial class MainForm : Form
                     Check(form._settingsForm!.BackColor == AuroraTheme.Palette.Canvas, "Open Settings appearance did not update.");
                     Capture(form, "appearance-main-" + appearance);
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
+                    await form._settingsForm!.ReviewNavigation(output);
+                    await DialogReviewTests.Run(form._settingsForm, output);
                     using (var restart = new UpdateRestartDialog("99.0.0", monitoring: true))
                     {
                         restart.Show(form._settingsForm);
@@ -2030,6 +2032,7 @@ public sealed partial class MainForm : Form
                             }, (_, _) => imported = true, temporary);
                         add.Show(form);
                         await Task.Delay(50);
+                        add.CheckKeyboardNavigation();
                         add.Width = 850;
                         Capture(add, "dialog-quick-" + temporary + "-empty-" + appearance);
                         add.CheckLayout();
