@@ -104,6 +104,8 @@ internal sealed class SettingsForm : Form
 
         _appearance.Items.AddRange(new object[] { "System", "Light", "Dark" });
         _appearance.SelectedIndex = 0;
+        CompactDialog.StylePicker(_appearance);
+        CompactDialog.StylePicker(_historyRange);
         _appearance.SelectedIndexChanged += (_, _) => UpdateDirtyState();
         BuildLayout();
         ApplyTheme();
@@ -299,6 +301,12 @@ internal sealed class SettingsForm : Form
             foreach (var child in DialogReviewTests.Descendants(_content).Where(c => c.Visible && c is Label or Button or NumericUpDown or ComboBox))
                 if (child.Left < 0 || child.Right > child.Parent!.ClientSize.Width)
                     throw new InvalidOperationException(category + ": content extends past its parent: " + child.Text);
+            foreach (var label in DialogReviewTests.Descendants(_content).OfType<Label>().Where(c => c.Visible && c.Tag as string == "settingLabel"))
+                if (label.Height < label.Font.Height || label.Width < 80)
+                    throw new InvalidOperationException("Settings label has no readable bounds: " + label.Text);
+            var stack = (FlowLayoutPanel)_pages[category].Controls[1];
+            if (stack.HorizontalScroll.Visible)
+                throw new InvalidOperationException(category + ": Settings requires horizontal scrolling.");
             using var bitmap = new Bitmap(Width, Height);
             DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             bitmap.Save(Path.Combine(output, "dialog-settings-" + category.Replace(' ', '-') + "-" + AuroraTheme.Mode + ".png"));
@@ -575,11 +583,24 @@ internal sealed class SettingsForm : Form
             {
                 child.MinimumSize = new Size(width, child.MinimumSize.Height);
                 child.MaximumSize = new Size(width, 0);
-                foreach (var label in child.Controls.OfType<Label>())
+                void FitChildren(Control parent, int available)
                 {
-                    label.MaximumSize = new Size(Math.Max(80, width - child.Padding.Horizontal - 10), 0);
-                    if (label == _updateStatus) label.AutoSize = true;
+                    foreach (Control nested in parent.Controls)
+                    {
+                        int room = Math.Max(80, available - nested.Margin.Horizontal);
+                        if (nested is Label or CheckBox)
+                        {
+                            nested.MaximumSize = new Size(room, 0);
+                            if (nested == _updateStatus) nested.AutoSize = true;
+                        }
+                        else if (nested is FlowLayoutPanel flow)
+                        {
+                            flow.MaximumSize = new Size(room, 0);
+                            FitChildren(flow, room - flow.Padding.Horizontal);
+                        }
+                    }
                 }
+                FitChildren(child, width - child.Padding.Horizontal);
             }
             foreach (var label in head.Controls.OfType<Label>()) label.MaximumSize = new Size(Math.Max(80, head.ClientSize.Width), 0);
         }
@@ -642,8 +663,9 @@ internal sealed class SettingsForm : Form
         row.Controls.Add(new Label
         {
             Text = label,
-            Width = 205,
-            Height = 32,
+            AutoSize = true,
+            MinimumSize = new Size(140, 32),
+            Tag = "settingLabel",
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Color.FromArgb(220, 228, 237)
         });
