@@ -286,7 +286,7 @@ internal sealed class SettingsForm : Form
     {
         Size previous = Size;
         Size = MinimumSize;
-        foreach (string category in _nav.Items)
+        foreach (string category in _nav.Items.Cast<string>().ToArray())
         {
             SelectCategory(category);
             await Task.Delay(50);
