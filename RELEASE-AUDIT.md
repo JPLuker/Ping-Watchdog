@@ -266,3 +266,14 @@ v1.19.17 was withheld because the new test enumerated a native list while changi
 This is automated desktop-state evidence, not full item-1 acceptance: physical DPI/large-text, open dropdowns, complete forward/reverse keyboard traversal, Narrator, high contrast, dense-folder and popup desktop-composition checks remain open. The accepted dashboard/topology and toolbar-free Wallboard were preserved. Linux and issue #12 were not changed. Next: hands-on supporting-window acceptance, then item 2 (the reported updater “okay” state); public documentation remains a separate milestone.
 
 The final v1.19.20 Windows run completed successfully. Latest-release assets were verified: installer, portable ZIP, full/delta packages, both update feeds and SHA256SUMS.txt.
+
+
+## Update restart failure actions — 2026-11-03
+
+v1.19.21 replaces the remaining updater MessageBoxButtons.OK path (failure in ApplyPendingUpdateAndRestart) with a named Retry restart / Later dialog. Long error text is selectable and scrollable; the window follows Settings, Wallboard or Main through UpdateDialogOwner. Enter and Escape defer by default. Retry is queued back to the message loop and invokes the existing restart confirmation and Settings/save guards, avoiding recursive retry calls. The downloaded update remains available.
+
+Windows run [41732966848](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41732966848) passed core regressions, packaged startup/UI and isolated recovery checks. The new review verifies safe accept/cancel defaults, initial focus, ownership, Escape dismissal and minimum-size bounds with long errors; light/dark screenshots were inspected. The existing save-failure/canceled-close and download-integrity tests also pass. This does not establish a real installed-package apply failure/retry on a user's machine.
+
+Issue #12 remains open: its report has no screenshot, and this identifies one concrete remaining OK dialog without proving it was the exact reported screen. Next: current README and packaged quick start, followed by public-release documentation; final hands-on updater and supporting-window acceptance remains pending.
+
+The v1.19.21 run completed successfully; latest-release installer, portable ZIP, full/delta packages, both feeds and checksums were verified.
