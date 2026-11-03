@@ -251,3 +251,18 @@ v1.19.14 passed and published as an authorized iteration; visual review then fou
 The [v1.19.16 release](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.19.16) is verified as latest with installer, portable ZIP, full/delta packages, RELEASES, releases.win.json and SHA256SUMS.txt. No main/Wallboard redesign or Linux change was introduced.
 
 Next: refresh public README and the packaged README-FIRST quick start, then privacy/security/support/maintenance material and download-page checks. The existing quick start contains obsolete UI and updater descriptions; public readiness remains unchecked. Final candidate installation/upgrade, physical accessibility, workday monitoring and license/notice acceptance remain open. Issue #12 has not been reproduced or closed by this dialog work.
+
+
+## Supporting-window keyboard and narrow-layout review — 2026-11-03
+
+v1.19.20 fixes Settings labels with measured sizing, constrains nested labels and checkboxes to the visible page, and refits when native scrollbars change the client area. Monitoring units and priority-sound actions wrap; appearance/history pickers use themed selected values. Settings timing fields have accessible names. Initial focus is explicit in Settings, Quick Add/Quick Monitor and recovery; Quick Add's footer follows its visual order.
+
+Diagnostic-copy feedback now has a separate wrapping row, preserving the review text and actions at minimum size. Recovery status is selectable and vertically scrollable with bounded height, so long failures cannot displace the original exception or recovery actions. High-contrast selection text uses the system highlight foreground in Settings navigation and grid rows; physical high-contrast acceptance remains open.
+
+Windows run [41713463433](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41713463433) passed core self-tests, published startup/UI tests and isolated recovery checks. New coverage traverses all nine Settings categories at minimum size in both themes, checks entry by Tab, readable timing-label bounds and absence of horizontal scrolling; checks Quick Add/Quick Monitor initial focus and tab order through source actions into destination fields; exercises diagnostic-copy failure, support/recovery ownership, Escape dismissal and long recovery errors. The existing monitoring/snooze/disabled-state and canceled-exit regressions also passed. All eighteen minimum-size Settings captures and six diagnostic/license/recovery captures were visually inspected.
+
+v1.19.17 was withheld because the new test enumerated a native list while changing its selection; v1.19.18 passed and published, but visual inspection found missing Settings labels and horizontal scrolling. v1.19.19 was withheld by the new no-horizontal-scroll assertion. v1.19.20 fixes the remaining scrollbar-dependent layout.
+
+This is automated desktop-state evidence, not full item-1 acceptance: physical DPI/large-text, open dropdowns, complete forward/reverse keyboard traversal, Narrator, high contrast, dense-folder and popup desktop-composition checks remain open. The accepted dashboard/topology and toolbar-free Wallboard were preserved. Linux and issue #12 were not changed. Next: hands-on supporting-window acceptance, then item 2 (the reported updater “okay” state); public documentation remains a separate milestone.
+
+The final v1.19.20 Windows run completed successfully. Latest-release assets were verified: installer, portable ZIP, full/delta packages, both update feeds and SHA256SUMS.txt.
