@@ -1976,6 +1976,7 @@ public sealed partial class MainForm : Form
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
                     await form._settingsForm!.ReviewNavigation(output);
                     await DialogReviewTests.Run(form._settingsForm, output);
+                    await UpdateFailureDialog.Review(form._settingsForm, output);
                     using (var restart = new UpdateRestartDialog("99.0.0", monitoring: true))
                     {
                         restart.Show(form._settingsForm);
@@ -4677,12 +4678,16 @@ public sealed partial class MainForm : Form
             _trayUpdateItem.Enabled = true;
             _statusLabel.Text = "Update restart failed.";
 
-            MessageBox.Show(
-                UpdateDialogOwner,
-                $"The update is still downloaded, but Ping Watchdog could not restart to apply it.\r\n\r\n{ex.Message}",
-                "Ping Watchdog Update",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            using var failure = new UpdateFailureDialog(ex.Message);
+            if (failure.ShowDialog(UpdateDialogOwner) == DialogResult.Retry)
+            {
+                // Return to the message loop before reopening confirmation; repeated failures
+                // must not build a recursive stack or bypass Settings/save protection.
+                BeginInvoke((Action)(() =>
+                {
+                    if (!IsDisposed && !Disposing) RestartToApplyPendingUpdate();
+                }));
+            }
         }
     }
 

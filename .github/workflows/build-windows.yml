@@ -192,9 +192,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Keep diagnostic-copy errors and long recovery messages readable at smaller window sizes.
-          - Wrap monitoring units and priority sound actions in narrow Settings windows.
-          - Set predictable initial focus in Settings, Quick Add and recovery, and preserve selected-row text in Windows high contrast.
+          - Replace the updater restart-failure OK dialog with Retry restart and Later.
+          - Keep long restart errors readable and selectable, with Later as the safe keyboard default.
+          - Retry through the existing restart confirmation and unsaved-settings protection.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
