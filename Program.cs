@@ -1530,6 +1530,27 @@ public sealed partial class MainForm : Form
             bitmap.Save(Path.Combine(output, name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
         }
 
+        void CaptureLiveReview(MainForm window, string name)
+        {
+            Check(window._commandBox.Text.Contains("Reply from 172.20."), "Screenshot must show sample replies.");
+            window.Refresh();
+            using var bitmap = new Bitmap(window.Width, window.Height);
+            window.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            // RichEdit's child window can be omitted by DrawToBitmap. Render its visible text
+            // through RichEdit's own printing API at the control's screen DPI.
+            var box = window._commandBox;
+            using var log = new Bitmap(box.ClientSize.Width, box.ClientSize.Height);
+            using (var graphics = Graphics.FromImage(log))
+            {
+                graphics.Clear(box.BackColor);
+                SampleLogRenderer.Draw(box, graphics, log.Size);
+            }
+            var at = box.PointToScreen(Point.Empty);
+            using (var g = Graphics.FromImage(bitmap))
+                g.DrawImageUnscaled(log, at.X - window.Left, at.Y - window.Top);
+            bitmap.Save(Path.Combine(output, name + ".png"));
+        }
+
         void DismissWithEscape(Form window)
         {
             var escape = typeof(Form).GetMethod("ProcessDialogKey",
@@ -1845,12 +1866,27 @@ public sealed partial class MainForm : Form
                     review.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, ShowCommandView = true,
                         Sites = Enumerable.Range(1, 5).Select(site => new SiteDefinition {
                             Name = "Branch " + site,
-                            Hosts = Enumerable.Range(1, 5).Select(host => $"192.0.2.{site * 10 + host}").ToList(),
-                            Labels = new() { [$"192.0.2.{site * 10 + 2}"] = "Printer", [$"192.0.2.{site * 10 + 3}"] = "Cloudkey" }
+                            Hosts = Enumerable.Range(1, 5).Select(host => $"172.20.{site}.{20 + host}").ToList(),
+                            Labels = Enumerable.Range(1, 5).ToDictionary(host => $"172.20.{site}.{20 + host}",
+                                host => new[] { "Laptop", "Desktop", "Tablet", "Mini PC", "Server" }[host - 1] + " " +
+                                    new[] { "Ash", "Birch", "Cedar", "Maple", "Pine" }[(site + host - 2) % 5])
                         }).ToList() });
                     review.MaximumSize = new Size(1920, 1080);
                     review.Show(form);
                     review.SetWorkspaceView(true);
+                    // Deterministic screenshot session: sample replies, no network workers.
+                    review._cts = new CancellationTokenSource();
+                    int seq = 0;
+                    foreach (var site in review._sites)
+                    foreach (var address in site.Hosts)
+                    {
+                        var host = new HostMonitor(site.Name, address, review.GetNickname(site.Name, address));
+                        review._hosts[BuildHostKey(site.Name, address)] = host;
+                        long ms = 2 + (seq++ * 3) % 13;
+                        review.AppendCommandLog(site.Name, address, true, $"Reply from {address}: time={ms}ms TTL=128");
+                        review.ProcessResult(host, true, ms);
+                    }
+                    review.RefreshGrid();
                     foreach (var appearance in new[] { AppearanceMode.Dark, AppearanceMode.Light })
                     {
                         AuroraTheme.SetMode(appearance);
@@ -1865,13 +1901,13 @@ public sealed partial class MainForm : Form
                             "Ping log consumed the host table width.");
                         Check(review._mainSplit.Panel1.Width > review._mainSplit.Panel2.Width * 1.8,
                             "Host results lost priority over the log.");
-                        Capture(review, "workspace-list-" + appearance);
+                        CaptureLiveReview(review, "workspace-list-" + appearance);
                         review.SetWorkspaceView(false);
                         await Task.Delay(100);
                         Check(review._mainSplit.Panel1Collapsed && !review._dashboardSplit.Panel1Collapsed,
                             "Map and list are displayed together.");
                         Check(review._statusStrip.Parent == null, "Redundant bottom status bar returned.");
-                        Capture(review, "workspace-populated-" + appearance);
+                        CaptureLiveReview(review, "workspace-populated-" + appearance);
                         Check(review._monitorCanvas.AllHostNodesFit && review._monitorCanvas.VisibleHostCount == 25,
                             "The selected topology does not fit every node.");
                         review.SetUpdateStatus("Up to date", true);
