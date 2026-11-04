@@ -1,168 +1,55 @@
 # Ping Watchdog
 
-<img src="Assets/WatchdogLogo.png" alt="Ping Watchdog dog logo" width="72">
-
-A desktop ICMP monitoring tool for tracking multiple IP addresses and hostnames across sites. Configurable failure and recovery thresholds help distinguish a brief missed reply from an outage.
-
-Available for Windows, with a native Linux beta built using Avalonia.
-
-## Features
-
-- **Multi-site monitoring:** Monitor all configured hosts together, filter by site, and assign host nicknames.
-- **Site organization:** Group sites into folders and nested folders, and edit hosts while monitoring continues.
-- **Outage alerts:** Receive outage and recovery notifications when consecutive failure or success thresholds are reached.
-- **Persistent history:** Review outages across sessions, filter by site or time range, hide suspect events, and export history to CSV.
-- **Live command trace:** View individual ping results alongside the host table, with failed attempts highlighted in red.
-- **Fullscreen Wallboard:** Display site and host topology, current outages, history, and command output. Windows Wallboard also provides monitoring and site-management controls.
-- **Saved configuration:** Automatically save your working setup and import or export `.pingwatch.json` files.
-- **Background updates:** Check for releases and download updates in the background, then restart when ready to apply them.
+Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices by site, watch missed replies become outages, and see when a host recovers. A device that blocks ICMP can appear offline even while its services are running.
 
 ## Download
 
-Official builds are available on the [Releases page](https://github.com/JPLuker/Ping-Watchdog/releases).
+For Windows x64, run the [installer](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Setup.exe) or extract the [portable ZIP](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Portable.zip) and open `PingWatchdog.exe`. Both include the .NET runtime. The Windows builds are unsigned. To verify a download, compare its PowerShell `Get-FileHash` result with the matching filename in the release's [SHA256SUMS.txt](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/SHA256SUMS.txt).
 
-| Platform | Package | Installation |
-| --- | --- | --- |
-| Windows x64 | `PingWatchdog-win-Setup.exe` | Run the installer. |
-| Windows x64, portable | `PingWatchdog-win-Portable.zip` | Extract the ZIP and run `PingWatchdog.exe`. |
-| Linux x64, beta | `PingWatchdog.AppImage` | Download from a release tagged `-linux`, make it executable, and run it. |
+Linux has a separate beta and installation guide. [Linux beta](README-LINUX.md)
 
-The packages include the .NET runtime; a separate .NET installation is not required to run them. Windows builds are unsigned. Linux requirements and desktop integration details are documented in [README-LINUX.md](README-LINUX.md).
+## Run your first monitor
 
-```bash
-chmod +x PingWatchdog.AppImage
-./PingWatchdog.AppImage
-```
+1. Click **Add hosts**. Enter a hostname or IP address you expect to answer ping, or paste several addresses on separate lines.
+2. Under **Site**, select an existing site or type a new name. Review the preview, check the hosts you want, then click **Add hosts** to save them.
+3. Click **Start monitoring**. Select a site in the sidebar to narrow the view, or choose **All sites** for the whole inventory. Enable **Show ping log** to see individual attempts.
+4. For a temporary check, choose **More → Quick monitor…**, enter the targets, and click **Start quick monitor**. To save temporary hosts, select them in **List** and choose **Keep in a site**.
 
-## Getting started on Windows
+The default interval is two seconds with a one-second timeout. Three consecutive failures declare an outage and two consecutive replies declare recovery. A suspect host has missed a reply but has not reached its outage threshold. To change these defaults, stop monitoring and open **Settings → Monitoring**.
 
-1. Open Ping Watchdog and create a site with **+ Add Site**.
-2. Enter the site's IP addresses or hostnames, one per line.
-3. Adjust the monitoring interval and outage thresholds if needed.
-4. Click **Start Monitoring**. Select a site or **All Sites** to choose what the table displays.
-5. Right-click a host to set its label, enable **Show CMD view** for command output, or open **Wallboard** for a fullscreen view.
+## Find and manage hosts
 
-Use **Settings** to configure notifications, history filters, display preferences, and updates. On Windows, **Settings → Updates** always provides a manual update check. The developer option on that page can also expose update controls in the main window and Wallboard.
+**Map** shows how hosts are grouped by site. Open **Wallboard** for a fullscreen view. Press **Esc** or **F11** to return. The map and Wallboard support host actions through the host's context menu.
 
-### Host status and default thresholds
+![Dark Map view showing five sites with five example hosts each](docs/screenshots/map-dark.png)
 
-| Status | Meaning |
+**List** lets you search, filter and edit hosts. Select one or more rows to move hosts, change their group, mark them as priority, or disable them. Press **F2** to rename a selected host. List edits save immediately and offer an eight-second Undo with **Ctrl+Z**. In Settings, use **Save changes** to apply a draft.
+
+![Light List view showing host filters and actions for the selected host](docs/screenshots/list-light.png)
+
+| When you need to | What to do |
 | --- | --- |
-| **ONLINE** | The host is replying normally. |
-| **SUSPECT** | Recent failures have not yet reached the outage threshold. |
-| **OFFLINE** | The consecutive failure threshold has been reached. |
-| **UNKNOWN** | The host has not yet established a monitoring state. |
+| Silence one host for an hour | Right-click the host and choose **Snooze host for 1 hour**. Probes, live ping output and active outage alerts pause until expiry. Choose **Resume monitoring now** to end the snooze early. Past events stay in history. |
+| Keep an alarm sounding until someone responds | Mark the host as priority. Outage and recovery alarms repeat every 15 seconds until acknowledged. Choose the sound in **Settings → Notifications**. |
+| Check when an outage started or ended | Open **Outage history** or press **Ctrl+H**. Filter by site or time range, hide suspect events, or export the results to CSV. |
+| Share ongoing monitoring with someone on Windows | Choose **More → Export monitoring batch…** to create a batch file they can run without installing Ping Watchdog. |
 
-Defaults are a **2-second interval**, **1,000 ms timeout**, **3 consecutive failures** to declare an outage, and **2 consecutive successes** to declare recovery. Notifications are sent when an outage is declared and when the host recovers, rather than for every failed ping.
+## Backups and portable storage
 
-ICMP filtering can make a reachable device appear offline. Ping Watchdog reports ping availability, not the health of every service on a host.
+To carry a saved configuration to another PC, use the configuration export under **More**. For a complete backup, save any Settings changes, then choose **Settings → Data and storage → Create backup…**. A complete backup includes saved hosts, preferences, snooze deadlines and outage history. It contains unencrypted network inventory, so choose where you keep it.
 
-### Windows keyboard shortcuts
+To restore, stop monitoring, close other copies, then choose **Restore backup…**. Check the site and host counts before confirming. Restore replaces the active data and restarts the app. [Backup and restore guide](DATA-RECOVERY.md)
 
-| Shortcut | Action |
-| --- | --- |
-| `F11` | Open Wallboard, or return to the main window from Wallboard. |
-| `Esc` in Wallboard | Return to the main window. |
-| `Ctrl+H` | Open outage history. |
-| `Ctrl+,` | Open Settings. |
-| `O` in Wallboard | Open or close Operations. |
-| `P` in Wallboard | Start or stop monitoring. |
-| `C` in Wallboard | Show or hide the command trace. |
-| `M` in Wallboard | Move to the next monitor. |
-| `H` / `S` in Wallboard | Cycle the history range / toggle suspect-event visibility. |
+The portable ZIP uses per-user storage by default. Choose **Enable portable storage…** in the portable copy to move future saves into its package folder. The original per-user files are retained. [Portable storage guide](PORTABLE-AND-DELETION.md)
 
-## Configuration and data
+## Updates and support
 
-### Windows startup recovery
+Use **Check for updates** in the sidebar or **Settings → Updates**. When automatic checks are enabled, Ping Watchdog checks at most once a day and downloads available updates in the background. Choose **Restart now** to apply a downloaded update, or **Later** to keep working. A failed restart offers **Retry restart**. An organization policy can disable update checks.
 
-If the Windows app fails during startup, a separate recovery window shows the error details and offers **Check for updates**, **Open downloads**, and **Retry startup**. If a newer release is available, recovery can download it and offer **Install update and restart** without opening the dashboard. If no fix has been published yet, it reports that instead of repeating the failed startup automatically.
+For a problem report, include the version from **Settings → About**, your Windows version and the steps that reproduce it. You can review diagnostic information in About before copying it. [Report an issue](https://github.com/JPLuker/Ping-Watchdog/issues) · [Changelog](CHANGELOG.md)
 
-Reports are saved under `%LOCALAPPDATA%\PingWatchdog\Startup`. Recovery does not reset your saved configuration. The startup observer detects early process exits after it starts; failures that prevent the executable or .NET runtime from launching still require an installer download.
+## Build and test
 
-### Saved settings
+On Windows with the .NET 8 SDK, run `dotnet run --project PingWatchdog.csproj -c Release`. Pass `-- --self-test`, `-- --ui-smoke-test`, or `-- --recovery-smoke-test` to run the corresponding checks.
 
-Settings, sites, host labels, and history persist locally between launches. Export configuration from the app menu to move a setup between computers. Windows and Linux use compatible `.pingwatch.json` configuration formats.
-
-| Platform | Working configuration | Event history |
-| --- | --- | --- |
-| Windows | `%APPDATA%\PingWatchdog\autosave.pingwatch.json` | `%APPDATA%\PingWatchdog\event-history.json` |
-| Linux | `~/.config/PingWatchdog/autosave.pingwatch.json` | `~/.local/state/PingWatchdog/event-history.json` |
-
-Linux respects `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. Fresh installations use the bundled [default.pingwatch.json](default.pingwatch.json) as their starter configuration.
-
-## Development
-
-The Windows application uses C# and Windows Forms. The Linux application uses C# and Avalonia. Both target .NET 8 and use Velopack for release packaging and updates. They compile `Shared/Presentation.cs` for common visual definitions; Windows is the layout reference. See [Linux layout and desktop verification](README-LINUX.md#windows-layout-alignment) for the shared maintenance contract and platform limits.
-
-Build the Windows application on Windows with the **.NET 8 SDK**:
-
-```powershell
-dotnet build PingWatchdog.csproj -c Release
-dotnet run --project PingWatchdog.csproj -c Release
-```
-
-Build and run the Linux application with the **.NET 8 SDK**:
-
-```bash
-dotnet build linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release
-dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release
-```
-
-Run the platform's built-in checks:
-
-```powershell
-# Windows
-dotnet run --project PingWatchdog.csproj -c Release -- --self-test
-dotnet run --project PingWatchdog.csproj -c Release -- --ui-smoke-test
-dotnet run --project PingWatchdog.csproj -c Release -- --recovery-smoke-test
-```
-
-```bash
-# Linux
-dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
-```
-
-GitHub Actions builds and publishes Windows installer/portable packages and Linux AppImages. Windows release checks include startup and UI tests; UI screenshots are available in the workflow's `PingWatchdog-UI-*` artifact.
-
-## Issues
-
-Report bugs through [GitHub Issues](https://github.com/JPLuker/Ping-Watchdog/issues). Include your app version, operating system, steps to reproduce the problem, and a screenshot when relevant.
-
-## License
-
-Copyright © 2026 Joseph Luker. All rights reserved.
-
-Ping Watchdog is proprietary software with publicly viewable source code. The [LICENSE](LICENSE) permits personal or internal business use of official compiled releases. Other uses, including modification and redistribution, require written permission from Joseph Luker.
-
-
-## Host categories
-
-Hosts can have both a **Label** and a separate **Category**. Use labels for a human-friendly identity such as `Front Lobby` and categories for device type or role such as `AP`, `Firewall`, `Switch`, `Router`, `Server`, `Printer`, `Camera`, `UPS`, `Workstation`, or any custom value. On Windows, right-click a monitored host and choose **Set category...**. Category metadata is saved with the site configuration and is cleaned up automatically when an address is removed. Linux preserves the same category metadata in the shared config schema.
-
-### Hosts and Quick Add (Windows)
-
-Open **Hosts** beside the inventory or with Ctrl+Shift+H. Search names, addresses,
-sites, groups, and tags; select multiple rows to move sites, assign groups/tags,
-enable or disable monitoring, or apply monitoring policies. Edit names and policies
-in the table, then choose **Save Edits**. Zero for interval, timeout, or failure
-threshold inherits the application's monitoring defaults. Changes apply to active
-monitoring and autosave. Refresh reloads the inventory and current state.
-
-**Quick Add** accepts one address per line, comma-separated address lists,
-`Address,Label,Group` CSV (including quoted labels), tab-separated spreadsheet rows,
-IPv4 CIDR, and short ranges such as `192.168.1.10-25`. Paste from the clipboard,
-import/drop a text file, or enter a row manually. The editable preview retains
-invalid entries and flags existing addresses and label conflicts across sites.
-Only checked, valid, new rows are added; edit conflicting labels through Hosts.
-IPv6 individual addresses and DNS hostnames are supported. CIDR expansion is
-limited to 4,096 hosts, excluding network/broadcast addresses except /31 and /32.
-
-**Quick Monitor** creates a temporary troubleshooting site and starts monitoring.
-Temporary hosts are excluded from autosave and configuration export. In Hosts,
-select temporary rows and choose **Save Temporary Hosts** to move them into a new
-permanent site. Quick Monitor shares the existing monitoring engine; if monitoring
-is already running, its targets are added without restarting other workers.
-Existing configuration files remain compatible; per-host stable IDs and optional
-policies are populated as configurations are edited. Site/address identity remains
-the existing history key, so moving a host between sites starts a new live worker;
-prior events retain their original site and display label.
+Copyright © 2026 Joseph Luker. Official compiled releases are licensed for personal or internal business use. [License](LICENSE)

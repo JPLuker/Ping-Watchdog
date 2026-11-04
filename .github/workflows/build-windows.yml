@@ -192,9 +192,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Replace the updater restart-failure OK dialog with Retry restart and Later.
-          - Keep long restart errors readable and selectable, with Later as the safe keyboard default.
-          - Retry through the existing restart confirmation and unsaved-settings protection.
+          - Updated the bundled quick start with current host editing, monitoring, backup and update instructions.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
@@ -233,6 +231,18 @@ jobs:
           $required = @("PingWatchdog-$v-full.nupkg", "PingWatchdog-win-Setup.exe", "PingWatchdog-win-Portable.zip", "RELEASES", "releases.win.json")
           $missing = @($required | Where-Object { -not (Test-Path "Releases\$_") })
           if ($missing.Count -gt 0) { throw "Missing release assets: $($missing -join ', ')" }
+          $expectedGuide = (Get-FileHash README-FIRST.txt -Algorithm SHA256).Hash
+          foreach ($package in @("PingWatchdog-$v-full.nupkg", "PingWatchdog-win-Portable.zip")) {
+            $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path "Releases/$package").Path)
+            try {
+              $guides = @($archive.Entries | Where-Object { $_.Name -eq "README-FIRST.txt" })
+              if ($guides.Count -ne 1) { throw "Expected one quick start in $package." }
+              $stream = $guides[0].Open()
+              try { $actualGuide = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)) }
+              finally { $stream.Dispose() }
+              if ($actualGuide -ne $expectedGuide) { throw "Quick start differs from source in $package." }
+            } finally { $archive.Dispose() }
+          }
           $previous = & gh release list --repo "${{ github.repository }}" --limit 1 --json tagName --jq length
           $deltaNote = ""
           if (-not (Test-Path "Releases\PingWatchdog-$v-delta.nupkg") -and $previous -ne "0") {
