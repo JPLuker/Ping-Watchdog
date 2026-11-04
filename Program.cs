@@ -1845,8 +1845,10 @@ public sealed partial class MainForm : Form
                     review.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, ShowCommandView = true,
                         Sites = Enumerable.Range(1, 5).Select(site => new SiteDefinition {
                             Name = "Branch " + site,
-                            Hosts = Enumerable.Range(1, 5).Select(host => $"192.0.2.{site * 10 + host}").ToList(),
-                            Labels = new() { [$"192.0.2.{site * 10 + 2}"] = "Printer", [$"192.0.2.{site * 10 + 3}"] = "Cloudkey" }
+                            Hosts = Enumerable.Range(1, 5).Select(host => $"172.20.{site}.{20 + host}").ToList(),
+                            Labels = Enumerable.Range(1, 5).ToDictionary(host => $"172.20.{site}.{20 + host}",
+                                host => new[] { "Laptop", "Desktop", "Tablet", "Mini PC", "Server" }[host - 1] + " " +
+                                    new[] { "Ash", "Birch", "Cedar", "Maple", "Pine" }[(site + host - 2) % 5])
                         }).ToList() });
                     review.MaximumSize = new Size(1920, 1080);
                     review.Show(form);
