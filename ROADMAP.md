@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.21**.
+Current published Windows build: **v1.19.22**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -49,7 +49,7 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 
 ## 5. Public readiness
 
-- [ ] Current README/quick start/changelog/screenshots.
+- [x] Current README, packaged quick start, Windows changelog and screenshots (v1.19.22).
 - [ ] Privacy/network disclosure, SECURITY.md, issue templates, support and maintenance policy.
 - [ ] Truthful accessible landing page with tested Windows downloads.
 - [ ] Final confirmation of the existing proprietary license and required notices.
@@ -252,3 +252,9 @@ Windows run [41732966848](https://github.com/JPLuker/Ping-Watchdog/actions/runs/
 Issue #12 remains open: its report has no screenshot, and this identifies one concrete remaining OK dialog without proving it was the exact reported screen. Next: current README and packaged quick start, followed by public-release documentation; final hands-on updater and supporting-window acceptance remains pending.
 
 The v1.19.21 run completed successfully; latest-release installer, portable ZIP, full/delta packages, both feeds and checksums were verified.
+
+## Windows user documentation — 2026-11-04
+
+The README and packaged quick start cover adding hosts, temporary monitoring, List editing and Undo, priority alarms, snooze, backups, portable storage and daily updates. The README includes Map and List screenshots captured from v1.19.21 using sample hosts. CHANGELOG.md records recent Windows releases.
+
+[Windows run 41839121965](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41839121965) passed and verified the quick start in both the portable ZIP and full update package against the source file before publishing v1.19.22. Next: privacy/network disclosure, security reporting, support and maintenance policy, issue templates and third-party notices. Final manual acceptance remains open.
