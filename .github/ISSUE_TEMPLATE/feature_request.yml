@@ -1,0 +1,13 @@
+name: Feature request
+description: Describe a monitoring task you would like Ping Watchdog to support.
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What would make that task easier?

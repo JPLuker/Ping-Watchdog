@@ -83,6 +83,8 @@ jobs:
           Copy-Item default.pingwatch.json publish\default.pingwatch.json
           Copy-Item README-FIRST.txt publish\README-FIRST.txt
           Copy-Item LICENSE publish\LICENSE
+          python tools/collect_windows_notices.py publish/ThirdPartyNotices
+          if ($LASTEXITCODE -ne 0) { throw "Could not collect Windows notices." }
 
       - name: Smoke test published Windows app startup
         shell: pwsh
@@ -192,7 +194,7 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Updated the bundled quick start with current host editing, monitoring, backup and update instructions.
+          - Added third-party license and notice files to the Windows packages. Open them from Settings > About.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
@@ -235,6 +237,14 @@ jobs:
           foreach ($package in @("PingWatchdog-$v-full.nupkg", "PingWatchdog-win-Portable.zip")) {
             $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path "Releases/$package").Path)
             try {
+              $index = @($archive.Entries | Where-Object { $_.FullName.Replace('\','/') -match '(^|/)ThirdPartyNotices/INDEX.txt$' })
+              if ($index.Count -ne 1) { throw "Missing notice inventory in $package." }
+              $prefix = $index[0].FullName.Replace('\','/') -replace 'INDEX.txt$',''
+              $names = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\','/') })
+              foreach ($file in Get-ChildItem publish/ThirdPartyNotices -Recurse -File) {
+                $relative = [IO.Path]::GetRelativePath((Resolve-Path publish/ThirdPartyNotices).Path, $file.FullName).Replace('\','/')
+                if ($names -notcontains ($prefix + $relative)) { throw "Missing $relative in $package." }
+              }
               $guides = @($archive.Entries | Where-Object { $_.Name -eq "README-FIRST.txt" })
               if ($guides.Count -ne 1) { throw "Expected one quick start in $package." }
               $stream = $guides[0].Open()

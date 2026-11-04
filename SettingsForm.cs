@@ -514,7 +514,20 @@ internal sealed class SettingsForm : Form
             FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Margin = new Padding(0)
         };
+        var notices = new AuroraButton { Text = "Open third-party notices", AutoSize = true };
+        notices.Click += (_, _) =>
+        {
+            string folder = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices");
+            try
+            {
+                if (!File.Exists(Path.Combine(folder, "INDEX.txt")))
+                    throw new FileNotFoundException("This copy has no packaged notice folder.");
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
+            }
+            catch (Exception ex) { status.Text = "Could not open notices: " + ex.Message; }
+        };
         actions.Controls.Add(license);
+        actions.Controls.Add(notices);
         actions.Controls.Add(issue);
         actions.Controls.Add(diagnostics);
         actions.Controls.Add(status);

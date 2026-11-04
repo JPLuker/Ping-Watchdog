@@ -42,11 +42,28 @@ To restore, stop monitoring, close other copies, then choose **Restore backup…
 
 The portable ZIP uses per-user storage by default. Choose **Enable portable storage…** in the portable copy to move future saves into its package folder. The original per-user files are retained. [Portable storage guide](PORTABLE-AND-DELETION.md)
 
+## Privacy and network connections
+
+Ping Watchdog for Windows stores saved hosts, labels, preferences, snooze deadlines and outage history on the PC. Startup failures can leave local reports with exception details and file paths. Find the active folder under **Settings → Data and storage**. Complete backups include inventory and history in unencrypted JSON. Windows notifications can show host details on the desktop.
+
+| Destination | When a connection happens | What the destination receives |
+| --- | --- | --- |
+| Configured IP addresses and hostnames | While monitoring, including automatic startup if enabled, or when running a command-window ping or exported batch | ICMP echo requests and the source address visible to the target |
+| Your configured name-resolution service | When Windows resolves a hostname and needs a network lookup | The hostname being resolved |
+| GitHub release services, including api.github.com, github.com and redirected asset hosts | Automatic or manual update checks and package downloads, including a manually requested check from startup recovery | Requests for this repository's releases, update feed or package, ordinary connection metadata and the requesting IP address |
+| GitHub in your browser | When you choose Report an issue or Open downloads | The page request and normal browser metadata. Anything you submit to GitHub is your choice. |
+
+The app requires no account and has no application analytics or automatic crash-report upload. About lets you review diagnostic text before copying it. Review paths and usernames before posting that text. Microsoft's Windows App SDK terms separately describe possible SDK diagnostics. [Microsoft terms](docs/licenses/WindowsAppSDK-2.4.0.txt)
+
+Turn off automatic checks in **Settings → Updates**. To remove active saved data, stop monitoring and use **Settings → Data and storage**. External exports and inactive storage copies must be removed separately. [Deletion scope](PORTABLE-AND-DELETION.md)
+
 ## Updates and support
 
 Use **Check for updates** in the sidebar or **Settings → Updates**. When automatic checks are enabled, Ping Watchdog checks at most once a day and downloads available updates in the background. Choose **Restart now** to apply a downloaded update, or **Later** to keep working. A failed restart offers **Retry restart**. An organization policy can disable update checks.
 
 For a problem report, include the version from **Settings → About**, your Windows version and the steps that reproduce it. You can review diagnostic information in About before copying it. [Report an issue](https://github.com/JPLuker/Ping-Watchdog/issues) · [Changelog](CHANGELOG.md)
+
+For support, maintenance scope and private security reporting, see the project policies. [Support](SUPPORT.md) · [Security](SECURITY.md) · [Third-party notices](THIRD-PARTY-NOTICES.md)
 
 ## Build and test
 

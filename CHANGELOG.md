@@ -2,6 +2,10 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.23
+
+- Added packaged third-party notices with access from Settings → About.
+
 ## 1.19.22
 
 - Updated the packaged quick start for the current Windows interface and updater.
