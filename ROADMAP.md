@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.22**.
+Current published Windows build: **v1.19.23**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -50,7 +50,8 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 ## 5. Public readiness
 
 - [x] Current README, packaged quick start, Windows changelog and screenshots (v1.19.22).
-- [ ] Privacy/network disclosure, SECURITY.md, issue templates, support and maintenance policy.
+- [x] Windows privacy/network disclosure, SECURITY.md, issue forms and support/maintenance policy (v1.19.23).
+- [ ] Enable and verify GitHub private vulnerability reporting. The reporting guide documents requesting a private channel while reporting is disabled.
 - [ ] Truthful accessible landing page with tested Windows downloads.
 - [ ] Final confirmation of the existing proprietary license and required notices.
 
@@ -258,3 +259,9 @@ The v1.19.21 run completed successfully; latest-release installer, portable ZIP,
 The README and packaged quick start cover adding hosts, temporary monitoring, List editing and Undo, priority alarms, snooze, backups, portable storage and daily updates. The README includes Map and List screenshots captured from v1.19.21 using sample hosts. CHANGELOG.md records recent Windows releases.
 
 [Windows run 41839121965](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41839121965) passed and verified the quick start in both the portable ZIP and full update package against the source file before publishing v1.19.22. Next: privacy/network disclosure, security reporting, support and maintenance policy, issue templates and third-party notices. Final manual acceptance remains open.
+
+## Public release materials — 2026-11-04
+
+v1.19.23 adds public support, security and privacy documentation, issue forms and packaged third-party attribution accessible from Settings → About. [Windows validation and packaging](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41840460522) passed. The build inventoried 21 resolved packages and verified the notice inventory and collected files in the portable ZIP and full updater package. The installer, ZIP, full/delta packages, feeds and checksums were published. The About action was visually inspected in both themes.
+
+License review distinguished Microsoft binary distribution terms from MIT components. The SDK BuildTools and SDK.NET.Ref packages point to Microsoft's Windows SDK license URL in their NuGet metadata. Velopack's full MIT license and vendor attribution are supplied from its pinned upstream tag. Windows App SDK section 3 covers distribution conditions including end-user terms. Owner confirmation of final proprietary licensing and acceptance of applicable distribution terms remains open. Private vulnerability reporting was disabled on the last check. Next build milestone: the download page.
