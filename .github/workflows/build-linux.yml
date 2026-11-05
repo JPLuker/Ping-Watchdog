@@ -40,19 +40,6 @@ jobs:
         shell: bash
         run: dotnet tool install --tool-path ./.tools vpk --version 1.2.161
 
-      - name: Use Linux beta update channel
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('linux/PingWatchdog.Linux/Core.cs')
-          text = path.read_text(encoding='utf-8')
-          old = 'prerelease: false'
-          if old not in text:
-              raise SystemExit('Linux updater prerelease marker not found.')
-          path.write_text(text.replace(old, 'prerelease: true', 1), encoding='utf-8')
-          PY
-
       - name: Validate starter config
         shell: bash
         run: |
@@ -110,28 +97,10 @@ jobs:
           cat > release-notes-linux.md <<EOF
           # Ping Watchdog $WATCHDOG_VERSION for Linux
 
-          Native Linux x64 AppImage powered by Avalonia.
-
-          - Windows-aligned main window, tables, Settings navigation, Organization tree, and radial Wallboard.
-          - Common presentation code compiled by Windows and Linux to keep visual updates aligned.
-          - Desktop regressions across X11 rendering scales and the optional native Wayland backend.
-          - Injected outage/recovery tests and safe handling of late probes after Stop or host removal.
-          - Same Ping Watchdog site/config schema as Windows.
-          - Multi-site ICMP monitoring with DOWN / SUSPECT / RECOVERED state logic.
-          - Live site/host edits while monitoring.
-          - Edit/clear host labels from the live host list and context menu.
-          - Native configuration import/export, preserving folders, labels, preferences, and outage history.
-          - Linux system tray menu and minimize preference with a safe taskbar fallback.
-          - Incremental CLI trace rows: successful replies green, failures red, optional live following.
-          - Stable host/site rows preserve selection and scroll during live updates.
-          - Nested site folders, organization view, full persistent outage history, filters, and filtered CSV export.
-          - Fullscreen Wallboard with scoped, scrollable topology and explicit host overflow counts.
-          - Wallboard site operations, stable live host list, label actions, timing controls, native config import/export, and outage/history panels.
-          - Watchdog branding, monitor cycling, and keyboard controls with safe text-entry behavior.
-          - Settings and background GitHub update checks on the Linux beta channel.
-          - Linux desktop notifications through notify-send when available.
-          - Self-contained .NET runtime; no separate .NET installation required.
-          - Copyright © 2026 Joseph Luker. All rights reserved.
+          - Edit or clear a selected host's label directly in the main list.
+          - Wallboard uses the full window. Press O or right-click for Operations; Esc or F11 returns to Main.
+          - The site sidebar opens with All Sites.
+          - The updater uses the Linux beta feed and offers Restart now or Later.
           EOF
 
       - name: Download previous Linux Velopack release
@@ -162,6 +131,20 @@ jobs:
             --releaseNotes release-notes-linux.md \
             --channel linux \
             --outputDir Releases-linux
+
+      - name: Exercise the packaged AppImage
+        shell: bash
+        run: |
+          image="$PWD/Releases-linux/PingWatchdog.AppImage"
+          chmod +x "$image"
+          test -s "Releases-linux/releases.linux.json"
+          scratch=$(mktemp -d)
+          trap 'rm -rf "$scratch"' EXIT
+          cd "$scratch"
+          "$image" --appimage-extract >/dev/null
+          export XDG_CONFIG_HOME="$scratch/config" XDG_STATE_HOME="$scratch/state"
+          timeout 60s ./squashfs-root/AppRun --self-test
+          timeout 120s dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c 'openbox >/tmp/watchdog-packaged-openbox.log 2>&1 & ./squashfs-root/AppRun --ui-regression-test'
 
       - name: Upload Linux build artifact
         uses: actions/upload-artifact@v4

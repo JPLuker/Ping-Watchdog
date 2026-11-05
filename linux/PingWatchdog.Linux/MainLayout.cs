@@ -39,9 +39,8 @@ internal sealed partial class MainWindow
         Grid.SetColumn(actions, 1); header.Children.Add(actions); root.Children.Add(header);
         var workspace = new Grid { ColumnDefinitions = new ColumnDefinitions { _navigationColumn, new(GridLength.Star) } };
         Grid.SetRow(workspace, 1);
-        var nav = new Grid { RowDefinitions = new RowDefinitions("38,*,38,38,38,38"), Background = Theme.Brush(Presentation.Navigation) };
-        var navContent = new Grid { RowDefinitions = new RowDefinitions("38,*,38,38,38,38"), Margin = new Thickness(12, 14, 10, 14) };
-        navContent.Children.Add(Theme.Label("Sites", 14, FontWeight.SemiBold));
+        var nav = new Grid { Background = Theme.Brush(Presentation.Navigation) };
+        var navContent = new Grid { RowDefinitions = new RowDefinitions("*,38,38,38,38"), Margin = new Thickness(12, 14, 10, 14) };
         _siteList.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = {
             new Setter(ListBoxItem.BackgroundProperty, Theme.Brush("#121820")), new Setter(ListBoxItem.MinHeightProperty, 36d),
             new Setter(ListBoxItem.BorderThicknessProperty, new Thickness(1)), new Setter(ListBoxItem.BorderBrushProperty, Avalonia.Media.Brushes.Transparent),
@@ -51,14 +50,14 @@ internal sealed partial class MainWindow
             new Setter(ListBoxItem.BackgroundProperty, Theme.Brush("#1A485B")), new Setter(ListBoxItem.BorderBrushProperty, Theme.Cyan)
         } });
         _siteList.Background = Theme.Brush(Presentation.Navigation); _siteList.BorderThickness = new Thickness(0); _siteList.FontSize = 13.3;
-        Grid.SetRow(_siteList, 1); navContent.Children.Add(_siteList);
+        Grid.SetRow(_siteList, 0); navContent.Children.Add(_siteList);
         var add = Theme.Button("+ Add Site", true); add.Click += async (_, _) => await AddSiteAsync();
         var organize = Theme.Button("Organize"); organize.Click += (_, _) => OpenOrganization();
         var rename = Theme.Button("Rename Site"); rename.Click += async (_, _) => await RenameSiteAsync();
         var delete = Theme.Button("Delete Site"); delete.Background = Theme.Brush("#391C22"); delete.Click += async (_, _) => await DeleteSiteAsync();
-        int navRow = 2;
+        int navRow = 1;
         foreach (var b in new[] { add, organize, rename, delete }) { b.Margin = new Thickness(0, 3); b.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(b, navRow++); navContent.Children.Add(b); }
-        Grid.SetRowSpan(navContent, 6); nav.Children.Add(navContent); workspace.Children.Add(nav);
+        nav.Children.Add(navContent); workspace.Children.Add(nav);
         var right = new Grid { RowDefinitions = new RowDefinitions("76,Auto,Auto,*"), Margin = new Thickness(16, 14, 16, 14) };
         Grid.SetColumn(right, 1);
         var stats = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
@@ -83,10 +82,13 @@ internal sealed partial class MainWindow
         Grid.SetColumn(monitoring, 1); timing.Children.Add(monitoring);
         var timingBorder = Theme.CardBorder(timing, new Thickness(0, 0, 0, 10)); timingBorder.BorderThickness = new Thickness(0); timingBorder.Padding = new Thickness(14, 10, 12, 10);
         Grid.SetRow(timingBorder, 2); right.Children.Add(timingBorder);
-        var live = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
-        _hostTable = new HostTableView(_hostList); live.Children.Add(_hostTable);
+        var live = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
+        var hostActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
+            Children = { _editLabel, _clearLabel } };
+        live.Children.Add(hostActions);
+        _hostTable = new HostTableView(_hostList); Grid.SetRow(_hostTable, 1); live.Children.Add(_hostTable);
         _commandBox.Height = 160; _commandBox.Margin = new Thickness(0, 8, 0, 0);
-        Grid.SetRow(_commandBox, 1); live.Children.Add(_commandBox);
+        Grid.SetRow(_commandBox, 2); live.Children.Add(_commandBox);
         Grid.SetRow(live, 3); right.Children.Add(live);
         workspace.Children.Add(right); root.Children.Add(workspace);
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Brush("#0B1017") };
