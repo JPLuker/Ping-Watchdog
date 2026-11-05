@@ -1107,7 +1107,7 @@ internal sealed partial class WallboardCanvas : Control
         DrawBackground(g);
         DrawHeader(g, snapshot);
 
-        int headerBandHeight = Embedded ? 40 : 112;
+        int headerBandHeight = Embedded ? (snapshot.Monitoring ? 40 : 0) : 112;
         int statsTop = headerBandHeight;
         int statsHeight = 0;
 
@@ -1218,7 +1218,7 @@ internal sealed partial class WallboardCanvas : Control
             $"{hosts.Count(h => h.State == HostState.Offline)} offline";
         if (Embedded)
         {
-            g.DrawString(snapshot.Monitoring ? summary : "Sites and hosts", _sectionFont, brandBrush, 0, 8);
+            if (snapshot.Monitoring) g.DrawString(summary, _sectionFont, brandBrush, 0, 8);
             return;
         }
         g.DrawString(summary, _sectionFont, brandBrush, 24, 32);

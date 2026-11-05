@@ -15,9 +15,9 @@ public sealed partial class MainForm
     private FlowLayoutPanel? _filterBar;
     private FlowLayoutPanel? _selectionBar;
     private readonly Label _selectionCount = new() { AutoSize = true, Tag = "primaryText", Font = AuroraTheme.LabelFont, Padding = new Padding(4, 10, 12, 0) };
-    private readonly AuroraButton _priorityAction = new() { AutoSize = true };
-    private readonly AuroraButton _enableAction = new() { AutoSize = true };
-    private readonly AuroraButton _keepAction = new() { Text = "Keep in a site…", AutoSize = true };
+    private string _priorityActionText = "Mark as priority";
+    private string _enableActionText = "Disable";
+    private bool _canKeepSelection;
     private Panel? _undoBar;
     private readonly Label _undoMessage = new() { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Tag = "primaryText", AutoEllipsis = true };
     private List<SiteDefinition>? _undoSites;
@@ -43,26 +43,10 @@ public sealed partial class MainForm
             _filterBar.Controls.Add(chip);
         }
         _selectionBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Visible = false, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 4) };
-        _priorityAction.Click += (_, _) => TogglePriorityForSelection();
-        _enableAction.Click += (_, _) => ToggleEnabledForSelection();
-        _keepAction.Click += (_, _) => KeepSelectionInSite();
-        var move = new AuroraButton { Text = "Move to site…", AutoSize = true };
-        move.Click += (_, _) => MoveSelectionToSite();
-        var group = new AuroraButton { Text = "Set group…", AutoSize = true };
-        group.Click += (_, _) => SetGroupForSelection();
-        var policy = new AuroraButton { Text = "Monitoring…", AutoSize = true };
-        policy.Click += (_, _) => SetMonitoringForSelection();
-        var remove = new AuroraButton { Text = "Remove…", AutoSize = true, Destructive = true, Ghost = true };
-        remove.Click += (_, _) => RemoveSelection();
         var clear = new AuroraButton { Text = "Clear selection", AutoSize = true, Ghost = true };
         clear.Click += (_, _) => _grid.ClearSelection();
-        _hostActionsButton.Click += (_, _) =>
-        {
-            var selected = SelectedManagedHosts();
-            if (selected.Count == 1)
-                ShowHostQuickActions(_hostActionsButton, new Point(0, _hostActionsButton.Height), selected[0].Site, selected[0].Address);
-        };
-        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, _hostActionsButton, _priorityAction, _enableAction, move, group, policy, _keepAction, remove, clear });
+        _hostActionsButton.Click += (_, _) => ShowSelectionMenu(_hostActionsButton, new Point(0, _hostActionsButton.Height));
+        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, _hostActionsButton, clear });
         // Dock Top stacks the last-added control highest: filters first, the action bar beneath.
         _listHeader.Controls.Add(_selectionBar);
         _listHeader.Controls.Add(_filterBar);
@@ -158,12 +142,12 @@ public sealed partial class MainForm
     {
         if (_refreshingHostRows || _selectionBar is null || _filterBar is null) return;
         var selected = SelectedManagedHosts();
-        _hostActionsButton.Enabled = selected.Count == 1;
+        _hostActionsButton.Enabled = selected.Count > 0;
         bool any = selected.Count > 0;
         _selectionCount.Text = selected.Count == 1 ? "1 host selected" : $"{selected.Count} hosts selected";
-        _priorityAction.Text = any && selected.All(h => h.Options.Priority) ? "Remove priority" : "Mark as priority";
-        _enableAction.Text = any && selected.All(h => h.Options.Enabled) ? "Disable" : "Enable";
-        _keepAction.Visible = selected.Any(h => FindSite(h.Site)?.Temporary == true);
+        _priorityActionText = any && selected.All(h => h.Options.Priority) ? "Remove priority" : "Mark as priority";
+        _enableActionText = any && selected.All(h => h.Options.Enabled) ? "Disable" : "Enable";
+        _canKeepSelection = selected.Any(h => FindSite(h.Site)?.Temporary == true);
         if (_selectionMode != any)
         {
             _selectionMode = any;
@@ -339,8 +323,15 @@ public sealed partial class MainForm
         });
     }
 
-    private void ShowSelectionMenu(Point location)
+    private void ShowSelectionMenu(Control anchor, Point location)
     {
+        var hosts = SelectedManagedHosts();
+        if (hosts.Count == 0) return;
+        if (hosts.Count == 1)
+        {
+            ShowHostQuickActions(anchor, location, hosts[0].Site, hosts[0].Address);
+            return;
+        }
         var menu = _hostQuickMenu;
         menu.Close();
         foreach (var item in menu.Items.Cast<ToolStripItem>().ToArray()) item.Dispose();
@@ -348,16 +339,16 @@ public sealed partial class MainForm
         menu.ShowImageMargin = false; menu.ShowCheckMargin = false;
         UpdateSelectionBar();
         menu.Items.Add(new ToolStripMenuItem(_selectionCount.Text) { Enabled = false });
-        menu.Items.Add(_priorityAction.Text, null, (_, _) => TogglePriorityForSelection());
-        menu.Items.Add(_enableAction.Text, null, (_, _) => ToggleEnabledForSelection());
+        menu.Items.Add(_priorityActionText, null, (_, _) => TogglePriorityForSelection());
+        menu.Items.Add(_enableActionText, null, (_, _) => ToggleEnabledForSelection());
         menu.Items.Add("Move to site…", null, (_, _) => MoveSelectionToSite());
         menu.Items.Add("Set group…", null, (_, _) => SetGroupForSelection());
         menu.Items.Add("Monitoring…", null, (_, _) => SetMonitoringForSelection());
-        if (_keepAction.Visible) menu.Items.Add("Keep in a site…", null, (_, _) => KeepSelectionInSite());
+        if (_canKeepSelection) menu.Items.Add("Keep in a site…", null, (_, _) => KeepSelectionInSite());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Remove…", null, (_, _) => RemoveSelection());
         AuroraTheme.ApplyMenu(menu);
-        menu.Show(_grid, location);
+        menu.Show(anchor, location);
     }
 
     private static HostOptions WithOptions(HostOptions value, Action<HostOptions> edit) { var copy = value.Copy(); edit(copy); return copy; }
@@ -400,7 +391,7 @@ public sealed partial class MainForm
         UpdateSelectionBar();
     }
     internal int VisibleHostRows => _grid.Rows.Count;
-    internal string PriorityActionText => _priorityAction.Text;
+    internal string PriorityActionText => _priorityActionText;
     internal bool SelectionBarShowing => _selectionMode;
     // On a shown window: chips visible above the action bar, and the header tall enough for both.
     internal bool FiltersShownWithSelection =>

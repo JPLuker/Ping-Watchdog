@@ -37,14 +37,6 @@ public sealed partial class MainForm
         _updateToastTimer = new System.Windows.Forms.Timer { Interval = 6000 };
         _updateToastTimer.Tick += (_, _) => { _updateToastTimer.Stop(); if (_updateToast != null) _updateToast.Visible = false; };
         _updateToast.Disposed += (_, _) => _updateToastTimer?.Dispose();
-        _updateToast.Resize += (_, _) =>
-        {
-            if (_updateToast.Width < 1 || _updateToast.Height < 1) return;
-            using var shape = WallboardStyle.Rounded(_updateToast.ClientRectangle, AuroraTheme.RadiusCard);
-            var previous = _updateToast.Region;
-            _updateToast.Region = new Region(shape);
-            previous?.Dispose();
-        };
     }
 
     private void SetUpdateStatus(string text, bool notify = false, bool persistent = false)
@@ -82,15 +74,46 @@ internal sealed class UpdateToastPanel : Panel
         ResizeRedraw = true;
     }
 
+    private int CornerRadius => Math.Max(1, LogicalToDeviceUnits(AuroraTheme.RadiusCard));
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ClipCorners();
+    }
+
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        ClipCorners();
+    }
+
+    protected override void OnDpiChangedAfterParent(EventArgs e)
+    {
+        base.OnDpiChangedAfterParent(e);
+        ClipCorners();
+    }
+
+    private void ClipCorners()
+    {
+        if (Width <= 0 || Height <= 0) return;
+        using var shape = WallboardStyle.Rounded(ClientRectangle, CornerRadius);
+        Region = new Region(shape);
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
         var bounds = ClientRectangle;
-        bounds.Inflate(-2, -2);
+        bounds.Inflate(-1, -1);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var edge = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusCard);
-        using var pen = new Pen(SystemInformation.HighContrast ? SystemColors.WindowText : AuroraTheme.Palette.Accent, 2);
+        using var edge = WallboardStyle.Rounded(bounds, Math.Max(1, CornerRadius - 1));
+        var palette = AuroraTheme.Palette;
+        var edgeColor = SystemInformation.HighContrast ? SystemColors.WindowText :
+            Color.FromArgb((3 * BackColor.R + palette.Text.R) / 4,
+                (3 * BackColor.G + palette.Text.G) / 4, (3 * BackColor.B + palette.Text.B) / 4);
+        using var pen = new Pen(edgeColor, Math.Max(1, LogicalToDeviceUnits(1)));
         e.Graphics.DrawPath(pen, edge);
     }
 }

@@ -194,10 +194,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Kept List rows and selection steady while ping results update.
-          - Added visible host actions in List and an Edit in host list action from the map.
-          - Grouped saved and temporary host adding under Add hosts.
-          - Separated the update popup from the map and removed the redundant Sites heading.
+          - Grouped single-host and bulk commands under Host actions to leave more room for the list.
+          - Removed the redundant idle map heading and its empty space.
+          - Softened the update popup border and clipped its corners on first display.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

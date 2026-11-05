@@ -1814,6 +1814,11 @@ public sealed partial class MainForm : Form
                     new(editSite, "192.0.2.202", "Edit B", "", new HostOptions(), "Unknown") }, false);
                 form.SetHostFilter(HostFilter.All);
                 form.SelectHostsForTest("192.0.2.201", "192.0.2.202");
+                form._hostActionsButton.PerformClick();
+                var bulkCommands = form._hostQuickMenu.Items.Cast<ToolStripItem>().Select(item => item.Text).ToList();
+                Check(form._hostQuickMenu.Visible && bulkCommands.Contains("Move to site…") &&
+                    !bulkCommands.Contains("Copy address"), "Host actions did not offer bulk operations for two hosts.");
+                form._hostQuickMenu.Close();
                 Check(form.PriorityActionText == "Mark as priority", $"Action read '{form.PriorityActionText}'.");
                 form.TogglePriorityForTest();
                 bool BothPriority() => form.HostSnapshot().Where(h => h.Address is "192.0.2.201" or "192.0.2.202").All(h => h.Options.Priority);
@@ -1907,6 +1912,11 @@ public sealed partial class MainForm : Form
                             "Internal update status is missing or outside the application.");
                         await Task.Delay(200);
                         review._updateToast!.Update();
+                        var clip = review._updateToast.Region;
+                        Check(clip != null && !clip.IsVisible(0, 0) &&
+                            !clip.IsVisible(review._updateToast.Width - 1, review._updateToast.Height - 1) &&
+                            clip.IsVisible(review._updateToast.Width / 2, review._updateToast.Height / 2),
+                            "Popup did not clip its corners on first display.");
                         Check(review._updateToast.BackColor != AuroraTheme.Palette.Surface,
                             "Update popup uses the map card surface.");
                         Check(AuroraTheme.ContrastRatio(AuroraTheme.Palette.Text, review._updateToast.BackColor) >= 4.5,
@@ -3080,7 +3090,7 @@ public sealed partial class MainForm : Form
         // Right-clicking inside a multi-selection acts on all of it.
         if (_grid.Rows[e.RowIndex].Selected && _grid.SelectedRows.Count > 1)
         {
-            ShowSelectionMenu(_grid.PointToClient(Cursor.Position));
+            ShowSelectionMenu(_grid, _grid.PointToClient(Cursor.Position));
             return;
         }
 

@@ -15,7 +15,7 @@ Working with hosts
   Right-click a map host and choose Edit in host list to select it in List.
   Select rows for bulk actions. F2 renames a host. Ctrl+Z undoes a List
   edit while Undo is available (eight seconds).
-- Add hosts > Monitor temporarily starts a temporary session. Use Keep in a site
+- Add hosts > Monitor temporarily starts a temporary session. Use Host actions > Keep in a site
   in List to save temporary hosts.
 - Select a row and choose Host actions, or right-click a host, to snooze it
   for one hour. Its probes, live log and
