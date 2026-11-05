@@ -277,3 +277,14 @@ Windows run [41732966848](https://github.com/JPLuker/Ping-Watchdog/actions/runs/
 Issue #12 remains open: its report has no screenshot, and this identifies one concrete remaining OK dialog without proving it was the exact reported screen. Next: current README and packaged quick start, followed by public-release documentation; final hands-on updater and supporting-window acceptance remains pending.
 
 The v1.19.21 run completed successfully; latest-release installer, portable ZIP, full/delta packages, both feeds and checksums were verified.
+
+
+## Usage-test fixes and public page — 2026-11-04
+
+v1.19.24 addresses #25. List updates changed cells without replacing unchanged rows or clearing/restoring their selection. Changed membership still rebuilds the visible set and restores selection by site/address. A double-buffered table reduces erase/repaint flicker. Add hosts groups saved and temporary monitoring. List exposes Host actions, and Map/Wallboard hosts can open their selected row via Edit in host list. All sites and Add site share one row without the redundant Sites heading. The update popup uses an opaque elevated surface and visible accent edge.
+
+[PR validation 41947990003](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41947990003) passed core and UI tests, including row identity, no selection churn, retained scroll position, filters/Undo, direct host navigation and popup text contrast. Light/dark host-action and standalone popup captures and the narrow main layout were inspected. Full-window DrawToBitmap captures omit overlapping panels, so desktop popup composition remains a hands-on check.
+
+[Release run 41948392625](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41948392625) passed published startup/UI, isolated recovery, packaged guide/notice verification and publication. Installer, portable ZIP, full/delta packages, both update feeds and SHA256SUMS.txt are published. Final human acceptance remains open; #25 stays available for confirmation or further usage reports.
+
+The public GitHub Pages deployment succeeded and the finished page was fetched successfully at https://jpluker.github.io/Ping-Watchdog/. Joseph accepted the page design. Next: test these usage fixes on Windows, then finish exact-candidate upgrade/accessibility/workday acceptance and owner licensing/security items in #4.

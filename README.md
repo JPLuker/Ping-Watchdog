@@ -4,6 +4,8 @@ Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices 
 
 ## Download
 
+[Ping Watchdog website](https://jpluker.github.io/Ping-Watchdog/)
+
 For Windows x64, run the [installer](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Setup.exe) or extract the [portable ZIP](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Portable.zip) and open `PingWatchdog.exe`. Both include the .NET runtime. The Windows builds are unsigned. To verify a download, compare its PowerShell `Get-FileHash` result with the matching filename in the release's [SHA256SUMS.txt](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/SHA256SUMS.txt).
 
 Linux has a separate beta and installation guide. [Linux beta](README-LINUX.md)

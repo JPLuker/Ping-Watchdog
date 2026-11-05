@@ -1,6 +1,6 @@
 # Ping Watchdog roadmap to maintenance
 
-Current published Windows build: **v1.19.23**.
+Current published Windows build: **v1.19.24**.
 Proposed final maintenance release: **v1.20.0**, subject to acceptance and intervening version bumps.
 Current stage: config/preference protection, Settings save feedback, host keyboard/accessibility, snooze correction and About/support information implemented. Complete backup/restore and data-folder access are implemented. Portable storage and confirmed deletion are implemented. The map handles many sites without overlap and the History font floor is met. Remaining supporting UI, release work and manual acceptance remain open.
 
@@ -52,7 +52,7 @@ The accepted dashboard and connected topology remain the visual baseline. Wallbo
 - [x] Current README, packaged quick start, Windows changelog and screenshots (v1.19.22).
 - [x] Windows privacy/network disclosure, SECURITY.md, issue forms and support/maintenance policy (v1.19.23).
 - [ ] Enable and verify GitHub private vulnerability reporting. The reporting guide documents requesting a private channel while reporting is disabled.
-- [ ] Truthful accessible landing page with tested Windows downloads.
+- [x] Landing page with reviewed light/dark screenshots and tested Windows downloads; public at https://jpluker.github.io/Ping-Watchdog/. Physical accessibility acceptance remains part of final review.
 - [ ] Final confirmation of the existing proprietary license and required notices.
 
 ## 6. Candidate acceptance and final release
@@ -265,3 +265,14 @@ The README and packaged quick start cover adding hosts, temporary monitoring, Li
 v1.19.23 adds public support, security and privacy documentation, issue forms and packaged third-party attribution accessible from Settings → About. [Windows validation and packaging](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41840460522) passed. The build inventoried 21 resolved packages and verified the notice inventory and collected files in the portable ZIP and full updater package. The installer, ZIP, full/delta packages, feeds and checksums were published. The About action was visually inspected in both themes.
 
 License review distinguished Microsoft binary distribution terms from MIT components. The SDK BuildTools and SDK.NET.Ref packages point to Microsoft's Windows SDK license URL in their NuGet metadata. Velopack's full MIT license and vendor attribution are supplied from its pinned upstream tag. Windows App SDK section 3 covers distribution conditions including end-user terms. Owner confirmation of final proprietary licensing and acceptance of applicable distribution terms remains open. Private vulnerability reporting was disabled on the last check. Next build milestone: the download page.
+
+
+## Usage-test fixes and public page — 2026-11-04
+
+v1.19.24 addresses #25. List updates changed cells without replacing unchanged rows or clearing/restoring their selection. Changed membership still rebuilds the visible set and restores selection by site/address. A double-buffered table reduces erase/repaint flicker. Add hosts groups saved and temporary monitoring. List exposes Host actions, and Map/Wallboard hosts can open their selected row via Edit in host list. All sites and Add site share one row without the redundant Sites heading. The update popup uses an opaque elevated surface and visible accent edge.
+
+[PR validation 41947990003](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41947990003) passed core and UI tests, including row identity, no selection churn, retained scroll position, filters/Undo, direct host navigation and popup text contrast. Light/dark host-action and standalone popup captures and the narrow main layout were inspected. Full-window DrawToBitmap captures omit overlapping panels, so desktop popup composition remains a hands-on check.
+
+[Release run 41948392625](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41948392625) passed published startup/UI, isolated recovery, packaged guide/notice verification and publication. Installer, portable ZIP, full/delta packages, both update feeds and SHA256SUMS.txt are published. Final human acceptance remains open; #25 stays available for confirmation or further usage reports.
+
+The public GitHub Pages deployment succeeded and the finished page was fetched successfully at https://jpluker.github.io/Ping-Watchdog/. Joseph accepted the page design. Next: test these usage fixes on Windows, then finish exact-candidate upgrade/accessibility/workday acceptance and owner licensing/security items in #4.
