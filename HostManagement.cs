@@ -149,6 +149,12 @@ public sealed partial class MainForm
             var options = current.Options.Copy(); options.Enabled = !options.Enabled;
             ApplyHostEdit(() => { SaveManagedHosts(new() { current with { Options = options } }); return (options.Enabled ? "Enabled " : "Disabled ") + shown; });
         });
+        if (surface == _grid || surface == _hostActionsButton)
+        {
+            Add("Move to site…", MoveSelectionToSite);
+            Add("Monitoring…", SetMonitoringForSelection);
+            if (FindSite(site)?.Temporary == true) Add("Keep in a site…", KeepSelectionInSite);
+        }
         menu.Items.Add(new ToolStripSeparator());
         Add("Remove host…", () =>
         {

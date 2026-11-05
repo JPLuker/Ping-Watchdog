@@ -2,6 +2,12 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.25
+
+- Grouped single-host and bulk commands under Host actions to leave more room for the list.
+- Removed the redundant idle map heading and its empty space.
+- Softened the update popup border and clipped its corners on first display.
+
 ## 1.19.24
 
 - Kept List rows and selection steady while ping results update.
