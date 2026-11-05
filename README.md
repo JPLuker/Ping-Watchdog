@@ -10,10 +10,10 @@ Linux has a separate beta and installation guide. [Linux beta](README-LINUX.md)
 
 ## Run your first monitor
 
-1. Click **Add hosts**. Enter a hostname or IP address you expect to answer ping, or paste several addresses on separate lines.
+1. Choose **Add hosts → Save hosts to a site…**. Enter a hostname or IP address you expect to answer ping, or paste several addresses on separate lines.
 2. Under **Site**, select an existing site or type a new name. Review the preview, check the hosts you want, then click **Add hosts** to save them.
 3. Click **Start monitoring**. Select a site in the sidebar to narrow the view, or choose **All sites** for the whole inventory. Enable **Show ping log** to see individual attempts.
-4. For a temporary check, choose **More → Quick monitor…**, enter the targets, and click **Start quick monitor**. To save temporary hosts, select them in **List** and choose **Keep in a site**.
+4. For a temporary check, choose **Add hosts → Monitor temporarily…**, enter the targets, and click **Start quick monitor**. To save temporary hosts, select them in **List** and choose **Keep in a site**.
 
 The default interval is two seconds with a one-second timeout. Three consecutive failures declare an outage and two consecutive replies declare recovery. A suspect host has missed a reply but has not reached its outage threshold. To change these defaults, stop monitoring and open **Settings → Monitoring**.
 
@@ -23,7 +23,7 @@ The default interval is two seconds with a one-second timeout. Three consecutive
 
 ![Dark Map view showing five sites with five example hosts each](docs/screenshots/map-dark.png)
 
-**List** lets you search, filter and edit hosts. Select one or more rows to move hosts, change their group, mark them as priority, or disable them. Press **F2** to rename a selected host. List edits save immediately and offer an eight-second Undo with **Ctrl+Z**. In Settings, use **Save changes** to apply a draft.
+**List** lets you search, filter and edit hosts. Select a row and use **Host actions** for its quick actions. From Map or Wallboard, right-click a host and choose **Edit in host list** to open that host directly. Select one or more rows to move hosts, change their group, mark them as priority, or disable them. Press **F2** to rename a selected host. List edits save immediately and offer an eight-second Undo with **Ctrl+Z**. In Settings, use **Save changes** to apply a draft.
 
 ![Light List view showing host filters and actions for the selected host](docs/screenshots/list-light.png)
 

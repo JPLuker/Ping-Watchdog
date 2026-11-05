@@ -3,7 +3,7 @@ PING WATCHDOG FOR WINDOWS
 First monitor
 1. Run PingWatchdog-win-Setup.exe, or extract the portable ZIP and open
    PingWatchdog.exe.
-2. Choose Add hosts. Enter a hostname or IP address that answers ping.
+2. Choose Add hosts > Save hosts to a site. Enter a hostname or IP address.
    For several hosts, paste one per line.
 3. Select a Site or type a new site name. Check the preview, then click
    Add hosts to save the selected rows.
@@ -12,11 +12,13 @@ First monitor
 
 Working with hosts
 - Map shows hosts by site. List lets you search, filter and edit them.
+  Right-click a map host and choose Edit in host list to select it in List.
   Select rows for bulk actions. F2 renames a host. Ctrl+Z undoes a List
   edit while Undo is available (eight seconds).
-- More > Quick monitor starts a temporary session. Use Keep in a site
+- Add hosts > Monitor temporarily starts a temporary session. Use Keep in a site
   in List to save temporary hosts.
-- Right-click a host to snooze it for one hour. Its probes, live log and
+- Select a row and choose Host actions, or right-click a host, to snooze it
+  for one hour. Its probes, live log and
   active alerts pause. Resume monitoring now ends the snooze early.
 - Mark a host as priority to repeat outage and recovery alarms every
   15 seconds until acknowledged. Set the sound in Settings > Notifications.

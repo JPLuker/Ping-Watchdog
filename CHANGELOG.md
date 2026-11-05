@@ -2,6 +2,13 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.24
+
+- Kept List rows and selection steady while ping results update.
+- Added visible host actions in List and an Edit in host list action from the map.
+- Grouped saved and temporary host adding under Add hosts.
+- Separated the update popup from the map and removed the redundant Sites heading.
+
 ## 1.19.23
 
 - Added packaged third-party notices with access from Settings → About.

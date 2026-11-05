@@ -518,7 +518,7 @@ public sealed partial class MainForm : Form
         Tag = "stateBadge"
     };
 
-    private readonly DataGridView _grid = new()
+    private readonly DataGridView _grid = new HostResultsGrid()
     {
         Dock = DockStyle.Fill,
         ReadOnly = true,
@@ -1492,6 +1492,13 @@ public sealed partial class MainForm : Form
                 throw new InvalidOperationException(message);
         }
 
+        static IEnumerable<Control> Descendants(Control parent)
+        {
+            yield return parent;
+            foreach (Control child in parent.Controls)
+                foreach (var descendant in Descendants(child)) yield return descendant;
+        }
+
         // Gaps, unselected rows, empty list space and the well's own padding must all be the one well color.
         void CheckSiteWellBlends(MainForm window)
         {
@@ -1767,14 +1774,20 @@ public sealed partial class MainForm : Form
                 Check(form._grid.CurrentRow?.Cells["CategoryColumn"].Value?.ToString() == "AP",
                     "Category did not render for the selected host.");
                 Check(form.GetSelectedHostIdentity() == selected, "Category edit changed the selected host.");
+                int selectionChanges = 0;
+                EventHandler countSelectionChanges = (_, _) => selectionChanges++;
+                form._grid.SelectionChanged += countSelectionChanges;
                 for (int i = 0; i < 6; i++)
                 {
                     await Task.Delay(100);
                     form.RefreshGrid();
+                    Check(ReferenceEquals(form._grid.Rows[25], row), "Refresh rebuilt unchanged host rows.");
+                    Check(selectionChanges == 0, "Refresh cleared and restored selection.");
                     Check(form.GetSelectedHostIdentity() == selected, "Refresh lost the selected host.");
                     Check(form._grid.CurrentCell?.OwningColumn.Name == "LabelColumn", "Refresh lost the selected column.");
                     Check(form._grid.FirstDisplayedScrollingRowIndex == 20, "Refresh lost the scroll position.");
                 }
+                form._grid.SelectionChanged -= countSelectionChanges;
                 Capture(form, "hosts-selected");
                 form._hosts.Clear();
                 form.RefreshGrid();
@@ -1865,7 +1878,21 @@ public sealed partial class MainForm : Form
                             "Ping log consumed the host table width.");
                         Check(review._mainSplit.Panel1.Width > review._mainSplit.Panel2.Width * 1.8,
                             "Host results lost priority over the log.");
+                        Check(review._addHostsMenu.Items.Count == 2, "Saved and temporary host adding are not together.");
+                        Check(!review._workspaceSplit.Panel1.Controls.Cast<Control>().SelectMany(Descendants).OfType<Label>().Any(label => label.Text == "Sites"),
+                            "Redundant Sites heading returned.");
                         Capture(review, "workspace-list-" + appearance);
+                        review._hostSearch.Text = "no-match";
+                        review.SetHostFilter(HostFilter.Disabled);
+                        review.ShowHostInList("Branch 3", "192.0.2.31");
+                        Check(review._listView && review._selectedSiteName == "Branch 3" && review._grid.SelectedRows.Count == 1 &&
+                            review._grid.SelectedRows[0].Cells["HostColumn"].Value?.ToString() == "192.0.2.31",
+                            "Map-to-List navigation did not reveal and select its host.");
+                        Check(review._hostActionsButton.Enabled && review.SelectionBarShowing, "Host actions are not exposed in List.");
+                        await Task.Delay(100);
+                        Capture(review, "host-actions-" + appearance);
+                        review.SelectSiteScope(null);
+                        review._grid.ClearSelection();
                         review.SetWorkspaceView(false);
                         await Task.Delay(100);
                         Check(review._mainSplit.Panel1Collapsed && !review._dashboardSplit.Panel1Collapsed,
@@ -1880,6 +1907,10 @@ public sealed partial class MainForm : Form
                             "Internal update status is missing or outside the application.");
                         await Task.Delay(200);
                         review._updateToast!.Update();
+                        Check(review._updateToast.BackColor != AuroraTheme.Palette.Surface,
+                            "Update popup uses the map card surface.");
+                        Check(AuroraTheme.ContrastRatio(AuroraTheme.Palette.Text, review._updateToast.BackColor) >= 4.5,
+                            "Update popup text contrast is insufficient.");
                         Check(review.Controls.GetChildIndex(review._updateToast) == 0,
                             "Update status is behind the main workspace.");
                         using (var popup = new Bitmap(review._updateToast.Width, review._updateToast.Height))
@@ -2150,10 +2181,9 @@ public sealed partial class MainForm : Form
         importItem.Click += (_, _) => LoadConfigFile();
         aboutItem.Click += (_, _) => ShowAboutDialog();
 
-        var hostsItem = new ToolStripMenuItem("Hosts...") { ShortcutKeys = Keys.Control | Keys.Shift | Keys.H };
+        var hostsItem = new ToolStripMenuItem("Host list") { ShortcutKeys = Keys.Control | Keys.Shift | Keys.H };
         hostsItem.Click += (_, _) => ShowHostList();
         _appMenu.Items.Add("Export monitoring batch…", null, (_, _) => ExportMonitoringBatch());
-        _appMenu.Items.Add("Quick monitor…", null, (_, _) => OpenQuickAdd(true));
         _appMenu.Items.Add(hostsItem);
         _appMenu.Items.Add(settingsItem);
         _appMenu.Items.Add(historyItem);
@@ -2216,6 +2246,8 @@ public sealed partial class MainForm : Form
         _grid.Columns.Insert(Math.Min(labelIndex + 1, _grid.Columns.Count), categoryColumn);
         foreach (DataGridViewColumn column in _grid.Columns)
             column.Visible = column.Name is "SiteColumn" or "HostColumn" or "LabelColumn" or "StatusColumn" or "LatencyColumn";
+        // Ordering follows site/address, as it did with the former read-only bound list.
+        foreach (DataGridViewColumn column in _grid.Columns) column.SortMode = DataGridViewColumnSortMode.NotSortable;
         _grid.Columns["HostColumn"].HeaderText = "Address";
         _grid.Columns["LabelColumn"].HeaderText = "Name";
         _grid.Columns["HostColumn"].DisplayIndex = 0;
@@ -4985,7 +5017,34 @@ public sealed partial class MainForm : Form
                 h.Site.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
         UpdateFilterChips(rows.Select(h => h.Status));
         rows = rows.Where(h => MatchesFilter(_hostFilter, h.Status)).ToList();
-        _grid.DataSource = rows;
+        // Preserve native rows, selection and scroll position on ordinary ping refreshes.
+        bool structureChanged = _grid.Rows.Count != rows.Count || rows.Where((host, index) =>
+            !string.Equals(_grid.Rows[index].Cells["SiteColumn"].Value?.ToString(), host.Site, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(_grid.Rows[index].Cells["HostColumn"].Value?.ToString(), host.Host, StringComparison.OrdinalIgnoreCase)).Any();
+        _refreshingHostRows = true;
+        try
+        {
+            if (structureChanged)
+            {
+                _grid.Rows.Clear();
+                if (rows.Count > 0) _grid.Rows.Add(rows.Count);
+            }
+            for (int index = 0; index < rows.Count; index++)
+            {
+                var host = rows[index];
+                var row = _grid.Rows[index];
+                void Set(string column, object value)
+                {
+                    if (!Equals(row.Cells[column].Value, value)) row.Cells[column].Value = value;
+                }
+                Set("SiteColumn", host.Site); Set("HostColumn", host.Host);
+                Set("LabelColumn", host.Label); Set("CategoryColumn", host.Category);
+                Set("StatusColumn", host.Status); Set("LatencyColumn", host.Latency);
+                Set("FailuresColumn", host.Failures); Set("LastReplyColumn", host.LastReply);
+                Set("OutageColumn", host.OutageSince);
+            }
+        }
+        finally { _refreshingHostRows = false; }
         _emptyHosts.Text = query.Length > 0 ? "No matching hosts" : EmptyFilterText();
         _emptyHosts.Visible = rows.Count == 0;
         if (_emptyHosts.Visible) _emptyHosts.BringToFront();
@@ -4993,32 +5052,41 @@ public sealed partial class MainForm : Form
         if (_grid.Columns["SiteColumn"] is DataGridViewColumn siteColumn)
             siteColumn.Visible = _selectedSiteName is null;
 
-        // Restore after rebinding and setting column visibility, before repainting.
-        _grid.ClearSelection();
-        _grid.CurrentCell = null;
-        if (selection is { } desired)
+        if (structureChanged)
         {
-            foreach (DataGridViewRow row in _grid.Rows)
+            _refreshingHostRows = true;
+            try
             {
-                if (!string.Equals(row.Cells["SiteColumn"].Value?.ToString(), desired.Site, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(row.Cells["HostColumn"].Value?.ToString(), desired.Host, StringComparison.OrdinalIgnoreCase))
-                    continue;
+                // Restore after membership changes and setting column visibility.
+                _grid.ClearSelection();
+                _grid.CurrentCell = null;
+                if (selection is { } desired)
+                {
+                    foreach (DataGridViewRow row in _grid.Rows)
+                    {
+                        if (!string.Equals(row.Cells["SiteColumn"].Value?.ToString(), desired.Site, StringComparison.OrdinalIgnoreCase) ||
+                            !string.Equals(row.Cells["HostColumn"].Value?.ToString(), desired.Host, StringComparison.OrdinalIgnoreCase))
+                            continue;
 
-                var column = selectedColumn is not null ? _grid.Columns[selectedColumn] : null;
-                if (column?.Visible != true)
-                    column = _grid.Columns["HostColumn"];
-                _grid.CurrentCell = row.Cells[column!.Index];
-                row.Selected = true;
-                break;
+                        var column = selectedColumn is not null ? _grid.Columns[selectedColumn] : null;
+                        if (column?.Visible != true)
+                            column = _grid.Columns["HostColumn"];
+                        _grid.CurrentCell = row.Cells[column!.Index];
+                        row.Selected = true;
+                        break;
+                    }
+                }
+                foreach (DataGridViewRow row in _grid.Rows)
+                    if (selectedKeys.Contains(BuildHostKey(row.Cells["SiteColumn"].Value?.ToString() ?? "", row.Cells["HostColumn"].Value?.ToString() ?? "")))
+                        row.Selected = true;
+                if (firstDisplayedRow >= 0 && _grid.Rows.Count > 0)
+                    _grid.FirstDisplayedScrollingRowIndex = Math.Min(firstDisplayedRow, _grid.Rows.Count - 1);
+                _grid.HorizontalScrollingOffset = horizontalOffset;
+
             }
+            finally { _refreshingHostRows = false; }
         }
-        foreach (DataGridViewRow row in _grid.Rows)
-            if (selectedKeys.Contains(BuildHostKey(row.Cells["SiteColumn"].Value?.ToString() ?? "", row.Cells["HostColumn"].Value?.ToString() ?? "")))
-                row.Selected = true;
         UpdateSelectionBar();
-        if (firstDisplayedRow >= 0 && _grid.Rows.Count > 0)
-            _grid.FirstDisplayedScrollingRowIndex = Math.Min(firstDisplayedRow, _grid.Rows.Count - 1);
-        _grid.HorizontalScrollingOffset = horizontalOffset;
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
@@ -5035,8 +5103,7 @@ public sealed partial class MainForm : Form
                 _ => AuroraTheme.Palette.Secondary
             };
 
-            if (status == "Offline")
-                row.DefaultCellStyle.BackColor = AuroraTheme.Palette.Surface2;
+            row.DefaultCellStyle.BackColor = status == "Offline" ? AuroraTheme.Palette.Surface2 : Color.Empty;
         }
 
         int online = rows.Count(h => h.Status.StartsWith("Online", StringComparison.Ordinal));

@@ -140,7 +140,7 @@ internal static class AuroraTheme
             control.Font = control.Font.FontFamily.Name.Equals("Consolas", StringComparison.OrdinalIgnoreCase) ? MonoFont : CaptionFont;
         string role = control.Tag as string ?? "";
         control.ForeColor = p.Text;
-        control.BackColor = role is "divider" ? p.Surface3 : role is "well" ? AuroraWell.WellColor : role is "card" or "nav" or "header" ? p.Surface : p.Canvas;
+        control.BackColor = role is "overlay" ? (SystemInformation.HighContrast ? SystemColors.Window : p.Surface3) : role is "divider" ? p.Surface3 : role is "well" ? AuroraWell.WellColor : role is "card" or "nav" or "header" ? p.Surface : p.Canvas;
         switch (control)
         {
             case PictureBox picture:
