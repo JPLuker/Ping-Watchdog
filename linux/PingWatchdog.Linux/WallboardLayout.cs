@@ -15,22 +15,27 @@ internal sealed partial class WallboardWindow
     private Grid _board = null!;
     private Control BuildLayout()
     {
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Background = Theme.Brush(Presentation.WallboardBackground) };
-        var toolbar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Brush(Presentation.WallboardPanel), MinHeight = 42 };
-        var toolbarTitle = Theme.Label("PING WATCHDOG • WALLBOARD", 13.3); toolbarTitle.Margin = new Thickness(18, 10); toolbar.Children.Add(toolbarTitle);
-        var actions = new WrapPanel { Margin = new Thickness(0, 2, 10, 2) };
+        var root = new Grid { Background = Theme.Brush(Presentation.WallboardBackground) };
+        var actions = new WrapPanel();
         _startStop.Click += (_, _) => ToggleMonitoring();
-        var ops = Theme.Button("Operations", true); ops.Click += (_, _) => ToggleOperations();
-        var cli = Theme.Button("Hide CLI"); cli.Click += (_, _) => { ToggleCli(); cli.Content = _showCli ? "Hide CLI" : "Show CLI"; };
+        var cli = Theme.Button("Toggle CLI"); cli.Click += (_, _) => ToggleCli();
         var history = Theme.Button("History"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
         var settings = Theme.Button("Settings"); settings.Click += (_, _) => new SettingsWindow(_engine, _updates, _main).Show(this);
         var screen = Theme.Button("Screen"); screen.Click += async (_, _) => await MoveToNextScreenAsync();
-        var main = Theme.Button("Main Window"); main.Click += (_, _) => Close();
+        var main = Theme.Button("Main window"); main.Click += (_, _) => Close();
         _updateButton.Click += async (_, _) => await _main.RunUpdateActionAsync(this);
-        foreach (var b in new[] { _startStop, ops, cli, history, settings, _updateButton, screen, main }) { b.FontSize = 12; b.MinHeight = 30; b.Margin = new Thickness(0, 2, 6, 2); actions.Children.Add(b); }
-        Grid.SetColumn(actions, 1); toolbar.Children.Add(actions); root.Children.Add(toolbar);
+        foreach (var button in new[] { _startStop, cli, history, settings, _updateButton, screen, main })
+        {
+            button.Margin = new Thickness(0, 2, 6, 2);
+            actions.Children.Add(button);
+        }
+        var operations = new MenuItem { Header = "Operations" };
+        operations.Click += (_, _) => ToggleOperations();
+        var exit = new MenuItem { Header = "Exit Wallboard" };
+        exit.Click += (_, _) => Close();
+        root.ContextMenu = new ContextMenu { ItemsSource = new[] { operations, exit } };
         var workspace = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        _board = new Grid { RowDefinitions = new RowDefinitions($"{Presentation.WallboardHeaderHeight},{Presentation.WallboardStatsHeight},*,Auto,{Presentation.WallboardFooterHeight}") };
+        _board = new Grid { RowDefinitions = new RowDefinitions($"{Presentation.WallboardHeaderHeight},{Presentation.WallboardStatsHeight},*,Auto") };
         var background = new Grid { Children = { new WallboardBackdrop(), _board } }; workspace.Children.Add(background);
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(22, 12, 24, 10) };
         header.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = {
@@ -62,15 +67,12 @@ internal sealed partial class WallboardWindow
         Grid.SetColumn(_reportsCard, 1); body.Children.Add(_reportsCard); Grid.SetRow(body, 2); _board.Children.Add(body);
         _cli.Margin = new Thickness(22, 16, 22, 0); _cli.MinHeight = 150; _cli.MaxHeight = 240;
         Grid.SetRow(_cli, 3); _board.Children.Add(_cli);
-        var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(22, 8, 22, 4) };
-        var shortcuts = Theme.Label("ESC Main   O Operations   P Start/Stop   C CLI   H Range   S Suspects   Ctrl+H History   Ctrl+, Settings", 9, color: Theme.Muted); shortcuts.TextWrapping = TextWrapping.Wrap; footer.Children.Add(shortcuts);
-        var copyright = Theme.Label("© 2026 Joseph Luker • All rights reserved.", 9, color: Theme.Muted); Grid.SetColumn(copyright, 1); footer.Children.Add(copyright);
-        Grid.SetRow(footer, 4); _board.Children.Add(footer);
         BuildOpsPanel();
+        _ops.Children.Insert(1, actions);
         var closeOps = Theme.Button("Close Operations"); closeOps.Click += (_, _) => ToggleOperations(); _ops.Children.Add(closeOps);
         _opsCard = Theme.CardBorder(new ScrollViewer { Content = _ops, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, new Thickness(0));
         _opsCard.Background = Theme.Brush("#0A1017"); _opsCard.IsVisible = false;
-        Grid.SetColumn(_opsCard, 1); workspace.Children.Add(_opsCard); Grid.SetRow(workspace, 1); root.Children.Add(workspace);
+        Grid.SetColumn(_opsCard, 1); workspace.Children.Add(_opsCard); root.Children.Add(workspace);
         _board.SizeChanged += (_, _) => {
             _reportsCard.Width = Math.Clamp(_board.Bounds.Width * .29, 320, 440);
             _cli.Height = Math.Clamp(Math.Max(240, _board.Bounds.Height - 266) * .28, 150, 240);

@@ -1203,8 +1203,8 @@ internal sealed class LinuxUpdateService : IDisposable
 
         try
         {
-            var source = new GithubSource(RepositoryUrl, accessToken: null, prerelease: false);
-            var manager = new UpdateManager(source);
+            var source = new GithubSource(RepositoryUrl, accessToken: null, prerelease: true);
+            var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = "linux" });
             if (!manager.IsInstalled)
             {
                 Status = "Unmanaged AppImage / development build";

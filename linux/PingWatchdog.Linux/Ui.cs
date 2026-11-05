@@ -610,7 +610,7 @@ internal sealed partial class MainWindow : Window
             string message = version is null
                 ? "The update is downloaded. Restart Ping Watchdog now?"
                 : $"Version {version} downloaded in the background. Restart now to apply it?";
-            if (!await ConfirmAsync("Restart to Update", message, owner)) return;
+            if (!await ConfirmAsync("Restart to Update", message, owner, "Restart now", "Later")) return;
             if (!_editor.Commit() || (_wallboard is not null && !_wallboard.CommitHostEdits())) return;
             try { _updates.ApplyAndRestart(_engine); }
             catch (Exception ex) { await AlertAsync($"Could not apply update: {ex.Message}", "Ping Watchdog Updates", owner); }
@@ -701,7 +701,7 @@ internal sealed partial class MainWindow : Window
         return await dialog.ShowDialog<string?>(this);
     }
 
-    internal async Task<bool> ConfirmAsync(string title, string message, Window? owner = null)
+    internal async Task<bool> ConfirmAsync(string title, string message, Window? owner = null, string accept = "Yes", string cancel = "No")
     {
         var dialog = new Window
         {
@@ -712,8 +712,10 @@ internal sealed partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Background = Theme.Window
         };
-        var yes = Theme.Button("Yes", true);
-        var no = Theme.Button("No");
+        var yes = Theme.Button(accept, true);
+        var no = Theme.Button(cancel);
+        no.IsCancel = true;
+        dialog.Opened += (_, _) => no.Focus();
         yes.Click += (_, _) => dialog.Close(true);
         no.Click += (_, _) => dialog.Close(false);
         dialog.Content = new StackPanel

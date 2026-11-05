@@ -38,6 +38,8 @@ The Linux build includes:
 - Background GitHub update checks and self-updating AppImage packages on the Linux beta channel.
 - Desktop outage/recovery notifications through `notify-send` when it is available.
 
+Press **O** or right-click the Wallboard to open Operations. **Esc** or **F11** returns to the main window. In the main host list, select a host to edit or clear its label.
+
 ## Windows layout alignment
 
 The Windows application is the visual reference. Linux now follows its compact header and More menu, site sidebar, host-column table, separate Start/Stop controls, Settings page navigation, history table, folder tree, and radial Wallboard layout. Both builds embed the same dog artwork.
