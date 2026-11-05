@@ -10,6 +10,8 @@ public sealed partial class MainForm
 
     private bool _listView;
     private readonly Label _searchLabel = new() { Text = "Search", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(0, 12, 8, 0) };
+    private readonly Button _addHostsButton = new AuroraButton { Text = "Add hosts", AutoSize = true };
+    private readonly ContextMenuStrip _addHostsMenu = new();
     private readonly Button _columnPickerButton = new AuroraButton { Text = "Columns", AutoSize = true };
     private readonly Button _mapTab = new AuroraButton { Text = "Map", AutoSize = true };
     private readonly Button _listTab = new AuroraButton { Text = "List", AutoSize = true };
@@ -34,29 +36,27 @@ public sealed partial class MainForm
         _workspaceSplit.Panel1.Tag = "nav";
         _workspaceSplit.Panel2.Tag = "window";
 
-        // Sites heading, pinned All sites, the scrolling site well, a divider, then app actions.
+        // Pinned All sites and Add site share one row above the scrolling site list.
         var navigation = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Margin = Padding.Empty, Tag = "nav" };
-        navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        navigation.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         navigation.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        // "Sites" heading with a compact add action at the far edge, not a second label beside it.
-        var siteHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Tag = "nav" };
-        siteHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        siteHeading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        siteHeading.Controls.Add(new Label { Text = "Sites", AutoSize = true, Font = AuroraTheme.LabelFont, Tag = "primaryText", Anchor = AnchorStyles.Left, Padding = new Padding(8, 0, 8, 0) }, 0, 0);
+        var scopeRow = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 0, 0, 8), Tag = "nav" };
+        scopeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        scopeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _addSiteButton.Text = "+";
         _addSiteButton.AccessibleName = "Add site";
         _addSiteButton.Anchor = AnchorStyles.Right;
         _addSiteTip.SetToolTip(_addSiteButton, "Add site");
         if (_addSiteButton is AuroraButton add) add.Ghost = true;
-        siteHeading.Controls.Add(_addSiteButton, 1, 0);
-        navigation.Controls.Add(siteHeading, 0, 0);
         _allSitesButton.Dock = DockStyle.Fill;
-        _allSitesButton.Margin = new Padding(0, 0, 0, 8);
+        _allSitesButton.Margin = Padding.Empty;
         _allSitesButton.Click += (_, _) => { if (_selectedSiteName is not null) SelectSiteScope(null); };
-        navigation.Controls.Add(_allSitesButton, 0, 1);
+        scopeRow.Controls.Add(_allSitesButton, 0, 0);
+        scopeRow.Controls.Add(_addSiteButton, 1, 0);
+        navigation.Controls.Add(scopeRow, 0, 1);
         _siteWell = new AuroraWell { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(4, 6, 14, 6), Tag = "well" };
         _siteList.Tag = "well";
         _siteWell.Controls.Add(_siteList);
@@ -119,7 +119,15 @@ public sealed partial class MainForm
         _siteHeaderLabel.Tag = "primaryText";
         heading.Controls.Add(_siteHeaderLabel, 0, 0);
         var actions = new FlowLayoutPanel { AutoSize = true, Anchor = AnchorStyles.Right, WrapContents = false, Margin = Padding.Empty, Tag = "window" };
-        actions.Controls.Add(HostUi.Button("Add hosts", () => OpenQuickAdd(false)));
+        _addHostsMenu.Items.Add("Save hosts to a site…", null, (_, _) => OpenQuickAdd(false));
+        _addHostsMenu.Items.Add("Monitor temporarily…", null, (_, _) => OpenQuickAdd(true));
+        _addHostsButton.Click += (_, _) =>
+        {
+            AuroraTheme.ApplyMenu(_addHostsMenu);
+            _addHostsMenu.Show(_addHostsButton, new Point(0, _addHostsButton.Height));
+        };
+        Disposed += (_, _) => _addHostsMenu.Dispose();
+        actions.Controls.Add(_addHostsButton);
         actions.Controls.Add(_wallboardButton);
         if (_startButton is AuroraButton primary) primary.Primary = true;
         _startButton.Text = "Start monitoring";
@@ -237,7 +245,7 @@ public sealed partial class MainForm
     private void SizeNavigationActions()
     {
         _allSitesButton.Height = (int)(40 * DeviceDpi / 96f);
-        _allSitesButton.Padding = new Padding(12, 4, 12, 4);
+        _allSitesButton.Padding = new Padding(4, 4, 4, 4);
         float wellScale = DeviceDpi / 96f;
         // Right padding holds the scroll indicator at any scale.
         if (_siteWell is not null)

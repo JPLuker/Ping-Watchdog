@@ -1,3 +1,5 @@
+using System.Drawing.Drawing2D;
+
 namespace PingWatchdog;
 
 public sealed partial class MainForm
@@ -11,11 +13,11 @@ public sealed partial class MainForm
     private void InitializeUpdateToast()
     {
         if (_updateToast is { IsDisposed: false }) return;
-        _updateToast = new Panel { Visible = false, Tag = "card", Padding = new Padding(16),
+        _updateToast = new UpdateToastPanel { Visible = false, Tag = "overlay", Padding = new Padding(16),
             Size = new Size(360, 160), Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             AccessibleName = "Update status", AccessibleRole = AccessibleRole.Alert };
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
-            Margin = Padding.Empty, Tag = "card" };
+            Margin = Padding.Empty, Tag = "overlay" };
         content.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         content.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
@@ -23,7 +25,7 @@ public sealed partial class MainForm
         _updateToastBody = new Label { Dock = DockStyle.Fill, Font = AuroraTheme.CaptionFont, AutoEllipsis = true };
         content.Controls.Add(_updateToastBody, 0, 1);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false, Margin = Padding.Empty, Tag = "card" };
+            WrapContents = false, Margin = Padding.Empty, Tag = "overlay" };
         var dismiss = HostUi.Button("Dismiss", () => { if (_updateToast != null) _updateToast.Visible = false; _updateToastTimer?.Stop(); });
         _updateToastRestart = HostUi.Button("Restart now", RestartToApplyPendingUpdate);
         _updateToastRestart.Visible = false;
@@ -68,5 +70,27 @@ public sealed partial class MainForm
         _updateToast.Invalidate(true);
         _updateToastTimer!.Stop();
         if (!persistent) _updateToastTimer.Start();
+    }
+}
+
+// FOCAL: update status. Opaque elevated surface with a visible edge over a dense map.
+internal sealed class UpdateToastPanel : Panel
+{
+    internal UpdateToastPanel()
+    {
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var bounds = ClientRectangle;
+        bounds.Inflate(-2, -2);
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var edge = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusCard);
+        using var pen = new Pen(SystemInformation.HighContrast ? SystemColors.WindowText : AuroraTheme.Palette.Accent, 2);
+        e.Graphics.DrawPath(pen, edge);
     }
 }

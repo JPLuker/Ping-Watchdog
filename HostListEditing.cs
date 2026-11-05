@@ -5,6 +5,8 @@ internal enum HostFilter { All, Priority, Offline, Disabled, Snoozed }
 // The List view is where hosts are edited: filter chips, multi-select actions that save at once, and Undo.
 public sealed partial class MainForm
 {
+    private bool _refreshingHostRows;
+    private readonly AuroraButton _hostActionsButton = new() { Text = "Host actions", AutoSize = true };
     private HostFilter _hostFilter = HostFilter.All;
     // True while hosts are selected: the action bar replaces the filter chips.
     private bool _selectionMode;
@@ -54,7 +56,13 @@ public sealed partial class MainForm
         remove.Click += (_, _) => RemoveSelection();
         var clear = new AuroraButton { Text = "Clear selection", AutoSize = true, Ghost = true };
         clear.Click += (_, _) => _grid.ClearSelection();
-        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, _priorityAction, _enableAction, move, group, policy, _keepAction, remove, clear });
+        _hostActionsButton.Click += (_, _) =>
+        {
+            var selected = SelectedManagedHosts();
+            if (selected.Count == 1)
+                ShowHostQuickActions(_hostActionsButton, new Point(0, _hostActionsButton.Height), selected[0].Site, selected[0].Address);
+        };
+        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, _hostActionsButton, _priorityAction, _enableAction, move, group, policy, _keepAction, remove, clear });
         // Dock Top stacks the last-added control highest: filters first, the action bar beneath.
         _listHeader.Controls.Add(_selectionBar);
         _listHeader.Controls.Add(_filterBar);
@@ -148,8 +156,9 @@ public sealed partial class MainForm
 
     private void UpdateSelectionBar()
     {
-        if (_selectionBar is null || _filterBar is null) return;
+        if (_refreshingHostRows || _selectionBar is null || _filterBar is null) return;
         var selected = SelectedManagedHosts();
+        _hostActionsButton.Enabled = selected.Count == 1;
         bool any = selected.Count > 0;
         _selectionCount.Text = selected.Count == 1 ? "1 host selected" : $"{selected.Count} hosts selected";
         _priorityAction.Text = any && selected.All(h => h.Options.Priority) ? "Remove priority" : "Mark as priority";
@@ -359,6 +368,27 @@ public sealed partial class MainForm
         RestoreFromTray();
         SetWorkspaceView(true);
         _grid.Focus();
+    }
+
+    private void ShowHostInList(string site, string address)
+    {
+        if (_wallboardForm is { IsDisposed: false }) _wallboardForm.Close();
+        _hostSearch.Clear();
+        _hostFilter = HostFilter.All;
+        SelectSiteScope(site);
+        RefreshGrid();
+        ShowHostList();
+        _grid.ClearSelection();
+        foreach (DataGridViewRow row in _grid.Rows)
+        {
+            if (!string.Equals(row.Cells["SiteColumn"].Value?.ToString(), site, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(row.Cells["HostColumn"].Value?.ToString(), address, StringComparison.OrdinalIgnoreCase)) continue;
+            _grid.CurrentCell = row.Cells["HostColumn"];
+            row.Selected = true;
+            _grid.FirstDisplayedScrollingRowIndex = row.Index;
+            break;
+        }
+        UpdateSelectionBar();
     }
 
     // Test hooks.

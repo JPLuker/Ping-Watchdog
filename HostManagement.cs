@@ -106,6 +106,8 @@ public sealed partial class MainForm
             catch (Exception ex) { MessageBox.Show(surface.FindForm(), ex.Message, "Host action failed"); }
         });
         menu.Items.Add(new ToolStripMenuItem(AuroraTheme.MenuText(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address)) { Enabled = false });
+        if (surface != _grid && surface != _hostActionsButton)
+            Add("Edit in host list", () => ShowHostInList(site, address));
         Add("Copy address", () => Clipboard.SetText(address));
         Add("Set label / nickname…", () =>
         {
