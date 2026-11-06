@@ -106,7 +106,7 @@ public sealed partial class MainForm
             catch (Exception ex) { MessageBox.Show(surface.FindForm(), ex.Message, "Host action failed"); }
         });
         menu.Items.Add(new ToolStripMenuItem(AuroraTheme.MenuText(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address)) { Enabled = false });
-        if (surface != _grid && surface != _hostActionsButton)
+        if (surface != _grid)
             Add("Edit in host list", () => ShowHostInList(site, address));
         Add("Copy address", () => Clipboard.SetText(address));
         Add("Set label / nickname…", () =>
@@ -149,7 +149,7 @@ public sealed partial class MainForm
             var options = current.Options.Copy(); options.Enabled = !options.Enabled;
             ApplyHostEdit(() => { SaveManagedHosts(new() { current with { Options = options } }); return (options.Enabled ? "Enabled " : "Disabled ") + shown; });
         });
-        if (surface == _grid || surface == _hostActionsButton)
+        if (surface == _grid)
         {
             Add("Move to site…", MoveSelectionToSite);
             Add("Monitoring…", SetMonitoringForSelection);

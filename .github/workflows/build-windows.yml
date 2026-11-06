@@ -160,6 +160,7 @@ jobs:
 
       - name: Upload UI smoke-test screenshots and results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-UI-${{ env.WATCHDOG_VERSION }}
@@ -182,6 +183,7 @@ jobs:
 
       - name: Upload recovery screenshots and reports
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-Recovery-${{ env.WATCHDOG_VERSION }}
@@ -194,9 +196,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Grouped single-host and bulk commands under Host actions to leave more room for the list.
-          - Removed the redundant idle map heading and its empty space.
-          - Softened the update popup border and clipped its corners on first display.
+          - Kept Ping activity below Map and List in the same shared pane.
+          - Removed the Host actions button. Right-click selected hosts for individual or bulk actions.
+          - Added Shift+F10 and the Menu key for host actions, and Escape to clear selection.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 
@@ -269,6 +271,7 @@ jobs:
 
       - name: Upload release bundle artifact
         if: env.SKIP_PUBLISH != '1'
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PingWatchdog-${{ env.WATCHDOG_VERSION }}

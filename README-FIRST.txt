@@ -13,11 +13,12 @@ First monitor
 Working with hosts
 - Map shows hosts by site. List lets you search, filter and edit them.
   Right-click a map host and choose Edit in host list to select it in List.
-  Select rows for bulk actions. F2 renames a host. Ctrl+Z undoes a List
-  edit while Undo is available (eight seconds).
-- Add hosts > Monitor temporarily starts a temporary session. Use Host actions > Keep in a site
-  in List to save temporary hosts.
-- Select a row and choose Host actions, or right-click a host, to snooze it
+  Ctrl+click selects individual rows. Shift+click selects a range. Right-click
+  the selection for bulk actions, or press Shift+F10. F2 renames a host.
+  Ctrl+Z undoes a List edit while Undo is available (eight seconds).
+- Add hosts > Monitor temporarily starts a temporary session. In List,
+  right-click the selection > Keep in a site to save temporary hosts.
+- Right-click a host to snooze it
   for one hour. Its probes, live log and
   active alerts pause. Resume monitoring now ends the snooze early.
 - Mark a host as priority to repeat outage and recovery alarms every

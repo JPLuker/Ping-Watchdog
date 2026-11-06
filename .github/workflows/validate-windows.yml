@@ -24,7 +24,8 @@ jobs:
         run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
       - name: UI regression checks
         run: dotnet run --project PingWatchdog.csproj -c Release -- --ui-smoke-test
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: windows-validation-ui

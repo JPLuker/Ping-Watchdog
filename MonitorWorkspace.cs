@@ -172,13 +172,11 @@ public sealed partial class MainForm
             if (_commandBox.TextLength == 0) _emptyLog.BringToFront();
         };
         _clearLogButton.Enabled = false;
-        _mainSplit.Panel2.Controls.Add(log);
-        _mainSplit.Orientation = Orientation.Vertical;
-        _mainSplit.FixedPanel = FixedPanel.Panel2;
-        _mainSplit.SizeChanged += (_, _) => SizePingLog();
+        _dashboardSplit.Panel2.Controls.Add(log);
+        _mainSplit.Panel2Collapsed = true;
         _monitorCanvas.HostRightClicked += (host, point) => ShowHostQuickActions(_monitorCanvas, point, host.Site, host.Address);
         _dashboardSplit.Panel1.Controls.Add(_monitorCanvas);
-        _dashboardSplit.Panel2.Controls.Add(_mainSplit);
+        _dashboardSplit.Panel1.Controls.Add(_mainSplit);
         _dashboardSplit.SizeChanged += (_, _) => SizeDashboard();
         right.Controls.Add(_dashboardSplit, 0, 3);
         _workspaceSplit.Panel2.Controls.Add(right);
@@ -263,44 +261,19 @@ public sealed partial class MainForm
         }
     }
 
-    private void SizePingLog(bool reset = false)
-    {
-        if (!_listView || _mainSplit.Panel2Collapsed || _mainSplit.Width < 300) return;
-        int width = _mainSplit.ClientSize.Width;
-        var orientation = width * 96f / DeviceDpi < 720 ? Orientation.Horizontal : Orientation.Vertical;
-        if (_mainSplit.Orientation != orientation) _mainSplit.Orientation = orientation;
-        if (orientation == Orientation.Horizontal)
-        {
-            int height = _mainSplit.ClientSize.Height;
-            if (height < 120) return;
-            int outputHeight = Math.Min((int)(96 * DeviceDpi / 96f), height / 3);
-            _mainSplit.SplitterDistance = Math.Max(1, height - outputHeight - _mainSplit.SplitterWidth);
-            return;
-        }
-        int logWidth = reset ? (int)(240 * DeviceDpi / 96f) : _mainSplit.Panel2.Width;
-        logWidth = Math.Clamp(logWidth, Math.Min(160, width / 3), Math.Max(160, width / 3));
-        _mainSplit.SplitterDistance = Math.Max(1, width - logWidth - _mainSplit.SplitterWidth);
-    }
     private void SetWorkspaceView(bool list)
     {
         _listView = list;
         _searchLabel.Visible = list; _hostSearch.Visible = list; _columnPickerButton.Visible = list;
-        _dashboardSplit.Panel2Collapsed = false;
+        // Both views share one bottom activity pane, including its splitter position.
+        bool activityWasHidden = _dashboardSplit.Panel2Collapsed;
         _dashboardSplit.Panel1Collapsed = false;
-        _mainSplit.Panel2Collapsed = false;
-        _mainSplit.Panel1Collapsed = false;
-        if (list)
-        {
-            _dashboardSplit.Panel1Collapsed = true;
-            _mainSplit.Panel2Collapsed = !_showCommandView.Checked;
-            SizePingLog(reset: true);
-        }
-        else
-        {
-            _mainSplit.Panel1Collapsed = true;
-            _dashboardSplit.Panel2Collapsed = !_showCommandView.Checked;
-            SizeDashboard();
-        }
+        _dashboardSplit.Panel2Collapsed = !_showCommandView.Checked;
+        _mainSplit.Visible = list;
+        _monitorCanvas.Visible = !list;
+        if (list) _mainSplit.BringToFront();
+        else _monitorCanvas.BringToFront();
+        if (activityWasHidden && !_dashboardSplit.Panel2Collapsed) SizeDashboard();
         ((AuroraButton)_mapTab).Selected = !list;
         ((AuroraButton)_listTab).Selected = list;
         _mapTab.Invalidate(); _listTab.Invalidate();
