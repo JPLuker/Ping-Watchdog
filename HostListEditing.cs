@@ -6,9 +6,8 @@ internal enum HostFilter { All, Priority, Offline, Disabled, Snoozed }
 public sealed partial class MainForm
 {
     private bool _refreshingHostRows;
-    private readonly AuroraButton _hostActionsButton = new() { Text = "Host actions", AutoSize = true };
     private HostFilter _hostFilter = HostFilter.All;
-    // True while hosts are selected: the action bar replaces the filter chips.
+    // Selection count and clear action stay separate from the context menu.
     private bool _selectionMode;
     private readonly Dictionary<HostFilter, AuroraButton> _filterChips = new();
     private Panel? _listHeader;
@@ -45,8 +44,7 @@ public sealed partial class MainForm
         _selectionBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Visible = false, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 4) };
         var clear = new AuroraButton { Text = "Clear selection", AutoSize = true, Ghost = true };
         clear.Click += (_, _) => _grid.ClearSelection();
-        _hostActionsButton.Click += (_, _) => ShowSelectionMenu(_hostActionsButton, new Point(0, _hostActionsButton.Height));
-        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, _hostActionsButton, clear });
+        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, clear });
         // Dock Top stacks the last-added control highest: filters first, the action bar beneath.
         _listHeader.Controls.Add(_selectionBar);
         _listHeader.Controls.Add(_filterBar);
@@ -72,7 +70,15 @@ public sealed partial class MainForm
         _grid.SelectionChanged += (_, _) => UpdateSelectionBar();
         _grid.KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Delete && _grid.SelectedRows.Count > 0) { e.Handled = true; RemoveSelection(); }
+            if (e.KeyCode == Keys.Apps || (e.Shift && e.KeyCode == Keys.F10))
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                var cell = _grid.CurrentCell;
+                var bounds = cell is null ? Rectangle.Empty : _grid.GetCellDisplayRectangle(cell.ColumnIndex, cell.RowIndex, true);
+                ShowSelectionMenu(_grid, new Point(Math.Max(0, bounds.Left), Math.Max(0, bounds.Bottom)));
+            }
+            else if (e.KeyCode == Keys.Escape) { e.Handled = true; _grid.ClearSelection(); }
+            else if (e.KeyCode == Keys.Delete && _grid.SelectedRows.Count > 0) { e.Handled = true; RemoveSelection(); }
             else if (e.KeyCode == Keys.F2 && _grid.SelectedRows.Count == 1) { e.Handled = true; RenameSelectedHost(); }
             else if (e.Control && e.KeyCode == Keys.Z && _undoSites is not null) { e.Handled = true; UndoLastHostEdit(); }
         };
@@ -142,7 +148,6 @@ public sealed partial class MainForm
     {
         if (_refreshingHostRows || _selectionBar is null || _filterBar is null) return;
         var selected = SelectedManagedHosts();
-        _hostActionsButton.Enabled = selected.Count > 0;
         bool any = selected.Count > 0;
         _selectionCount.Text = selected.Count == 1 ? "1 host selected" : $"{selected.Count} hosts selected";
         _priorityActionText = any && selected.All(h => h.Options.Priority) ? "Remove priority" : "Mark as priority";

@@ -1814,11 +1814,23 @@ public sealed partial class MainForm : Form
                     new(editSite, "192.0.2.202", "Edit B", "", new HostOptions(), "Unknown") }, false);
                 form.SetHostFilter(HostFilter.All);
                 form.SelectHostsForTest("192.0.2.201", "192.0.2.202");
-                form._hostActionsButton.PerformClick();
+                var selectedRows = form._grid.SelectedRows.Cast<DataGridViewRow>().ToArray();
+                form.GridCellMouseDown(form._grid, new DataGridViewCellMouseEventArgs(
+                    form._grid.Columns["HostColumn"].Index, selectedRows[0].Index, 4, 4,
+                    new MouseEventArgs(MouseButtons.Right, 1, 4, 4, 0)));
+                Check(form._grid.SelectedRows.Count == 2, "Right-click lost the multi-selection.");
                 var bulkCommands = form._hostQuickMenu.Items.Cast<ToolStripItem>().Select(item => item.Text).ToList();
                 Check(form._hostQuickMenu.Visible && bulkCommands.Contains("Move to site…") &&
                     !bulkCommands.Contains("Copy address"), "Host actions did not offer bulk operations for two hosts.");
                 form._hostQuickMenu.Close();
+                var otherRow = form._grid.Rows.Cast<DataGridViewRow>().First(r => !r.Selected);
+                form.GridCellMouseDown(form._grid, new DataGridViewCellMouseEventArgs(
+                    form._grid.Columns["HostColumn"].Index, otherRow.Index, 4, 4,
+                    new MouseEventArgs(MouseButtons.Right, 1, 4, 4, 0)));
+                Check(form._grid.SelectedRows.Count == 1 && otherRow.Selected,
+                    "Right-click outside the selection did not select only the clicked host.");
+                form._hostQuickMenu.Close();
+                form.SelectHostsForTest("192.0.2.201", "192.0.2.202");
                 Check(form.PriorityActionText == "Mark as priority", $"Action read '{form.PriorityActionText}'.");
                 form.TogglePriorityForTest();
                 bool BothPriority() => form.HostSnapshot().Where(h => h.Address is "192.0.2.201" or "192.0.2.202").All(h => h.Options.Priority);
@@ -1879,10 +1891,15 @@ public sealed partial class MainForm : Form
                         Check(review._grid.Columns["HostColumn"].DisplayIndex == 0, "Address must be the first column.");
                         Check(review._grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).Sum(c => c.Width) < review._grid.ClientSize.Width,
                             "Default host columns overflow beside ping output.");
-                        Check(review._mainSplit.Panel2.Width <= review._mainSplit.Width / 3 + 4,
-                            "Ping log consumed the host table width.");
-                        Check(review._mainSplit.Panel1.Width > review._mainSplit.Panel2.Width * 1.8,
-                            "Host results lost priority over the log.");
+                        Check(review._mainSplit.Panel2Collapsed && review._dashboardSplit.Panel2.Visible,
+                            "List activity must use the shared bottom pane.");
+                        var activityBounds = review._dashboardSplit.Panel2.RectangleToScreen(review._dashboardSplit.Panel2.ClientRectangle);
+                        review.SetWorkspaceView(false);
+                        Check(review._dashboardSplit.Panel2.RectangleToScreen(review._dashboardSplit.Panel2.ClientRectangle) == activityBounds,
+                            "Ping activity moved when switching from List to Map.");
+                        review.SetWorkspaceView(true);
+                        Check(review._dashboardSplit.Panel2.RectangleToScreen(review._dashboardSplit.Panel2.ClientRectangle) == activityBounds,
+                            "Ping activity moved when switching back to List.");
                         Check(review._addHostsMenu.Items.Count == 2, "Saved and temporary host adding are not together.");
                         Check(!review._workspaceSplit.Panel1.Controls.Cast<Control>().SelectMany(Descendants).OfType<Label>().Any(label => label.Text == "Sites"),
                             "Redundant Sites heading returned.");
@@ -1893,14 +1910,17 @@ public sealed partial class MainForm : Form
                         Check(review._listView && review._selectedSiteName == "Branch 3" && review._grid.SelectedRows.Count == 1 &&
                             review._grid.SelectedRows[0].Cells["HostColumn"].Value?.ToString() == "192.0.2.31",
                             "Map-to-List navigation did not reveal and select its host.");
-                        Check(review._hostActionsButton.Enabled && review.SelectionBarShowing, "Host actions are not exposed in List.");
+                        Check(!Descendants(review).OfType<Button>().Any(b => b.Text == "Host actions"), "Host actions toolbar button returned.");
+                        review.ShowSelectionMenu(review._grid, new Point(20, 20));
+                        Check(review._hostQuickMenu.Visible, "Selected host context menu did not open.");
+                        review._hostQuickMenu.Close();
                         await Task.Delay(100);
                         Capture(review, "host-actions-" + appearance);
                         review.SelectSiteScope(null);
                         review._grid.ClearSelection();
                         review.SetWorkspaceView(false);
                         await Task.Delay(100);
-                        Check(review._mainSplit.Panel1Collapsed && !review._dashboardSplit.Panel1Collapsed,
+                        Check(!review._mainSplit.Visible && review._monitorCanvas.Visible,
                             "Map and list are displayed together.");
                         Check(review._statusStrip.Parent == null, "Redundant bottom status bar returned.");
                         Capture(review, "workspace-populated-" + appearance);
@@ -1911,6 +1931,10 @@ public sealed partial class MainForm : Form
                         Check(review._updateToast?.Visible == true && review._updateToast.Right <= review.ClientSize.Width,
                             "Internal update status is missing or outside the application.");
                         await Task.Delay(200);
+                        var updateButtons = Descendants(review._updateToast!).OfType<Button>().ToList();
+                        Check(updateButtons.Any(b => b.Text == "Dismiss") &&
+                            updateButtons.All(b => !new[] { "ok", "okay" }.Contains(b.Text.Trim(), StringComparer.OrdinalIgnoreCase)),
+                            "Update status returned a generic OK action.");
                         review._updateToast!.Update();
                         var clip = review._updateToast.Region;
                         Check(clip != null && !clip.IsVisible(0, 0) &&
