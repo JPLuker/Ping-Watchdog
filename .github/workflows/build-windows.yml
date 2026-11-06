@@ -196,9 +196,8 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - Kept Ping activity below Map and List in the same shared pane.
-          - Removed the Host actions button. Right-click selected hosts for individual or bulk actions.
-          - Added Shift+F10 and the Menu key for host actions, and Escape to clear selection.
+          - Removed the selected-host count and Clear selection row above List. Selecting hosts no longer moves the table.
+          - Kept highlighted rows, right-click actions, Ctrl/Shift selection and Escape to clear selection.
 
           Iterative UI update for user testing. The final design migration and maintenance-mode acceptance remain in progress.
 

@@ -7,13 +7,9 @@ public sealed partial class MainForm
 {
     private bool _refreshingHostRows;
     private HostFilter _hostFilter = HostFilter.All;
-    // Selection count and clear action stay separate from the context menu.
-    private bool _selectionMode;
     private readonly Dictionary<HostFilter, AuroraButton> _filterChips = new();
     private Panel? _listHeader;
     private FlowLayoutPanel? _filterBar;
-    private FlowLayoutPanel? _selectionBar;
-    private readonly Label _selectionCount = new() { AutoSize = true, Tag = "primaryText", Font = AuroraTheme.LabelFont, Padding = new Padding(4, 10, 12, 0) };
     private string _priorityActionText = "Mark as priority";
     private string _enableActionText = "Disable";
     private bool _canKeepSelection;
@@ -32,7 +28,7 @@ public sealed partial class MainForm
     private void BuildHostListEditing()
     {
         _listHeader = new Panel { Dock = DockStyle.Top, Tag = "window", Margin = Padding.Empty };
-        // Filters stay on top at all times; the action bar is a second row only while hosts are selected.
+        // Selection is shown by highlighted rows. The header contains only filters.
         _filterBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 4) };
         foreach (var filter in Enum.GetValues<HostFilter>())
         {
@@ -41,12 +37,6 @@ public sealed partial class MainForm
             _filterChips[filter] = chip;
             _filterBar.Controls.Add(chip);
         }
-        _selectionBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Visible = false, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 4) };
-        var clear = new AuroraButton { Text = "Clear selection", AutoSize = true, Ghost = true };
-        clear.Click += (_, _) => _grid.ClearSelection();
-        _selectionBar.Controls.AddRange(new Control[] { _selectionCount, clear });
-        // Dock Top stacks the last-added control highest: filters first, the action bar beneath.
-        _listHeader.Controls.Add(_selectionBar);
         _listHeader.Controls.Add(_filterBar);
         _listHeader.Resize += (_, _) => SizeHostListBars();
 
@@ -67,7 +57,7 @@ public sealed partial class MainForm
         // Fill docks last: the table takes what the header and Undo bar leave.
         _grid.BringToFront();
         _grid.MultiSelect = true;
-        _grid.SelectionChanged += (_, _) => UpdateSelectionBar();
+        _grid.SelectionChanged += (_, _) => UpdateSelectionActions();
         _grid.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Apps || (e.Shift && e.KeyCode == Keys.F10))
@@ -82,17 +72,16 @@ public sealed partial class MainForm
             else if (e.KeyCode == Keys.F2 && _grid.SelectedRows.Count == 1) { e.Handled = true; RenameSelectedHost(); }
             else if (e.Control && e.KeyCode == Keys.Z && _undoSites is not null) { e.Handled = true; UndoLastHostEdit(); }
         };
-        UpdateSelectionBar();
+        UpdateSelectionActions();
     }
 
     private void SizeHostListBars()
     {
-        if (_listHeader is null || _filterBar is null || _selectionBar is null || _undoBar is null) return;
+        if (_listHeader is null || _filterBar is null || _undoBar is null) return;
         int width = Math.Max(1, _listHeader.ClientSize.Width);
         int row = (int)(48 * DeviceDpi / 96f);
         _filterBar.Height = Math.Max(row, _filterBar.GetPreferredSize(new Size(width, 0)).Height);
-        _selectionBar.Height = Math.Max(row, _selectionBar.GetPreferredSize(new Size(width, 0)).Height);
-        _listHeader.Height = _filterBar.Height + (_selectionMode ? _selectionBar.Height : 0);
+        _listHeader.Height = _filterBar.Height;
         _undoBar.Height = (int)(48 * DeviceDpi / 96f);
         _undoBar.Padding = new Padding((int)(16 * DeviceDpi / 96f), 4, 8, 4);
     }
@@ -144,21 +133,15 @@ public sealed partial class MainForm
         return HostSnapshot().Where(h => keys.Contains(BuildHostKey(h.Site, h.Address))).ToList();
     }
 
-    private void UpdateSelectionBar()
+    private void UpdateSelectionActions()
     {
-        if (_refreshingHostRows || _selectionBar is null || _filterBar is null) return;
+        if (_refreshingHostRows || _filterBar is null) return;
         var selected = SelectedManagedHosts();
         bool any = selected.Count > 0;
-        _selectionCount.Text = selected.Count == 1 ? "1 host selected" : $"{selected.Count} hosts selected";
         _priorityActionText = any && selected.All(h => h.Options.Priority) ? "Remove priority" : "Mark as priority";
         _enableActionText = any && selected.All(h => h.Options.Enabled) ? "Disable" : "Enable";
         _canKeepSelection = selected.Any(h => FindSite(h.Site)?.Temporary == true);
-        if (_selectionMode != any)
-        {
-            _selectionMode = any;
-            _selectionBar.Visible = any;
-        }
-        SizeHostListBars();
+
     }
 
     private static string Hosts(int count) => count == 1 ? "1 host" : $"{count} hosts";
@@ -342,8 +325,8 @@ public sealed partial class MainForm
         foreach (var item in menu.Items.Cast<ToolStripItem>().ToArray()) item.Dispose();
         menu.Items.Clear();
         menu.ShowImageMargin = false; menu.ShowCheckMargin = false;
-        UpdateSelectionBar();
-        menu.Items.Add(new ToolStripMenuItem(_selectionCount.Text) { Enabled = false });
+        UpdateSelectionActions();
+        menu.Items.Add(new ToolStripMenuItem(Hosts(hosts.Count) + " selected") { Enabled = false });
         menu.Items.Add(_priorityActionText, null, (_, _) => TogglePriorityForSelection());
         menu.Items.Add(_enableActionText, null, (_, _) => ToggleEnabledForSelection());
         menu.Items.Add("Move to site…", null, (_, _) => MoveSelectionToSite());
@@ -384,7 +367,7 @@ public sealed partial class MainForm
             _grid.FirstDisplayedScrollingRowIndex = row.Index;
             break;
         }
-        UpdateSelectionBar();
+        UpdateSelectionActions();
     }
 
     // Test hooks.
@@ -393,16 +376,10 @@ public sealed partial class MainForm
         _grid.ClearSelection();
         foreach (DataGridViewRow row in _grid.Rows)
             if (addresses.Contains(row.Cells["HostColumn"].Value?.ToString(), StringComparer.OrdinalIgnoreCase)) row.Selected = true;
-        UpdateSelectionBar();
+        UpdateSelectionActions();
     }
     internal int VisibleHostRows => _grid.Rows.Count;
     internal string PriorityActionText => _priorityActionText;
-    internal bool SelectionBarShowing => _selectionMode;
-    // On a shown window: chips visible above the action bar, and the header tall enough for both.
-    internal bool FiltersShownWithSelection =>
-        _listHeader is { } header && _filterBar is { } filters && _selectionBar is { } actions &&
-        filters.Visible && actions.Visible && filters.Height > 0 &&
-        actions.Top >= filters.Bottom && header.Height >= filters.Height + actions.Height;
     internal string FilterChipText(HostFilter filter) => _filterChips[filter].Text;
     internal string UndoMessageText => _undoSites is null ? "" : _undoMessage.Text;
     internal void TogglePriorityForTest() => TogglePriorityForSelection();

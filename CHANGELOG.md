@@ -2,6 +2,11 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.28
+
+- Removed the selected-host count and Clear selection row above List. Selecting hosts no longer moves the table.
+- Kept highlighted rows, right-click actions, Ctrl/Shift selection and Escape to clear selection.
+
 ## 1.19.27
 
 - Kept Ping activity below both Map and List in the same shared pane.
