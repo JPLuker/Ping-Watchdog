@@ -2,7 +2,7 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
-## 1.19.26
+## 1.19.27
 
 - Kept Ping activity below both Map and List in the same shared pane.
 - Removed the Host actions button. Right-click selected hosts for individual or bulk actions.

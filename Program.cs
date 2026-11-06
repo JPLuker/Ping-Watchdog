@@ -1893,6 +1893,7 @@ public sealed partial class MainForm : Form
                             "Default host columns overflow beside ping output.");
                         Check(review._mainSplit.Panel2Collapsed && review._dashboardSplit.Panel2.Visible,
                             "List activity must use the shared bottom pane.");
+                        review._dashboardSplit.SplitterDistance -= 20;
                         var activityBounds = review._dashboardSplit.Panel2.RectangleToScreen(review._dashboardSplit.Panel2.ClientRectangle);
                         review.SetWorkspaceView(false);
                         Check(review._dashboardSplit.Panel2.RectangleToScreen(review._dashboardSplit.Panel2.ClientRectangle) == activityBounds,

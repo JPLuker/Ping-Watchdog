@@ -266,13 +266,14 @@ public sealed partial class MainForm
         _listView = list;
         _searchLabel.Visible = list; _hostSearch.Visible = list; _columnPickerButton.Visible = list;
         // Both views share one bottom activity pane, including its splitter position.
+        bool activityWasHidden = _dashboardSplit.Panel2Collapsed;
         _dashboardSplit.Panel1Collapsed = false;
         _dashboardSplit.Panel2Collapsed = !_showCommandView.Checked;
         _mainSplit.Visible = list;
         _monitorCanvas.Visible = !list;
         if (list) _mainSplit.BringToFront();
         else _monitorCanvas.BringToFront();
-        SizeDashboard();
+        if (activityWasHidden && !_dashboardSplit.Panel2Collapsed) SizeDashboard();
         ((AuroraButton)_mapTab).Selected = !list;
         ((AuroraButton)_listTab).Selected = list;
         _mapTab.Invalidate(); _listTab.Invalidate();
