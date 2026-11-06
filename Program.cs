@@ -1795,14 +1795,17 @@ public sealed partial class MainForm : Form
 
                 Check(form._rightLayout!.RowStyles[1].Height == 0, "Duplicate inventory space returned.");
                 Capture(form, "single-host-table");
-                // Host editing lives in the List: chips by default, the action bar while hosts are selected.
+                // Selecting hosts must not insert a toolbar or shift the table.
                 form.SetWorkspaceView(true);
                 await Task.Delay(100);
-                Check(!form.SelectionBarShowing, "Action bar showed with nothing selected.");
+                var unselectedGridBounds = form._grid.RectangleToScreen(form._grid.ClientRectangle);
                 form.SelectHostsForTest(form.HostSnapshot().First().Address);
                 await Task.Delay(50);
-                Check(form.SelectionBarShowing, "Selecting a host did not show the action bar.");
-                Check(form.FiltersShownWithSelection, "Filter chips disappeared while a host was selected.");
+                Check(form._grid.SelectedRows.Count == 1, "Host selection was lost.");
+                Check(form._grid.RectangleToScreen(form._grid.ClientRectangle) == unselectedGridBounds,
+                    "Selecting a host shifted the table.");
+                Check(form._listHeader!.Controls.Count == 1 && form._filterBar!.Visible,
+                    "Selection added a row above the table or hid the filters.");
                 Capture(form, "list-selection");
                 form.SelectHostsForTest();
 
@@ -5121,7 +5124,7 @@ public sealed partial class MainForm : Form
             }
             finally { _refreshingHostRows = false; }
         }
-        UpdateSelectionBar();
+        UpdateSelectionActions();
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
