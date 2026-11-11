@@ -6,30 +6,46 @@ namespace PingWatchdog;
 
 internal enum AppearanceMode { System, Light, Dark }
 
-// DESIGN.md native adaptation. Dense content uses the required opaque fallback.
+// Quiet Precision (InternalDesignGuidelines DESIGN.md Part B, v2.0), approved by Joseph 2026-11-11:
+// "use the new visual style". Warm neutrals, ink as the accent, semantic colors only for state.
+// Every text role passes 4.5:1 on canvas, surface, surface-2 and surface-3 (RunTests measures it).
 internal sealed record AuroraPalette(bool Dark, Color Canvas, Color Surface, Color Surface2,
     Color Surface3, Color Text, Color Secondary, Color Muted, Color Accent, Color OnAccent,
-    Color Teal, Color Warning, Color Danger, Color Success)
+    Color Success, Color Warning, Color Danger, Color Info, Color Border, Color BorderStrong, Color Focus)
 {
+    // Online status. Kept as its own name so state code reads as state.
+    internal Color Teal => Success;
     internal Color SelectionText => SystemInformation.HighContrast ? SystemColors.HighlightText : Text;
-    internal Color StatusText(Color semantic) => Dark ? semantic : Text;
+    // Quiet Precision semantic colors pass as text in both themes.
+    internal Color StatusText(Color semantic) => SystemInformation.HighContrast ? Text : semantic;
+    // The sidebar is the canvas itself: chrome recedes, structure comes from spacing and one border.
+    internal Color Nav => Canvas;
     internal static AuroraPalette Create(bool dark)
     {
         Color C(string value) => ColorTranslator.FromHtml(value);
         return dark
-            ? new(true, C("#0B0D16"), C("#151826"), C("#1D2133"), C("#262B40"), C("#F2F3F8"), C("#B8BCD0"), C("#9095AE"), C("#9C8EFF"), C("#0B0D16"), C("#3DD9C4"), C("#F5B547"), C("#FF6B6B"), C("#4ADE95"))
-            : new(false, C("#F4F5FA"), C("#FFFFFF"), C("#EEF0F7"), C("#E4E7F1"), C("#14172B"), C("#474D6B"), C("#62688A"), C("#6B5CF0"), C("#FFFFFF"), C("#0F9F8F"), C("#B7791F"), C("#D93B3B"), C("#16935C"));
+            ? new(true, C("#111110"), C("#191918"), C("#212120"), C("#2B2B29"), C("#EDEDEA"), C("#B5B4AE"), C("#9C9B95"),
+                C("#EDEDEA"), C("#111110"), C("#4CC26A"), C("#D9A53A"), C("#F47A73"), C("#58A6FF"), C("#30302D"), C("#75746E"), C("#6EA8FE"))
+            : new(false, C("#FAFAF9"), C("#FFFFFF"), C("#F3F3F1"), C("#E9E9E6"), C("#1B1B19"), C("#53524D"), C("#64635D"),
+                C("#1B1B19"), C("#FFFFFF"), C("#1A7531"), C("#875A00"), C("#C21F2B"), C("#0A63C9"), C("#DEDDD9"), C("#8E8D86"), C("#1F5FD9"));
     }
 }
 
 internal static class AuroraTheme
 {
-    internal const int Space1 = 4, Space2 = 8, Space3 = 12, Space4 = 16, Space6 = 24;
-    internal const int RadiusSmall = 10, RadiusMedium = 14, RadiusCard = 20;
-    internal static readonly Font BodyFont = new("Segoe UI", 11.25f); // 15 logical px
-    internal static readonly Font LabelFont = new("Segoe UI", 10.5f); // 14 logical px
-    internal static readonly Font CaptionFont = new("Segoe UI", 9.75f); // 13 logical px
-    internal static readonly Font MonoFont = new("Consolas", 9.75f);
+    // B6 spacing (4px base) and B5 shape. Buttons are rounded rectangles; pills are for chips and toggles.
+    internal const int Space1 = 4, Space2 = 8, Space3 = 12, Space4 = 16, Space5 = 20, Space6 = 24, Space8 = 32;
+    internal const int RadiusXs = 4, RadiusSmall = 6, RadiusMedium = 8, RadiusCard = 12, RadiusDialog = 16;
+    // B7 type, native: Segoe UI and Consolas (project deviation). Point sizes at 96 DPI: 1pt = 4/3 px.
+    // Three weights only: regular, and Semibold (600) for titles. Nothing below the 13px reading floor.
+    internal static readonly Font DisplayFont = new("Segoe UI Semibold", 24f);   // 32 px, one per screen
+    internal static readonly Font Title1Font = new("Segoe UI Semibold", 18f);    // 24 px, page title
+    internal static readonly Font Title2Font = new("Segoe UI Semibold", 15f);    // 20 px, section title
+    internal static readonly Font Title3Font = new("Segoe UI Semibold", 12f);    // 16 px, group title
+    internal static readonly Font BodyFont = new("Segoe UI", 10.5f);             // 14 px
+    internal static readonly Font LabelFont = new("Segoe UI", 10.5f);            // 14 px controls
+    internal static readonly Font CaptionFont = new("Segoe UI", 9.75f);          // 13 px floor
+    internal static readonly Font MonoFont = new("Consolas", 9.75f);             // 13 px addresses, logs
     private static readonly HashSet<Form> Windows = new();
     private static Form? _dispatcher;
     internal static AppearanceMode Mode { get; private set; } = AppearanceMode.System;
@@ -41,7 +57,8 @@ internal static class AuroraTheme
         if (SystemInformation.HighContrast)
             return new(false, SystemColors.Window, SystemColors.Window, SystemColors.Control, SystemColors.Highlight,
                 SystemColors.WindowText, SystemColors.WindowText, SystemColors.GrayText, SystemColors.Highlight,
-                SystemColors.HighlightText, SystemColors.WindowText, SystemColors.WindowText, SystemColors.WindowText, SystemColors.WindowText);
+                SystemColors.HighlightText, SystemColors.WindowText, SystemColors.WindowText, SystemColors.WindowText, SystemColors.WindowText,
+                SystemColors.WindowText, SystemColors.WindowText, SystemColors.Highlight);
         bool dark = Mode == AppearanceMode.Dark;
         if (Mode == AppearanceMode.System)
         {
@@ -140,7 +157,9 @@ internal static class AuroraTheme
             control.Font = control.Font.FontFamily.Name.Equals("Consolas", StringComparison.OrdinalIgnoreCase) ? MonoFont : CaptionFont;
         string role = control.Tag as string ?? "";
         control.ForeColor = p.Text;
-        control.BackColor = role is "overlay" ? (SystemInformation.HighContrast ? SystemColors.Window : p.Surface3) : role is "divider" ? p.Surface3 : role is "well" ? AuroraWell.WellColor : role is "card" or "nav" or "header" ? p.Surface : p.Canvas;
+        control.BackColor = role is "overlay" ? (SystemInformation.HighContrast ? SystemColors.Window : p.Surface3)
+            : role is "divider" ? p.Border : role is "well" ? AuroraWell.WellColor : role is "nav" ? p.Nav
+            : role is "card" or "header" ? p.Surface : p.Canvas;
         switch (control)
         {
             case PictureBox picture:
@@ -148,21 +167,24 @@ internal static class AuroraTheme
                 break;
             case DataGridView grid:
                 grid.EnableHeadersVisualStyles = false;
-                grid.BackgroundColor = p.Surface; grid.GridColor = p.Surface2;
+                grid.BackgroundColor = p.Surface; grid.GridColor = p.Border;
                 grid.BorderStyle = BorderStyle.None;
                 grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
                 grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
                 grid.DefaultCellStyle.BackColor = p.Surface; grid.DefaultCellStyle.ForeColor = p.Text;
                 grid.DefaultCellStyle.SelectionBackColor = p.Surface3; grid.DefaultCellStyle.SelectionForeColor = p.SelectionText;
                 grid.DefaultCellStyle.Font = BodyFont;
+                grid.DefaultCellStyle.Padding = new Padding(Space2, 0, Space2, 0);
                 grid.RowsDefaultCellStyle.SelectionBackColor = p.Surface3;
                 grid.RowsDefaultCellStyle.SelectionForeColor = p.SelectionText;
                 grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = p.Surface3;
                 grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = p.SelectionText;
                 grid.AlternatingRowsDefaultCellStyle.BackColor = p.Surface;
-                grid.ColumnHeadersDefaultCellStyle.BackColor = p.Surface2; grid.ColumnHeadersDefaultCellStyle.ForeColor = p.Secondary;
-                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = p.Surface2; grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = p.Secondary;
+                // B10 tables: header in label size and text-2 on the table's own surface, hairline rows.
+                grid.ColumnHeadersDefaultCellStyle.BackColor = p.Surface; grid.ColumnHeadersDefaultCellStyle.ForeColor = p.Secondary;
+                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = p.Surface; grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = p.Secondary;
                 grid.ColumnHeadersDefaultCellStyle.Font = CaptionFont;
+                grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(Space2, 0, Space2, 0);
                 grid.RowTemplate.Height = Math.Max(grid.RowTemplate.Height, (int)(36 * grid.DeviceDpi / 96f));
                 foreach (DataGridViewRow row in grid.Rows) { row.DefaultCellStyle.BackColor = Color.Empty; row.DefaultCellStyle.ForeColor = Color.Empty; }
                 break;
@@ -272,12 +294,20 @@ internal static class AuroraTheme
             double F(byte b) { double v = b / 255d; return v <= .04045 ? v / 12.92 : Math.Pow((v + .055) / 1.055, 2.4); }
             return .2126 * F(c.R) + .7152 * F(c.G) + .0722 * F(c.B);
         }
+        double Ratio(Color a, Color b) => (Math.Max(L(a), L(b)) + .05) / (Math.Min(L(a), L(b)) + .05);
         foreach (bool dark in new[] { false, true })
         {
             var p = AuroraPalette.Create(dark);
-            foreach (var pair in new[] { (p.Text, p.Surface), (p.Secondary, p.Surface), (p.Muted, p.Surface), (p.OnAccent, p.Accent), (p.Text, p.Surface3) })
-                if ((Math.Max(L(pair.Item1), L(pair.Item2)) + .05) / (Math.Min(L(pair.Item1), L(pair.Item2)) + .05) < 4.5)
-                    throw new InvalidOperationException("Appearance text contrast is below AA.");
+            // Every text role, including state words, on every surface it can sit on.
+            foreach (var text in new[] { p.Text, p.Secondary, p.Muted, p.Success, p.Warning, p.Danger })
+                foreach (var surface in new[] { p.Canvas, p.Surface, p.Surface2, p.Surface3 })
+                    if (Ratio(text, surface) < 4.5)
+                        throw new InvalidOperationException($"{(dark ? "Dark" : "Light")} text {ColorTranslator.ToHtml(text)} on {ColorTranslator.ToHtml(surface)} is below 4.5:1.");
+            if (Ratio(p.OnAccent, p.Accent) < 4.5) throw new InvalidOperationException("Primary button text is below 4.5:1.");
+            // Input edges and focus rings are UI boundaries: 3:1.
+            foreach (var edge in new[] { p.BorderStrong, p.Focus })
+                foreach (var surface in new[] { p.Canvas, p.Surface })
+                    if (Ratio(edge, surface) < 3) throw new InvalidOperationException("A control boundary is below 3:1.");
         }
     }
 }
@@ -285,13 +315,13 @@ internal static class AuroraTheme
 internal sealed class AuroraMenuColors : ProfessionalColorTable
 {
     public override Color ToolStripDropDownBackground => AuroraTheme.Palette.Surface;
-    public override Color MenuItemSelected => AuroraTheme.Palette.Surface3;
-    public override Color MenuItemBorder => AuroraTheme.Palette.Accent;
-    public override Color MenuBorder => AuroraTheme.Palette.Surface3;
+    public override Color MenuItemSelected => AuroraTheme.Palette.Surface2;
+    public override Color MenuItemBorder => AuroraTheme.Palette.Surface2;
+    public override Color MenuBorder => AuroraTheme.Palette.Border;
     public override Color ImageMarginGradientBegin => AuroraTheme.Palette.Surface;
     public override Color ImageMarginGradientMiddle => AuroraTheme.Palette.Surface;
     public override Color ImageMarginGradientEnd => AuroraTheme.Palette.Surface;
-    public override Color SeparatorDark => AuroraTheme.Palette.Surface3;
+    public override Color SeparatorDark => AuroraTheme.Palette.Border;
     public override Color SeparatorLight => AuroraTheme.Palette.Surface;
 }
 
@@ -300,7 +330,8 @@ internal sealed class AuroraMenuColors : ProfessionalColorTable
 // It also draws the list's scroll indicator in its right padding instead of a native scrollbar.
 internal sealed class AuroraWell : Panel
 {
-    internal static Color WellColor => AuroraTheme.Palette.Surface2;
+    // The site list sits directly on the sidebar: no box around it (B4, "structure is felt, not seen").
+    internal static Color WellColor => AuroraTheme.Palette.Nav;
     private bool _thumbHover, _dragging;
     private int _dragOffset;
     public AuroraWell()
@@ -506,9 +537,15 @@ internal class AuroraButton : Button
     protected override void OnKeyUp(KeyEventArgs e) { _pressed = false; base.OnKeyUp(e); Invalidate(); }
     protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
     protected override void OnLostFocus(EventArgs e) { _pressed = false; base.OnLostFocus(e); Invalidate(); }
+    // Ghost actions and unselected navigation sit back in text-2 (B10); selected and default buttons use text.
     internal Color ResolveTextColor(AuroraPalette p) =>
         !Enabled ? p.Muted : Destructive ? (Primary ? (p.Dark ? p.Canvas : Color.White) : p.StatusText(p.Danger))
-        : Primary ? p.OnAccent : p.Text;
+        : Primary ? p.OnAccent : Ghost && !Selected && !_hover ? p.Secondary : p.Text;
+
+    private static Color Blend(Color a, Color b, double amountOfA) => Color.FromArgb(
+        (int)Math.Round(a.R * amountOfA + b.R * (1 - amountOfA)),
+        (int)Math.Round(a.G * amountOfA + b.G * (1 - amountOfA)),
+        (int)Math.Round(a.B * amountOfA + b.B * (1 - amountOfA)));
 
     internal static void RunDestructiveContrastTests()
     {
@@ -547,19 +584,32 @@ internal class AuroraButton : Button
         int inset = Math.Max(4, (int)(4 * DeviceDpi / 96f));
         var bounds = Rectangle.Inflate(ClientRectangle, -inset, -inset);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
-        using var path = WallboardStyle.Rounded(bounds, bounds.Height / 2);
-        var fillColor = Primary && Enabled ? (Destructive ? p.Danger : p.Accent) : Selected || _pressed || (_hover && Enabled) ? p.Surface3 : Ghost ? Parent?.BackColor ?? p.Surface : p.Surface2;
+        // B5: actions are rounded rectangles; outlined chips (filters, scope) stay pills so they read as "choose".
+        int radius = Outline ? bounds.Height / 2 : Math.Min(bounds.Height / 2, (int)Math.Round(AuroraTheme.RadiusMedium * DeviceDpi / 96f));
+        using var path = WallboardStyle.Rounded(bounds, radius);
+        var background = Parent?.BackColor ?? p.Surface;
+        Color fillColor;
+        if (Primary && Enabled)
+            fillColor = Destructive ? p.Danger : _hover || _pressed ? Blend(p.Accent, p.Canvas, _pressed ? .78 : .86) : p.Accent;
+        else if (Selected || _pressed) fillColor = p.Surface3;
+        else if (_hover && Enabled) fillColor = p.Surface2 == background ? p.Surface3 : p.Surface2;
+        else fillColor = Ghost ? background : p.Surface2;
         using var fill = new SolidBrush(fillColor);
         e.Graphics.FillPath(fill, path);
-        if (Outline && Ghost && !Selected && !_pressed && !(_hover && Enabled))
+        // Secondary buttons and unselected chips carry a hairline edge; ghosts don't.
+        bool edged = (!Primary && !Ghost) || (Outline && Ghost && !Selected && !_pressed && !(_hover && Enabled));
+        if (edged)
         {
-            using var edge = new Pen(AuroraTheme.SoftOutline(p, Parent?.BackColor ?? p.Surface), Math.Max(1, DeviceDpi / 96f));
+            var edgeColor = Outline ? AuroraTheme.SoftOutline(p, background) : p.Border;
+            using var edge = new Pen(edgeColor, Math.Max(1, DeviceDpi / 96f));
             e.Graphics.DrawPath(edge, path);
         }
         if (Focused && ShowFocusCues)
         {
-            using var focus = new Pen(p.Accent, 2 * DeviceDpi / 96f);
-            using var ring = WallboardStyle.Rounded(Rectangle.Inflate(bounds, 2, 2), bounds.Height / 2 + 2);
+            float width = 2 * DeviceDpi / 96f;
+            using var focus = new Pen(p.Focus, width);
+            int gap = (int)Math.Ceiling(width);
+            using var ring = WallboardStyle.Rounded(Rectangle.Inflate(bounds, gap, gap), radius + gap);
             e.Graphics.DrawPath(focus, ring);
         }
         var ink = ResolveTextColor(p);

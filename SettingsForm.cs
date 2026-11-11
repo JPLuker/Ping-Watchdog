@@ -183,9 +183,9 @@ internal sealed class SettingsForm : Form
         _monitorLockLabel.Text = editable
             ? "Changes apply to the next monitoring session."
             : "Monitoring is active. Stop monitoring to change timing and outage thresholds.";
-        _monitorLockLabel.ForeColor = editable
-            ? Color.FromArgb(139, 153, 169)
-            : Color.FromArgb(245, 191, 71);
+        // Tag keeps the color through later theme passes.
+        _monitorLockLabel.Tag = editable ? null : "statSuspect";
+        _monitorLockLabel.ForeColor = editable ? AuroraTheme.Palette.Secondary : AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning);
     }
 
     private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal increment, int width)
@@ -217,18 +217,14 @@ internal sealed class SettingsForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
 
-        var header = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(12, 18, 26)
-        };
+        var header = new Panel { Dock = DockStyle.Fill };
         header.Controls.Add(new Label
         {
             Text = "Settings",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 20, FontStyle.Bold),
-            ForeColor = Color.White,
-            Location = new Point(24, 14)
+            Font = AuroraTheme.Title1Font,
+            Tag = "title",
+            Location = new Point(24, 20)
         });
         root.Controls.Add(header, 0, 0);
         root.SetColumnSpan(header, 2);
@@ -237,8 +233,9 @@ internal sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12, 16, 10, 16),
-            BackColor = Color.FromArgb(14, 20, 28)
+            Tag = "nav"
         };
+        _nav.Tag = "well";
         navPanel.Controls.Add(_nav);
         root.Controls.Add(navPanel, 0, 1);
 
@@ -580,8 +577,8 @@ internal sealed class SettingsForm : Form
         {
             Text = title,
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 16, FontStyle.Bold),
-            ForeColor = Color.White
+            Font = AuroraTheme.Title2Font,
+            Tag = "title"
         });
 
         var stack = new FlowLayoutPanel
@@ -660,8 +657,8 @@ internal sealed class SettingsForm : Form
         {
             Text = title,
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold),
-            ForeColor = Color.FromArgb(234, 240, 246)
+            Font = new Font("Segoe UI Semibold", 10.5f),
+            Tag = "title"
         });
         foreach (var control in controls)
         {
@@ -845,12 +842,12 @@ internal sealed class SettingsForm : Form
 
     private void DrawCategory(object? sender, DrawItemEventArgs e)
     {
-        using var background = new SolidBrush(AuroraTheme.Palette.Surface);
+        using var background = new SolidBrush(AuroraWell.WellColor);
         e.Graphics.FillRectangle(background, e.Bounds);
         if (e.Index < 0 || e.Index >= _nav.Items.Count) return;
         bool selected = (e.State & DrawItemState.Selected) != 0;
         var bounds = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 2, Math.Max(1, e.Bounds.Width - 8), Math.Max(1, e.Bounds.Height - 4));
-        using var shape = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusMedium);
+        using var shape = WallboardStyle.Rounded(bounds, (int)(AuroraTheme.RadiusSmall * DeviceDpi / 96f));
         if (selected)
         {
             using var fill = new SolidBrush(AuroraTheme.Palette.Surface3);
@@ -862,7 +859,7 @@ internal sealed class SettingsForm : Form
             TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         if ((e.State & DrawItemState.Focus) != 0 && _nav.Focused)
         {
-            using var focus = new Pen(AuroraTheme.Palette.Accent, 2);
+            using var focus = new Pen(AuroraTheme.Palette.Focus, 2);
             e.Graphics.DrawPath(focus, shape);
         }
     }

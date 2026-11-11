@@ -176,7 +176,7 @@ internal sealed class OrganizationForm : Form
         {
             Text = "Site organization", Tag = "title",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 15),
             ForeColor = Color.White
         });
         var toolbar = new FlowLayoutPanel

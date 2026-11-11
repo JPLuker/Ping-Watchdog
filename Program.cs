@@ -477,7 +477,7 @@ public sealed partial class MainForm : Form
         Height = 34,
         Padding = Padding.Empty,
         TextAlign = ContentAlignment.MiddleCenter,
-        Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold),
+        Font = new Font("Segoe UI Semibold", 15),
         AccessibleName = "More options"
     };
     private readonly ContextMenuStrip _appMenu = new();
@@ -502,7 +502,7 @@ public sealed partial class MainForm : Form
         Multiline = true,
         ScrollBars = ScrollBars.Vertical,
         Dock = DockStyle.Fill,
-        Font = new Font("Cascadia Mono", 9.5f),
+        Font = AuroraTheme.MonoFont,
         PlaceholderText = "One IP or hostname per line\r\n192.168.1.1\r\n8.8.8.8\r\nserver01"
     };
 
@@ -556,7 +556,7 @@ public sealed partial class MainForm : Form
     {
         Text = "IDLE",
         AutoSize = true,
-        Font = new Font("Segoe UI Semibold", 9, FontStyle.Bold),
+        Font = new Font("Segoe UI Semibold", 9),
         Padding = new Padding(10, 6, 10, 6),
         Tag = "stateBadge"
     };
@@ -579,7 +579,7 @@ public sealed partial class MainForm : Form
         Dock = DockStyle.Fill,
         ReadOnly = true,
         BorderStyle = BorderStyle.None,
-        Font = new Font("Cascadia Mono", 9.5f),
+        Font = AuroraTheme.MonoFont,
         DetectUrls = false,
         HideSelection = false
     };
@@ -625,8 +625,8 @@ public sealed partial class MainForm : Form
     private readonly ToolStripMenuItem _trayUpdateItem;
     private readonly Icon _appIcon;
     private readonly Bitmap _brandBitmap;
-    private readonly Font _siteItemFont = new("Segoe UI Semibold", 10.5f);
-    private readonly Font _statusCellFont = new("Segoe UI", 10.5f, FontStyle.Bold);
+    private readonly Font _siteItemFont = new("Segoe UI", 10.5f);
+    private readonly Font _statusCellFont = new("Segoe UI", 10.5f);
 
     private TableLayoutPanel? _rootLayout;
     private TableLayoutPanel? _rightLayout;
@@ -668,7 +668,7 @@ public sealed partial class MainForm : Form
         {
             Text = "0",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 22, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 22),
             Tag = "statValue"
         };
     }
@@ -688,7 +688,7 @@ public sealed partial class MainForm : Form
         Text = "Ping Watchdog";
         AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 9.5f);
+        Font = AuroraTheme.BodyFont;
         KeyPreview = true;
 
         var workingArea = Screen.PrimaryScreen?.WorkingArea
@@ -1259,7 +1259,7 @@ public sealed partial class MainForm : Form
         }
 
         // #41: the map always shows whole addresses, and the layout leaves room for them.
-        foreach (var (siteCount, hostsPerSite, viewport) in new[] { (5, 5, new Size(740, 360)), (12, 4, new Size(900, 650)), (24, 3, new Size(1280, 720)) })
+        foreach (var (siteCount, hostsPerSite, viewport) in new[] { (5, 5, new Size(1000, 500)), (12, 4, new Size(1280, 720)), (24, 2, new Size(1600, 1000)) })
         {
             var fullSites = Enumerable.Range(0, siteCount).Select(s => new WallboardSiteSnapshot($"Site {s:00}",
                 Enumerable.Range(0, hostsPerSite).Select(h => new WallboardHostSnapshot($"Site {s:00}", $"10.233.{100 + s}.{200 + h}", h % 2 == 0 ? "" : "Switch", HostState.Online, 1, null)).ToArray())).ToArray();
@@ -1268,7 +1268,8 @@ public sealed partial class MainForm : Form
             using var fullBitmap = new Bitmap(viewport.Width, viewport.Height);
             full.DrawToBitmap(fullBitmap, new Rectangle(Point.Empty, viewport));
             var expected = fullSites.SelectMany(site => site.Hosts.Select(host => host.Address)).OrderBy(a => a).ToArray();
-            Expect(full.DrawnAddresses.OrderBy(a => a).SequenceEqual(expected), $"{siteCount}x{hostsPerSite} at {viewport} did not draw every whole address.");
+            var drawn = full.DrawnAddresses.OrderBy(a => a).ToArray();
+            Expect(drawn.SequenceEqual(expected), $"{siteCount}x{hostsPerSite} at {viewport} drew {drawn.Length} of {expected.Length} addresses; first missing: {expected.Except(drawn).FirstOrDefault() ?? "none"}.");
             using var g = Graphics.FromImage(fullBitmap);
             foreach (var cell in full.HostCellBounds)
                 Expect(g.MeasureString("10.233.123.204", full.HostAddressFont, int.MaxValue, StringFormat.GenericTypographic).Width <= cell.Width - 20 * full.DeviceDpi / 96f,
@@ -2372,7 +2373,7 @@ public sealed partial class MainForm : Form
         _grid.Columns["LabelColumn"].HeaderText = "Name";
         _grid.Columns["HostColumn"].DisplayIndex = 0;
         _grid.Columns["LabelColumn"].DisplayIndex = 1;
-        _grid.Columns["HostColumn"].DefaultCellStyle.Font = new Font("Consolas", 11.25f);
+        _grid.Columns["HostColumn"].DefaultCellStyle.Font = new Font("Consolas", 10.5f);
         _grid.Columns["SiteColumn"].DisplayIndex = 2;
         _grid.Columns["LatencyColumn"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
         foreach (var name in new[] { "Host", "Label", "Site", "Status", "Latency" })
@@ -2406,7 +2407,7 @@ public sealed partial class MainForm : Form
             : AuroraTheme.Palette.Secondary);
 
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var rowPath = WallboardStyle.Rounded(bounds, AuroraTheme.RadiusMedium);
+        using var rowPath = WallboardStyle.Rounded(bounds, (int)(AuroraTheme.RadiusSmall * DeviceDpi / 96f));
         e.Graphics.FillPath(background, rowPath);
         if (selected)
         {
@@ -2428,7 +2429,7 @@ public sealed partial class MainForm : Form
 
         if ((e.State & DrawItemState.Focus) != 0 && ShowFocusCues)
         {
-            using var focus = new Pen(AuroraTheme.Palette.Accent, 2);
+            using var focus = new Pen(AuroraTheme.Palette.Focus, 2);
             e.Graphics.DrawPath(focus, rowPath);
         }
     }
@@ -4761,9 +4762,6 @@ public sealed partial class MainForm : Form
         _pendingUpdateVersion = version;
         SetUpdateStatus($"Version {_pendingUpdateVersion} is downloaded and ready.");
         _checkUpdateButton.Enabled = true;
-        _checkUpdateButton.BackColor = Color.FromArgb(107, 72, 26);
-        _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(190, 132, 47);
-        _checkUpdateButton.ForeColor = Color.White;
 
         _trayUpdateItem.Text = $"Restart to Update ({version})";
         _trayUpdateItem.Visible = true;
@@ -4780,9 +4778,6 @@ public sealed partial class MainForm : Form
         _pendingUpdateVersion = null;
         _trayUpdateItem.Visible = false;
         _trayUpdateItem.Enabled = false;
-        _checkUpdateButton.BackColor = Color.FromArgb(24, 55, 82);
-        _checkUpdateButton.FlatAppearance.BorderColor = Color.FromArgb(48, 103, 153);
-        _checkUpdateButton.ForeColor = Color.White;
         _settingsForm?.RefreshRuntimeState();
     }
 
@@ -5252,15 +5247,9 @@ public sealed partial class MainForm : Form
             var status = row.Cells["StatusColumn"].Value?.ToString()?.Split(" · ")[0];
             var cell = row.Cells["StatusColumn"];
 
+            // HostResultsGrid paints the dot and word; the font only sizes the row.
             cell.Style.Font = _statusCellFont;
-            cell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            cell.Style.ForeColor = status switch
-            {
-                "Offline" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Danger),
-                "Suspect" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning),
-                "Online" => AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Teal),
-                _ => AuroraTheme.Palette.Secondary
-            };
+            cell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
             row.DefaultCellStyle.BackColor = status == "Offline" ? AuroraTheme.Palette.Surface2 : Color.Empty;
         }

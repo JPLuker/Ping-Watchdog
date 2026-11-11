@@ -111,7 +111,7 @@ public sealed partial class MainForm
         var heading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Tag = "window" };
         heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _siteHeaderLabel.Font = new Font("Segoe UI", 18f, FontStyle.Bold);
+        _siteHeaderLabel.Font = AuroraTheme.Title1Font;
         _siteHeaderLabel.AutoSize = false;
         _siteHeaderLabel.AutoEllipsis = true;
         _siteHeaderLabel.Dock = DockStyle.Fill;

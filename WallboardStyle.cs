@@ -2,12 +2,12 @@ using System.Drawing.Drawing2D;
 
 namespace PingWatchdog;
 
-// Compatibility names backed by the common DESIGN.md theme.
+// Wallboard and map names backed by the shared Quiet Precision theme.
 internal static class WallboardStyle
 {
     internal static Color Background => AuroraTheme.Palette.Canvas;
     internal static Color Panel => AuroraTheme.Palette.Surface;
-    internal static Color Line => AuroraTheme.Palette.Surface3;
+    internal static Color Line => AuroraTheme.Palette.Border;
     internal static Color Text => AuroraTheme.Palette.Text;
     internal static Color Muted => AuroraTheme.Palette.Secondary;
     internal static Color Accent => AuroraTheme.Palette.Accent;
@@ -31,7 +31,8 @@ internal static class WallboardStyle
 
     internal static void DrawSurface(Graphics graphics, Rectangle bounds, Brush fill, Pen border)
     {
-        using var path = Rounded(bounds, 14);
+        // Cards: r-lg (12px), 1px border, no shadow (B4).
+        using var path = Rounded(bounds, AuroraTheme.RadiusCard);
         graphics.FillPath(fill, path);
         graphics.DrawPath(border, path);
     }

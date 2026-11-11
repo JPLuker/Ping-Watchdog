@@ -6,7 +6,7 @@ internal sealed class EventHistoryForm : Form
 {
     // FOCAL: outage records. Compact opaque surface with wrapping filters.
     // Event type text is read, so it sits at the 13 logical-px floor (9.75pt), not below it.
-    internal static readonly Font KindFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
+    internal static readonly Font KindFont = new("Segoe UI Semibold", 9.75f);
     private readonly Func<IReadOnlyList<StateEventRecord>> _eventProvider;
     private readonly Func<EventHistoryPreferences> _preferencesProvider;
     private readonly Action<int, bool> _preferencesChanged;
@@ -185,7 +185,7 @@ internal sealed class EventHistoryForm : Form
         titlePanel.Controls.Add(new Label
         {
             Text = "Outage history", AutoSize = true, Tag = "title",
-            Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold), Margin = Padding.Empty
+            Font = new Font("Segoe UI Semibold", 15), Margin = Padding.Empty
         }, 0, 0);
         _countLabel.Margin = new Padding(12, 4, 0, 0);
         titlePanel.Controls.Add(_countLabel, 1, 0);

@@ -297,7 +297,7 @@ internal sealed class WallboardForm : Form
             Text = text,
             AutoSize = true,
             Width = 372,
-            Font = new Font("Segoe UI Semibold", 10, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 10),
             ForeColor = Color.FromArgb(225, 235, 245),
             Margin = new Padding(0, 12, 0, 5)
         };
@@ -923,21 +923,21 @@ internal sealed partial class WallboardCanvas : Control
     private readonly List<Rectangle> _captionObstacles = new();
     private int _hiddenCaptions;
     private readonly Bitmap _brandBitmap = BrandAssets.LoadLogo();
-    private readonly Font _brandFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
-    private readonly Font _subtitleFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
-    private readonly Font _clockFont = new("Segoe UI Semibold", 22, FontStyle.Bold);
+    private readonly Font _brandFont = new("Segoe UI Semibold", 22);
+    private readonly Font _subtitleFont = new("Segoe UI Semibold", 11);
+    private readonly Font _clockFont = new("Segoe UI Semibold", 22);
     private readonly Font _dateFont = new("Segoe UI", 9.75f);
-    private readonly Font _statValueFont = new("Segoe UI Semibold", 25, FontStyle.Bold);
+    private readonly Font _statValueFont = new("Segoe UI Semibold", 25);
     private readonly Font _statLabelFont = new("Segoe UI", 10);
-    private readonly Font _sectionFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
-    private readonly Font _siteFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
-    private readonly Font _siteSmallFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
-    private readonly Font _siteTinyFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
-    private readonly Font _hostLabelFont = new("Segoe UI Semibold", 9.75f, FontStyle.Bold);
+    private readonly Font _sectionFont = new("Segoe UI Semibold", 11);
+    private readonly Font _siteFont = new("Segoe UI Semibold", 9.75f);
+    private readonly Font _siteSmallFont = new("Segoe UI Semibold", 9.75f);
+    private readonly Font _siteTinyFont = new("Segoe UI Semibold", 9.75f);
+    private readonly Font _hostLabelFont = new("Segoe UI Semibold", 9.75f);
     private readonly Font _hostIpFont = new("Consolas", 9.75f);
     private readonly Font _smallFont = new("Segoe UI", 9.75f);
     private readonly Font _tinyFont = new("Segoe UI", 9.75f);
-    private readonly Font _coreFont = new("Segoe UI Semibold", 11, FontStyle.Bold);
+    private readonly Font _coreFont = new("Segoe UI Semibold", 11);
     private readonly Font _cliFont = new("Consolas", 9.75f);
 
     private readonly List<(Rectangle Bounds, WallboardHostSnapshot Host)> _hostHitRegions = new();
@@ -1753,8 +1753,8 @@ internal sealed partial class WallboardCanvas : Control
         int contentBottom = rect.Bottom - 10;
 
         using var titleBrush = new SolidBrush(WallboardStyle.Muted);
-        using var hintBrush = new SolidBrush(Color.FromArgb(84, 111, 128));
-        using var idleBrush = new SolidBrush(Color.FromArgb(98, 116, 133));
+        using var hintBrush = new SolidBrush(WallboardStyle.Muted);
+        using var idleBrush = new SolidBrush(WallboardStyle.Muted);
         using var successBrush = new SolidBrush(WallboardStyle.Green);
         using var failureBrush = new SolidBrush(WallboardStyle.Red);
 
