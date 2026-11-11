@@ -122,7 +122,7 @@ public sealed partial class MainForm
         HostFilter.Offline => "No offline hosts",
         HostFilter.Disabled => "No disabled hosts",
         HostFilter.Snoozed => "No snoozed hosts",
-        _ => "No hosts — add hosts to start"
+        _ => "No hosts"
     };
 
     private List<ManagedHost> SelectedManagedHosts()

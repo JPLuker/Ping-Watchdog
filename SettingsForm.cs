@@ -71,6 +71,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _autoStart = new() { Text = "Start monitoring automatically when the app opens", AutoSize = true };
     private readonly CheckBox _startWithWindows = new() { Text = "Open Ping Watchdog when you sign in to Windows", AutoSize = true };
     private readonly CheckBox _wallboardOnStartup = new() { Text = "Open the Wallboard when the app opens", AutoSize = true };
+    private readonly CheckBox _versionOverlay = new() { Text = "Show version on all screens", AutoSize = true };
     private readonly Button _resetButton = new AuroraButton() { Text = "Restore default settings…", AutoSize = true };
 
     public SettingsForm(
@@ -118,7 +119,7 @@ internal sealed class SettingsForm : Form
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
 
-        foreach (var check in new[] { _autoStart, _startWithWindows, _wallboardOnStartup, _restoreLastSite, _use12HourTime, _minimizeToTray,
+        foreach (var check in new[] { _autoStart, _startWithWindows, _wallboardOnStartup, _versionOverlay, _restoreLastSite, _use12HourTime, _minimizeToTray,
             _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
             check.CheckedChanged += (_, _) => UpdateDirtyState();
         foreach (var number in new[] { _interval, _timeout, _downAfter, _recoverAfter })
@@ -181,8 +182,8 @@ internal sealed class SettingsForm : Form
             control.Enabled = editable;
 
         _monitorLockLabel.Text = editable
-            ? "Changes apply to the next monitoring session."
-            : "Monitoring is active. Stop monitoring to change timing and outage thresholds.";
+            ? "Applies the next time monitoring starts."
+            : "Stop monitoring to change these.";
         // Tag keeps the color through later theme passes.
         _monitorLockLabel.Tag = editable ? null : "statSuspect";
         _monitorLockLabel.ForeColor = editable ? AuroraTheme.Palette.Secondary : AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning);
@@ -322,8 +323,8 @@ internal sealed class SettingsForm : Form
         stack.Controls.Add(Section(
             "Window behavior",
             _minimizeToTray,
-            "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues."));
-        stack.Controls.Add(Section("Startup view", _restoreLastSite, "All Hosts opens by default. Enable this to reopen the site you last selected."));
+            "Monitoring keeps running while it's hidden."));
+        stack.Controls.Add(Section("Startup view", _restoreLastSite, "Otherwise it opens on All sites."));
         stack.Controls.Add(Section("Startup", new Control[] { _startWithWindows, _autoStart, _wallboardOnStartup },
             "The Wallboard opens on the screen it was last on."));
 
@@ -334,10 +335,10 @@ internal sealed class SettingsForm : Form
     {
         var page = Page("Appearance", "Clock format and ping-log visibility.");
         var stack = (FlowLayoutPanel)page.Controls[1];
-        stack.Controls.Add(Section("Appearance", _appearance, "System follows Windows. Changes apply when saved."));
-        stack.Controls.Add(Section("Time display", _use12HourTime, "Applies to host timestamps, history, CLI trace, and the Wallboard clock."));
+        stack.Controls.Add(Section("Appearance", _appearance, "System follows Windows."));
+        stack.Controls.Add(Section("Time display", _use12HourTime, ""));
         stack.Controls.Add(Section("Ping log", new Control[] { _showMainCli, _wallboardCli },
-            "Choose where ping commands and replies are shown by default."));
+            ""));
         return page;
     }
 
@@ -346,7 +347,7 @@ internal sealed class SettingsForm : Form
         var page = Page("Notifications", "Outage alerts and temporary quiet periods.");
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Windows notifications", _notifications,
-            "Receive notifications when a host goes down or recovers. Monitoring and history continue when alerts are off."));
+            "History still records outages when alerts are off."));
         var soundActions = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = Padding.Empty };
         var choose = new AuroraButton { Text = "Choose sound…", AutoSize = true };
         var test = new AuroraButton { Text = "Test", AutoSize = true };
@@ -360,9 +361,7 @@ internal sealed class SettingsForm : Form
         reset.Click += (_, _) => SetAlarmSound("");
         soundActions.Controls.AddRange(new Control[] { choose, test, reset });
         stack.Controls.Add(Section("Priority alarm", new Control[] { _alarmSoundName, soundActions },
-            "Priority hosts ring every 15 seconds after going offline or coming back online, until acknowledged. Right-click a host to mark it as priority."));
-        stack.Controls.Add(new Label { Text = "Right-click a host to snooze it for an hour. Pings and alerts pause until it resumes automatically. Resume monitoring ends the snooze early.",
-            AutoSize = true, MaximumSize = new Size(540, 0), Margin = new Padding(0, 8, 0, 8) });
+            "Priority hosts ring every 15 seconds when they go down or come back, until you acknowledge it."));
         return page;
     }
 
@@ -371,7 +370,8 @@ internal sealed class SettingsForm : Form
         var page = Page("Advanced", "Preference recovery.");
         var stack = (FlowLayoutPanel)page.Controls[1];
         stack.Controls.Add(Section("Restore preferences", _resetButton,
-            "Stages the default settings for review. Save changes applies them. Hosts, site organization, and outage history are preserved. Active-session timing stays unchanged."));
+            "Puts the defaults in place for you to review and save. Hosts and history aren't touched."));
+        stack.Controls.Add(Section("Testing", _versionOverlay, "Shows the version and build in the bottom-left corner of every window."));
         return page;
     }
 
@@ -397,7 +397,7 @@ internal sealed class SettingsForm : Form
         stack.Controls.Add(_hideSuspects);
         stack.Controls.Add(new Label
         {
-            Text = "These filters change what Wallboard and Outage History show. They never delete the underlying events.",
+            Text = "Only changes what's shown. Events are never deleted.",
             AutoSize = true,
             MaximumSize = new Size(560, 0),
             ForeColor = Color.FromArgb(139, 153, 169),
@@ -422,7 +422,7 @@ internal sealed class SettingsForm : Form
         stack.Controls.Add(_updateButton);
         stack.Controls.Add(new Label
         {
-            Text = "Updates can run in the background. Check for updates is also available in the sidebar.",
+            Text = "",
             AutoSize = true,
             ForeColor = Color.FromArgb(139, 153, 169),
             Margin = new Padding(0, 12, 0, 0)
@@ -451,13 +451,13 @@ internal sealed class SettingsForm : Form
         var backupButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
         backupButtons.Controls.Add(backup); backupButtons.Controls.Add(restore);
         stack.Controls.Add(Section("Backups", new Control[] { backupButtons, _dataStatus },
-            "Includes saved sites, host settings, preferences and history. Restore replaces data and restarts the app."));
+            "Restoring replaces your current data and restarts the app."));
         stack.Controls.Add(Section("Storage location", portable, StoragePaths.Current.Portable
-            ? "Folder-local storage is enabled. Keep the Data folder when moving or updating this copy."
-            : _canEnablePortable ? "Copies the saved setup beside this portable copy and restarts. Original AppData files remain."
-            : "Folder-local storage is available in portable copies."));
+            ? "Keep the Data folder when you move or update this copy."
+            : _canEnablePortable ? "Copies your data next to this portable copy and restarts. The AppData copy stays."
+            : "Only in the portable copy."));
         stack.Controls.Add(Section("Delete saved data", _deleteDataButton,
-            "Removes data, backups and recovery reports from active storage, then closes the app. Stop monitoring first."));
+            "Removes data, backups and recovery reports, then closes the app. Stop monitoring first."));
         return page;
     }
 
@@ -665,7 +665,8 @@ internal sealed class SettingsForm : Form
             control.Margin = new Padding(0, 8, 0, 0);
             panel.Controls.Add(control);
         }
-        panel.Controls.Add(new Label
+        // Descriptions only where the label alone is ambiguous (DESIGN.md A4).
+        if (description.Length > 0) panel.Controls.Add(new Label
         {
             Text = description,
             AutoSize = true,
@@ -770,6 +771,7 @@ internal sealed class SettingsForm : Form
             _autoStart.Checked = s.StartMonitoringOnLaunch;
             _startWithWindows.Checked = s.StartWithWindows;
             _wallboardOnStartup.Checked = s.OpenWallboardOnStartup;
+            _versionOverlay.Checked = s.ShowVersionOverlay;
             _autoUpdates.Checked = s.AutoCheckUpdates;
             // Managed by policy: the controls give way to one line saying so.
             _updatesManaged.Visible = s.UpdatesManaged;
@@ -793,7 +795,7 @@ internal sealed class SettingsForm : Form
         Use12HourTime = _use12HourTime.Checked, RestoreLastSiteOnStartup = _restoreLastSite.Checked,
         Appearance = (AppearanceMode)Math.Max(0, _appearance.SelectedIndex),
         StartMonitoringOnLaunch = _autoStart.Checked, StartWithWindows = _startWithWindows.Checked,
-        OpenWallboardOnStartup = _wallboardOnStartup.Checked, HideSuspectEvents = _hideSuspects.Checked,
+        OpenWallboardOnStartup = _wallboardOnStartup.Checked, ShowVersionOverlay = _versionOverlay.Checked, HideSuspectEvents = _hideSuspects.Checked,
         PriorityAlarmSound = _alarmSound
     };
 
@@ -932,7 +934,7 @@ internal sealed class SettingsForm : Form
         if (!_provider().MonitoringActive)
         { _interval.Value = 2; _timeout.Value = 1000; _downAfter.Value = 3; _recoverAfter.Value = 2; }
         _minimizeToTray.Checked = true; _restoreLastSite.Checked = false; _autoStart.Checked = false;
-        _startWithWindows.Checked = false; _wallboardOnStartup.Checked = false;
+        _startWithWindows.Checked = false; _wallboardOnStartup.Checked = false; _versionOverlay.Checked = false;
         _appearance.SelectedIndex = 0;
         _use12HourTime.Checked = false; _notifications.Checked = true; SetAlarmSound("");
         _showMainCli.Checked = true; _wallboardCli.Checked = true;

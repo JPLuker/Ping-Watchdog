@@ -30,7 +30,8 @@ internal static class SupportInfo
             $"Configuration: {Path.Combine(data, "autosave.pingwatch.json")}",
             $"Preferences: {Path.Combine(data, "preferences.json")}",
             $"History: {Path.Combine(data, "event-history.json")}",
-            $"Startup reports: {recovery}"
+            $"Startup reports: {recovery}",
+            $"Logs: {StoragePaths.Current.LogDirectory}"
         });
     }
 

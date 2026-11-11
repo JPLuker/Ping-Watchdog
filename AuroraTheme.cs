@@ -109,7 +109,7 @@ internal static class AuroraTheme
     {
         if (form.IsDisposed || !Windows.Add(form)) return;
         form.Disposed += (_, _) => Windows.Remove(form);
-        form.Shown += (_, _) => Apply(form);
+        form.Shown += (_, _) => { Apply(form); VersionOverlay.Attach(form); };
         Apply(form);
     }
 

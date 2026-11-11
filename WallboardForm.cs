@@ -273,7 +273,7 @@ internal sealed class WallboardForm : Form
 
         stack.Controls.Add(SectionTitle("Hosts"));
         stack.Controls.Add(_hostGrid);
-        stack.Controls.Add(SectionNote("Right-click a host for quick actions. Exit Wallboard to add or edit hosts."));
+        stack.Controls.Add(SectionNote("Right-click a host for actions."));
         var monitoringSettings = DrawerButton("Monitoring settings…");
         monitoringSettings.Click += (_, _) => _actions.OpenSettings();
         stack.Controls.Add(monitoringSettings);
@@ -1753,28 +1753,20 @@ internal sealed partial class WallboardCanvas : Control
         int contentBottom = rect.Bottom - 10;
 
         using var titleBrush = new SolidBrush(WallboardStyle.Muted);
-        using var hintBrush = new SolidBrush(WallboardStyle.Muted);
         using var idleBrush = new SolidBrush(WallboardStyle.Muted);
         using var successBrush = new SolidBrush(WallboardStyle.Green);
         using var failureBrush = new SolidBrush(WallboardStyle.Red);
 
         g.DrawString("Ping activity", _sectionFont, titleBrush, x, y);
 
-        string hint = "C  Hide";
-        var hintSize = g.MeasureString(hint, _tinyFont);
-        g.DrawString(
-            hint,
-            _tinyFont,
-            hintBrush,
-            rect.Right - hintSize.Width - 14,
-            y + 1);
+        // The footer already lists C for the log; one home per fact (A3).
 
         if (snapshot.Commands.Count == 0)
         {
             g.DrawString(
                 snapshot.Monitoring
-                    ? "Waiting for ping output..."
-                    : "Start monitoring to populate the live CLI trace.",
+                    ? "Waiting for replies"
+                    : "No ping activity",
                 _cliFont,
                 idleBrush,
                 x,

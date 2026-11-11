@@ -76,7 +76,7 @@ internal sealed class QuickAddForm : Form
         root.Controls.Add(new Label
         {
             AutoSize = true, Dock = DockStyle.Fill,
-            Text = "Paste addresses, spreadsheet rows, CIDR, or ranges. Maximum 4,096 hosts.",
+            Text = "Paste addresses, spreadsheet rows, CIDR blocks or ranges. Up to 4,096 hosts.",
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);
         root.Controls.Add(_paste, 0, 1);
@@ -331,7 +331,7 @@ internal sealed class QuickAddForm : Form
         if (!_temporary && siteError is not null) { ShowSiteStatus(siteError, "statSuspect"); _site.Focus(); return; }
         var hosts = _grid.Rows.Cast<DataGridViewRow>().Where(r => Equals(r.Cells[0].Value, true) && Cell(r, 5) == "New")
             .Select(r => new ManagedHost(siteName, HostImport.Normalize(Cell(r, 1)), Cell(r, 2), Cell(r, 4), new HostOptions(), "Unknown")).ToList();
-        if (hosts.Count == 0) { MessageBox.Show(this, "Select at least one valid new host. Duplicates and invalid rows are skipped."); return; }
+        if (hosts.Count == 0) { MessageBox.Show(this, "Select at least one new, valid host."); return; }
         _import(hosts, _temporary); Close();
     }
 }

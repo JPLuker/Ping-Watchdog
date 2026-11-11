@@ -22,6 +22,7 @@ public sealed partial class MainForm
                 Appearance = settings.Appearance, RestoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup,
                 StartMonitoringOnLaunch = settings.StartMonitoringOnLaunch,
                 OpenWallboardOnStartup = settings.OpenWallboardOnStartup,
+                ShowVersionOverlay = settings.ShowVersionOverlay,
                 WallboardScreen = _wallboardScreen,
                 ShowUpdateControlOnHome = settings.ShowUpdateControlOnHome
             };

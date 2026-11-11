@@ -13,6 +13,8 @@ internal sealed class UserPreferences
     public string WallboardScreen { get; set; } = "";
     // Set just before an update installs; checked and cleared on the next start.
     public string PendingUpdateVersion { get; set; } = "";
+    // VERSIONING.md 4.1 developer setting.
+    public bool ShowVersionOverlay { get; set; }
     public AppearanceMode Appearance { get; set; } = AppearanceMode.System;
     // Keeps automatic update checks to once a day across restarts.
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
@@ -105,6 +107,7 @@ public sealed partial class MainForm
         _openWallboardOnStartup = preferences.OpenWallboardOnStartup;
         _wallboardScreen = preferences.WallboardScreen ?? "";
         _appliedUpdateVersion = preferences.PendingUpdateVersion ?? "";
+        VersionOverlay.SetEnabled(preferences.ShowVersionOverlay);
         _lastUpdateCheckUtc = preferences.LastUpdateCheckUtc;
         AuroraTheme.SetMode(preferences.Appearance);
     }
@@ -130,7 +133,8 @@ public sealed partial class MainForm
     {
         ShowUpdateControlOnHome = _showUpdateControlOnHome, RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
         StartMonitoringOnLaunch = _startMonitoringOnLaunch, OpenWallboardOnStartup = _openWallboardOnStartup,
-        WallboardScreen = _wallboardScreen, Appearance = AuroraTheme.Mode, LastUpdateCheckUtc = _lastUpdateCheckUtc
+        WallboardScreen = _wallboardScreen, Appearance = AuroraTheme.Mode, LastUpdateCheckUtc = _lastUpdateCheckUtc,
+        ShowVersionOverlay = VersionOverlay.Enabled
     };
 
     // Background bookkeeping: read the saved file, change one value, keep the rest. Failures stay quiet.

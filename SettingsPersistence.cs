@@ -113,6 +113,7 @@ public sealed partial class MainForm
             RestoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup,
             StartMonitoringOnLaunch = settings.StartMonitoringOnLaunch,
             OpenWallboardOnStartup = settings.OpenWallboardOnStartup,
+            ShowVersionOverlay = settings.ShowVersionOverlay,
             WallboardScreen = _wallboardScreen,
             Appearance = settings.Appearance,
             LastUpdateCheckUtc = _lastUpdateCheckUtc

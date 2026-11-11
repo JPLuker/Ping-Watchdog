@@ -334,7 +334,8 @@ internal sealed record AppSettingsSnapshot(
     string PriorityAlarmSound = "",
     bool UpdatesManaged = false,
     bool StartWithWindows = false,
-    bool OpenWallboardOnStartup = false);
+    bool OpenWallboardOnStartup = false,
+    bool ShowVersionOverlay = false);
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -956,6 +957,7 @@ public sealed partial class MainForm : Form
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
         StartupRegistration.RunTests();
+        VersionOverlay.RunTests();
         SafeConfigStore.RunTests();
         SettingsPersistence.RunTests();
         DataBackupStore.RunTests();
@@ -1259,7 +1261,7 @@ public sealed partial class MainForm : Form
         }
 
         // The accepted map look: five branches of five hosts sit in one row at the default window size, labels shown.
-        using (var accepted = new WallboardCanvas { Size = new Size(740, 345), ShowCli = false,
+        using (var accepted = new WallboardCanvas { Size = new Size(740, 345), ShowCli = false, Embedded = true,
             Snapshot = new WallboardSnapshot(true, DateTime.Now, Enumerable.Range(1, 5).Select(site => new WallboardSiteSnapshot($"Branch {site}",
                 Enumerable.Range(1, 5).Select(host => new WallboardHostSnapshot($"Branch {site}", $"192.0.2.{site * 10 + host}", host == 2 ? "Printer" : host == 3 ? "Cloudkey" : "", HostState.Online, 1, null)).ToArray())).ToArray(),
                 Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) })
@@ -4639,7 +4641,8 @@ public sealed partial class MainForm : Form
             _priorityAlarmSound,
             UpdatesManaged,
             _persistSites && StartupRegistration.IsEnabled(),
-            _openWallboardOnStartup);
+            _openWallboardOnStartup,
+            VersionOverlay.Enabled);
     }
 
     private string GetUpdateActionText()
@@ -4678,6 +4681,7 @@ public sealed partial class MainForm : Form
         _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = settings.StartMonitoringOnLaunch;
         _openWallboardOnStartup = settings.OpenWallboardOnStartup;
+        VersionOverlay.SetEnabled(settings.ShowVersionOverlay);
         if (_persistSites && settings.StartWithWindows != StartupRegistration.IsEnabled())
         {
             try { StartupRegistration.Set(settings.StartWithWindows); }

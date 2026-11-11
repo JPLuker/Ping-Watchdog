@@ -66,7 +66,7 @@ internal sealed class RecoveryForm : Form
     internal RecoveryForm(string report, string reportPath, IRecoveryUpdates? updates = null)
     {
         _updates = updates ?? new RecoveryUpdates();
-        Text = "Ping Watchdog — Startup recovery";
+        Text = "Startup recovery • Ping Watchdog";
         Icon = SystemIcons.Warning;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(760, 490);
