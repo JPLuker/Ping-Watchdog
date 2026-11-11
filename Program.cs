@@ -39,7 +39,14 @@ internal static class Program
     internal static void InitializeUpdater(string[] args)
     {
         // Applying a staged package is an explicit action, including in recovery.
-        VelopackApp.Build().SetArgs(args).SetAutoApplyOnStartup(false).Run();
+        VelopackApp.Build().SetArgs(args).SetAutoApplyOnStartup(false)
+            // Uninstall also removes the "open at sign-in" entry so Windows isn't left pointing at a missing app.
+            .OnBeforeUninstallFastCallback(_ =>
+            {
+                try { StartupRegistration.Set(false); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
+            })
+            .Run();
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -181,6 +188,40 @@ internal sealed class NicknameDialog : Form
     }
 }
 
+// #40: "I tried to adjust a hosts address cuz DHCP and it only asks me to change the label".
+// One dialog edits both. The address must be valid; history stays with the old address.
+internal sealed class HostEditDialog : Form
+{
+    private readonly PlainTextBox _address = new() { AccessibleName = "Address", BorderStyle = BorderStyle.FixedSingle };
+    private readonly PlainTextBox _label = new() { AccessibleName = "Label", BorderStyle = BorderStyle.FixedSingle };
+    private readonly Label _addressPrompt = new() { Text = "Address" };
+    public string Address => HostImport.Normalize(ClipboardText.NormalizeLine(_address.Text));
+    public string Nickname => _label.Text.Trim();
+
+    public HostEditDialog(string address, string label, Func<string, string?> addressError)
+    {
+        _address.Text = address; _label.Text = label;
+        CompactDialog.Build(this, $"Edit host • {address}", new[] { (_addressPrompt, (Control)_address), (new Label { Text = "Label" }, (Control)_label) }, "Save");
+        FormClosing += (_, e) =>
+        {
+            if (DialogResult != DialogResult.OK) return;
+            string? error = HostImport.Valid(_address.Text.Trim()) ? addressError(Address) : "Enter a valid IP address or host name";
+            if (error is null) return;
+            e.Cancel = true;
+            _addressPrompt.Text = error; _addressPrompt.Tag = "statOffline"; AuroraTheme.Apply(this);
+            _address.Focus(); _address.SelectAll();
+        };
+        _address.TextChanged += (_, _) =>
+        {
+            if (_addressPrompt.Tag is null) return;
+            _addressPrompt.Text = "Address"; _addressPrompt.Tag = null; AuroraTheme.Apply(this);
+        };
+    }
+
+    internal void SetForTest(string address, string label) { _address.Text = address; _label.Text = label; }
+    internal string PromptForTest => _addressPrompt.Text;
+}
+
 internal sealed class SiteNameDialog : Form
 {
     private readonly PlainTextBox _box = new() { AccessibleName = "Site or group name", BorderStyle = BorderStyle.FixedSingle };
@@ -291,7 +332,9 @@ internal sealed record AppSettingsSnapshot(
     bool StartMonitoringOnLaunch = false,
     AppearanceMode Appearance = AppearanceMode.System,
     string PriorityAlarmSound = "",
-    bool UpdatesManaged = false);
+    bool UpdatesManaged = false,
+    bool StartWithWindows = false,
+    bool OpenWallboardOnStartup = false);
 
 internal sealed record WallboardControlHost(
     string Site,
@@ -566,6 +609,7 @@ public sealed partial class MainForm : Form
         TextAlign = ContentAlignment.MiddleRight
     };
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 500 };
+    private ResponsivenessGuard? _responsiveness;
     // Hourly look at whether a day has passed; the check itself runs at most once a day.
     private readonly System.Windows.Forms.Timer _updateTimer = new()
     {
@@ -783,6 +827,13 @@ public sealed partial class MainForm : Form
 
             ShowStorageWarning();
             if (_startMonitoringOnLaunch && !_configWriteBlocked) StartMonitoring();
+            if (_persistSites)
+            {
+                StartupRegistration.RefreshPath();
+                _responsiveness ??= new ResponsivenessGuard(this, StoragePaths.Current.LogDirectory);
+            }
+            CheckAppliedUpdate();
+            if (_openWallboardOnStartup && _persistSites) OpenWallboard();
 
             if (_autoCheckUpdates && !UpdatesManaged)
             {
@@ -833,6 +884,7 @@ public sealed partial class MainForm : Form
 
         FormClosed += (_, _) =>
         {
+            _responsiveness?.Dispose();
             _updateTimer.Stop();
             _updateTimer.Dispose();
             _trayIcon.Visible = false;
@@ -903,6 +955,7 @@ public sealed partial class MainForm : Form
         form.LoadHostEditor();
         TopologyLayout.RunTests();
         UserPreferenceStore.RunTests();
+        StartupRegistration.RunTests();
         SafeConfigStore.RunTests();
         SettingsPersistence.RunTests();
         DataBackupStore.RunTests();
@@ -1138,6 +1191,8 @@ public sealed partial class MainForm : Form
         // Updates: at most one automatic check a day (clock rollback re-arms it); IT policy turns them off.
         var checkedAt = new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero);
         Expect(UpdatePolicy.IsDue(null, checkedAt), "First update check was not due.");
+        Expect(UpdatePolicy.IsInstalled("v1.19.30", "1.19.30") && UpdatePolicy.IsInstalled("v1.20.0", "v1.19.30"), "An installed update read as missing.");
+        Expect(!UpdatePolicy.IsInstalled("v1.19.29", "1.19.30") && !UpdatePolicy.IsInstalled("v1.19.29", "the downloaded version"), "A missing update read as installed.");
         Expect(!UpdatePolicy.IsDue(checkedAt, checkedAt.AddHours(23)), "Update check ran twice in a day.");
         Expect(UpdatePolicy.IsDue(checkedAt, checkedAt.AddHours(24)), "Daily update check was not due after a day.");
         Expect(UpdatePolicy.IsDue(checkedAt, checkedAt.AddHours(-3)), "A clock moved backwards blocked update checks.");
@@ -1203,18 +1258,21 @@ public sealed partial class MainForm : Form
             Expect(!nameLabel.UseMnemonic, "Themed labels still treat & as a shortcut marker.");
         }
 
-        // Truncated map addresses keep their distinguishing end, never just the shared prefix.
-        using (var trimBitmap = new Bitmap(200, 50))
-        using (var trimGraphics = Graphics.FromImage(trimBitmap))
-        using (var trimFont = new Font("Consolas", 9.75f))
-        using (var trimFormat = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces })
+        // #41: the map always shows whole addresses, and the layout leaves room for them.
+        foreach (var (siteCount, hostsPerSite, viewport) in new[] { (5, 5, new Size(740, 360)), (12, 4, new Size(900, 650)), (24, 3, new Size(1280, 720)) })
         {
-            float Width(string value) => trimGraphics.MeasureString(value, trimFont, int.MaxValue, trimFormat).Width;
-            Expect(WallboardCanvas.TrimAddressStart(trimGraphics, "10.235.80.60", trimFont, Width("10.235.80.60") + 1) == "10.235.80.60", "A fitting address was trimmed.");
-            string tight = WallboardCanvas.TrimAddressStart(trimGraphics, "10.235.80.60", trimFont, Width("…80.60") + 1);
-            Expect(tight.StartsWith("…") && tight.EndsWith("80.60") && Width(tight) <= Width("…80.60") + 1, $"Address trimmed to '{tight}' instead of keeping its end.");
-            string v6 = WallboardCanvas.TrimAddressStart(trimGraphics, "2001:db8:abcd:1234:5678:90ab:cdef:1234", trimFont, Width("…cdef:1234") + 1);
-            Expect(v6.EndsWith("cdef:1234"), $"IPv6 address trimmed to '{v6}'.");
+            var fullSites = Enumerable.Range(0, siteCount).Select(s => new WallboardSiteSnapshot($"Site {s:00}",
+                Enumerable.Range(0, hostsPerSite).Select(h => new WallboardHostSnapshot($"Site {s:00}", $"10.233.{100 + s}.{200 + h}", h % 2 == 0 ? "" : "Switch", HostState.Online, 1, null)).ToArray())).ToArray();
+            using var full = new WallboardCanvas { Size = viewport, ShowCli = false,
+                Snapshot = new WallboardSnapshot(true, DateTime.Now, fullSites, Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) };
+            using var fullBitmap = new Bitmap(viewport.Width, viewport.Height);
+            full.DrawToBitmap(fullBitmap, new Rectangle(Point.Empty, viewport));
+            var expected = fullSites.SelectMany(site => site.Hosts.Select(host => host.Address)).OrderBy(a => a).ToArray();
+            Expect(full.DrawnAddresses.OrderBy(a => a).SequenceEqual(expected), $"{siteCount}x{hostsPerSite} at {viewport} did not draw every whole address.");
+            using var g = Graphics.FromImage(fullBitmap);
+            foreach (var cell in full.HostCellBounds)
+                Expect(g.MeasureString("10.233.123.204", full.HostAddressFont, int.MaxValue, StringFormat.GenericTypographic).Width <= cell.Width - 20 * full.DeviceDpi / 96f,
+                    $"{siteCount}x{hostsPerSite} at {viewport}: a {cell.Width}px host cell is too narrow for a whole address.");
         }
 
         var snoozeNow = DateTimeOffset.UtcNow;
@@ -1575,6 +1633,18 @@ public sealed partial class MainForm : Form
             try
             {
                 await Task.Delay(200);
+                // #40: a busy window is noticed and the wait is logged with what the app was doing.
+                string stallLogs = Path.Combine(Path.GetTempPath(), "PingWatchdog-stall-" + Guid.NewGuid().ToString("N"));
+                using (var guard = new ResponsivenessGuard(form, stallLogs))
+                {
+                    await Task.Delay(300);
+                    using (UiActivity.Begin("Test wait"))
+                        Thread.Sleep(1400);
+                    await Task.Delay(400);
+                    Check(File.Exists(guard.LogPath) && File.ReadAllText(guard.LogPath).Contains("not responding") &&
+                        File.ReadAllText(guard.LogPath).Contains("Test wait"), "A 1.4 s wait was not logged with its activity.");
+                }
+                Directory.Delete(stallLogs, recursive: true);
                 form.WindowState = FormWindowState.Normal;
                 foreach (int width in new[] { 900, 1060, 1320 })
                 {
@@ -1862,6 +1932,9 @@ public sealed partial class MainForm : Form
                     quickAdd.Show(form);
                     await Task.Delay(100);
                     Check(quickAdd.PreviewRowCount == 5, "Quick Add preview lost input rows.");
+                    // #40: pasted labels land in the Label column and fill down; Use and Site are left alone.
+                    var pasted = quickAdd.PasteLabelsForTest("Front desk\r\nCopier\tIgnored\n");
+                    Check(pasted[0] == "Front desk" && pasted[1] == "Copier", $"Pasting labels gave '{string.Join("|", pasted)}'.");
                     Capture(quickAdd, "quick-add");
                     quickAdd.Close();
                 }
@@ -2126,6 +2199,15 @@ public sealed partial class MainForm : Form
                         CompactDialog.CheckBounds(label);
                         Check(label.Nickname == "Printer & scanner", "Label review changed the current value.");
                         DismissWithEscape(label);
+                    }
+                    using (var hostEdit = new HostEditDialog("192.0.2.40", "Printer & scanner", _ => null))
+                    {
+                        hostEdit.Show(form);
+                        await Task.Delay(50);
+                        Capture(hostEdit, "dialog-edit-host-" + appearance);
+                        CompactDialog.CheckBounds(hostEdit);
+                        Check(hostEdit.Address == "192.0.2.40" && hostEdit.Nickname == "Printer & scanner", "Host edit review changed the current values.");
+                        DismissWithEscape(hostEdit);
                     }
                     using (var name = new SiteNameDialog("Rename site", "Rename", "Office & Warehouse"))
                     {
@@ -3549,6 +3631,7 @@ public sealed partial class MainForm : Form
 
     private void StartMonitoring()
     {
+        using var activity = UiActivity.Begin("Starting monitoring");
         PersistCurrentEditor();
         SaveSites();
         RefreshSiteList(_selectedSiteName);
@@ -4456,19 +4539,22 @@ public sealed partial class MainForm : Form
         return null;
     }
 
+    // The display it was last on when that display is still connected; otherwise a different screen than the main window.
+    internal static Screen WallboardTargetScreen(IReadOnlyList<Screen> screens, Screen current, string remembered) =>
+        screens.FirstOrDefault(s => remembered.Length > 0 && s.DeviceName.Equals(remembered, StringComparison.OrdinalIgnoreCase))
+        ?? screens.FirstOrDefault(s => !s.DeviceName.Equals(current.DeviceName, StringComparison.OrdinalIgnoreCase))
+        ?? current;
+
     private void OpenWallboard()
     {
+        using var activity = UiActivity.Begin("Opening Wallboard");
         if (_wallboardForm is not null && !_wallboardForm.IsDisposed)
         {
             _wallboardForm.Activate();
             return;
         }
 
-        var currentScreen = Screen.FromControl(this);
-        var screens = Screen.AllScreens;
-        var target = screens.FirstOrDefault(s =>
-            !s.DeviceName.Equals(currentScreen.DeviceName, StringComparison.OrdinalIgnoreCase))
-            ?? currentScreen;
+        var target = WallboardTargetScreen(Screen.AllScreens, Screen.FromControl(this), _wallboardScreen);
 
         _wallboardForm = new WallboardForm(
             BuildWallboardSnapshot,
@@ -4498,8 +4584,11 @@ public sealed partial class MainForm : Form
             ShowHostQuickActions);
         _wallboardForm.AttachPriorityBanner(new PriorityBanner(_priorityAlarm));
 
+        var opened = _wallboardForm;
+        opened.Move += (_, _) => { if (opened.IsHandleCreated && opened.WindowState != FormWindowState.Minimized) RecordWallboardScreen(Screen.FromControl(opened).DeviceName); };
         _wallboardForm.FormClosed += (_, _) =>
         {
+            RecordWallboardScreen(Screen.FromRectangle(opened.RestoreBounds).DeviceName);
             _wallboardForm = null;
 
             if (!_closingApplication)
@@ -4534,7 +4623,9 @@ public sealed partial class MainForm : Form
             _startMonitoringOnLaunch,
             AuroraTheme.Mode,
             _priorityAlarmSound,
-            UpdatesManaged);
+            UpdatesManaged,
+            _persistSites && StartupRegistration.IsEnabled(),
+            _openWallboardOnStartup);
     }
 
     private string GetUpdateActionText()
@@ -4572,6 +4663,13 @@ public sealed partial class MainForm : Form
         _showUpdateControlOnHome = settings.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = settings.StartMonitoringOnLaunch;
+        _openWallboardOnStartup = settings.OpenWallboardOnStartup;
+        if (_persistSites && settings.StartWithWindows != StartupRegistration.IsEnabled())
+        {
+            try { StartupRegistration.Set(settings.StartWithWindows); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            { throw new InvalidOperationException("Windows did not save the sign-in setting. " + ex.Message, ex); }
+        }
         AuroraTheme.SetMode(settings.Appearance);
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
@@ -4692,6 +4790,23 @@ public sealed partial class MainForm : Form
         _settingsForm is { Visible: true, IsDisposed: false } ? _settingsForm :
         _wallboardForm is { Visible: true, IsDisposed: false } ? _wallboardForm : this;
 
+    private void CheckAppliedUpdate()
+    {
+        if (!_persistSites || _appliedUpdateVersion.Length == 0) return;
+        string expected = _appliedUpdateVersion;
+        _appliedUpdateVersion = "";
+        UpdateSavedPreference(p => p.PendingUpdateVersion = "");
+        if (UpdatePolicy.IsInstalled(GetDisplayVersion(), expected))
+        {
+            SetUpdateStatus($"Updated to {(expected.StartsWith('v') ? expected : "v" + expected)}", notify: true);
+            return;
+        }
+        using var failure = new UpdateFailureDialog($"Ping Watchdog is still on {GetDisplayVersion()}.",
+            $"The update to {expected} didn't install.", "Update didn't install", "Try again");
+        if (failure.ShowDialog(this) == DialogResult.Retry)
+            BeginInvoke(async () => await CheckForUpdatesAsync(userInitiated: true));
+    }
+
     private void RestartToApplyPendingUpdate()
     {
         if (_pendingUpdateManager is null || _pendingUpdateInfo is null)
@@ -4737,8 +4852,13 @@ public sealed partial class MainForm : Form
             _trayUpdateItem.Enabled = false;
             _statusLabel.Text = $"Applying update {version}...";
 
+            // #35: no Velopack progress window with an OK button. The app closes, the update installs,
+            // and Ping Watchdog reopens; the next start confirms the version changed (CheckAppliedUpdate).
+            string target = _pendingUpdateInfo.TargetFullRelease.Version.ToString();
+            UpdateSavedPreference(p => p.PendingUpdateVersion = target);
             StartupRecovery.ExpectUpdateExit();
-            _pendingUpdateManager.ApplyUpdatesAndRestart(_pendingUpdateInfo);
+            _pendingUpdateManager.WaitExitThenApplyUpdates(_pendingUpdateInfo.TargetFullRelease, silent: true, restart: true, Array.Empty<string>());
+            Environment.Exit(0);
         }
         catch (Exception ex)
         {
@@ -4997,6 +5117,7 @@ public sealed partial class MainForm : Form
 
     private void RefreshGrid()
     {
+        using var activity = UiActivity.Begin("Refreshing hosts");
         // The active-session UI timer also resumes expired snoozes, including when all hosts are paused.
         ReconcileMonitoringWithConfig();
         _monitorCanvas.Snapshot = BuildWallboardSnapshot();

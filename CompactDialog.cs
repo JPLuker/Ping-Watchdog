@@ -3,7 +3,11 @@ namespace PingWatchdog;
 // FOCAL: one named value. Native compact chrome; measured rows keep actions visible.
 internal static class CompactDialog
 {
-    internal static void Build(Form form, string title, Label prompt, Control input, string action, int width = 440)
+    internal static void Build(Form form, string title, Label prompt, Control input, string action, int width = 440) =>
+        Build(form, title, new[] { (prompt, input) }, action, width);
+
+    // Several labeled fields in one column; the first field takes focus.
+    internal static void Build(Form form, string title, (Label Prompt, Control Input)[] fields, string action, int width = 440)
     {
         form.Text = title;
         form.AutoScaleMode = AutoScaleMode.Dpi;
@@ -16,12 +20,17 @@ internal static class CompactDialog
         form.MinimizeBox = form.MaximizeBox = false;
         form.ShowInTaskbar = false;
         form.StartPosition = FormStartPosition.CenterParent;
-        input.Font = AuroraTheme.LabelFont;
-        input.Dock = DockStyle.Top;
-        input.TabIndex = 0;
-        input.Margin = new Padding(0, 0, 0, 8);
-        prompt.AutoSize = true;
-        prompt.Margin = new Padding(0, 0, 0, 8);
+        for (int i = 0; i < fields.Length; i++)
+        {
+            var (prompt, input) = fields[i];
+            input.Font = AuroraTheme.LabelFont;
+            input.Dock = DockStyle.Top;
+            input.TabIndex = i * 2 + 1;
+            input.Margin = new Padding(0, 0, 0, i + 1 < fields.Length ? 16 : 8);
+            prompt.AutoSize = true;
+            prompt.TabIndex = i * 2;
+            prompt.Margin = new Padding(0, 0, 0, 8);
+        }
         var save = new AuroraButton { Text = action, AutoSize = true, DialogResult = DialogResult.OK,
             Font = AuroraTheme.LabelFont, MinimumSize = new Size(75, 32), TabIndex = 1 };
         var cancel = new AuroraButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel,
@@ -31,25 +40,30 @@ internal static class CompactDialog
         {
             AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill,
             WrapContents = true, FlowDirection = FlowDirection.RightToLeft,
-            Margin = new Padding(0, 12, 0, 0), TabIndex = 1
+            Margin = new Padding(0, 12, 0, 0), TabIndex = fields.Length * 2
         };
         actions.Controls.Add(save);
         actions.Controls.Add(cancel);
+        int rows = fields.Length * 2 + 1;
         var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3,
+            Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = rows,
             Padding = new Padding(AuroraTheme.Space4)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 3; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.Controls.Add(prompt, 0, 0);
-        root.Controls.Add(input, 0, 1);
-        root.Controls.Add(actions, 0, 2);
+        for (int i = 0; i < rows; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (int i = 0; i < fields.Length; i++)
+        {
+            root.Controls.Add(fields[i].Prompt, 0, i * 2);
+            root.Controls.Add(fields[i].Input, 0, i * 2 + 1);
+        }
+        root.Controls.Add(actions, 0, rows - 1);
         form.Controls.Add(root);
         form.AcceptButton = save;
         form.CancelButton = cancel;
         AuroraTheme.Register(form);
-        form.Shown += (_, _) => { input.Focus(); if (input is TextBoxBase text) text.SelectAll(); };
+        var first = fields[0].Input;
+        form.Shown += (_, _) => { first.Focus(); if (first is TextBoxBase text) text.SelectAll(); };
     }
 
     internal static void StylePicker(ComboBox combo)

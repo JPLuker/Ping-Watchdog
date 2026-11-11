@@ -299,17 +299,32 @@ public sealed partial class MainForm
     private void RenameSelectedHost()
     {
         var hosts = SelectedManagedHosts();
-        if (hosts.Count != 1) return;
-        var host = hosts[0];
-        using var dialog = new NicknameDialog(host.Address, host.Label);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Nickname == host.Label) return;
-        string label = dialog.Nickname;
-        ApplyHostEdit(() =>
-        {
-            SaveManagedHosts(new() { host with { Label = label } });
-            return label.Length == 0 ? $"Cleared the name for {host.Address}" : $"Named {host.Address} “{label}”";
-        });
+        if (hosts.Count == 1) EditHost(hosts[0], this);
     }
+
+    // Address and label in one dialog; saves at once with Undo.
+    private void EditHost(ManagedHost host, IWin32Window? owner)
+    {
+        string? AddressError(string address) =>
+            !address.Equals(host.Address, StringComparison.OrdinalIgnoreCase) &&
+            FindSite(host.Site)?.Hosts.Contains(address, StringComparer.OrdinalIgnoreCase) == true
+                ? $"{address} is already in {host.Site}" : null;
+        using var dialog = new HostEditDialog(host.Address, host.Label, AddressError);
+        if (dialog.ShowDialog(owner) != DialogResult.OK) return;
+        ApplyHostEdit(() => SaveHostEdit(host, dialog.Address, dialog.Nickname));
+    }
+
+    // Returns the Undo message, or null when nothing changed.
+    private string? SaveHostEdit(ManagedHost host, string address, string label)
+    {
+        bool moved = !address.Equals(host.Address, StringComparison.OrdinalIgnoreCase);
+        if (!moved && label == host.Label) return null;
+        SaveManagedHosts(new() { host with { Address = address, Label = label } });
+        if (moved) return $"Changed {host.Address} to {address}";
+        return label.Length == 0 ? $"Cleared the name for {host.Address}" : $"Named {host.Address} “{label}”";
+    }
+    internal string? SaveHostEditForTest(string site, string address, string newAddress, string label) =>
+        HostSnapshot().FirstOrDefault(h => h.Site == site && h.Address == address) is { } host ? SaveHostEdit(host, newAddress, label) : null;
 
     private void ShowSelectionMenu(Control anchor, Point location)
     {

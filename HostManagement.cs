@@ -109,12 +109,7 @@ public sealed partial class MainForm
         if (surface != _grid)
             Add("Edit in host list", () => ShowHostInList(site, address));
         Add("Copy address", () => Clipboard.SetText(address));
-        Add("Set label / nickname…", () =>
-        {
-            using var dialog = new NicknameDialog(address, host.Label);
-            if (dialog.ShowDialog(surface.FindForm()) == DialogResult.OK)
-                SaveManagedHosts(new() { host with { Label = dialog.Nickname } });
-        });
+        Add("Edit host…", () => EditHost(host, surface.FindForm()));
         Add("Clear label", () => SaveManagedHosts(new() { host with { Label = "" } }));
         Add("Set category…", () =>
         {
@@ -233,6 +228,9 @@ public sealed partial class MainForm
             var site = FindSite(host.Site) ?? throw new InvalidOperationException("Select an existing destination site.");
             if (original != null && original.Site != host.Site && site.Hosts.Contains(host.Address, StringComparer.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"{host.Address} already exists in {site.Name}.");
+            if (original != null && original.Site == host.Site && !original.Address.Equals(host.Address, StringComparison.OrdinalIgnoreCase)
+                && site.Hosts.Contains(host.Address, StringComparer.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"{host.Address} already exists in {site.Name}.");
         }
         foreach (var host in hosts)
         {
@@ -241,6 +239,16 @@ public sealed partial class MainForm
             if (original.Site != host.Site)
             {
                 RemoveManagedHost(original); site.Hosts.Add(host.Address);
+            }
+            else if (!original.Address.Equals(host.Address, StringComparison.OrdinalIgnoreCase))
+            {
+                // Address change (DHCP): same place in the site, same settings; the old worker stops.
+                int index = site.Hosts.FindIndex(a => a.Equals(original.Address, StringComparison.OrdinalIgnoreCase));
+                string oldKey = BuildHostKey(site.Name, original.Address);
+                RemoveManagedHost(original);
+                site.Hosts.Insert(Math.Clamp(index, 0, site.Hosts.Count), host.Address);
+                StopHostWorker(oldKey);
+                _hosts.TryRemove(oldKey, out _);
             }
             site.HostDetails[host.Address] = host.Options.Copy();
 
@@ -335,6 +343,21 @@ public sealed partial class MainForm
         Check(!form.BuildConfig().Sites.Any(s => s.Temporary || s.Name == "Temporary test"), "temporary excluded from persistence");
         form.ApplyConfig(config);
         Check(form.HostSnapshot().First(h => h.Address == imported.Address).Options.Id == imported.Options.Id, "identity import round trip");
+
+        // #40: a DHCP change edits the address in place and keeps label, group, settings and order.
+        form.ImportManagedHosts(new() { new(siteName, "192.0.2.30", "Front desk", "Desks", new HostOptions { Priority = true }, "Unknown") }, false);
+        var beforeMove = form.HostSnapshot().First(h => h.Address == "192.0.2.30");
+        int position = form.FindSite(siteName)!.Hosts.IndexOf("192.0.2.30");
+        Check(form.SaveHostEditForTest(siteName, "192.0.2.30", "192.0.2.31", "Front desk") == "Changed 192.0.2.30 to 192.0.2.31", "address change message");
+        var afterMove = form.HostSnapshot().First(h => h.Options.Id == beforeMove.Options.Id);
+        Check(afterMove.Address == "192.0.2.31" && afterMove.Label == "Front desk" && afterMove.Group == "Desks" && afterMove.Options.Priority,
+            "address change kept the host's details");
+        Check(!form.HostSnapshot().Any(h => h.Address == "192.0.2.30"), "old address remains after edit");
+        Check(form.FindSite(siteName)!.Hosts.IndexOf("192.0.2.31") == position, "address change moved the host in its site");
+        bool duplicateRejected = false;
+        try { form.SaveHostEditForTest(siteName, "192.0.2.31", imported.Address, "Front desk"); }
+        catch (InvalidOperationException) { duplicateRejected = true; }
+        Check(duplicateRejected, "address change onto an existing host was accepted");
         form.DeleteManagedHosts(new() { form.HostSnapshot().First(h => h.Address == imported.Address) });
         Check(!form.HostSnapshot().Any(h => h.Address == imported.Address), "deletion");
     }

@@ -15,6 +15,18 @@ internal static class UpdatePolicy
     internal static bool IsDue(DateTimeOffset? lastCheck, DateTimeOffset now) =>
         lastCheck is not { } last || now - last >= MinimumInterval || last - now > TimeSpan.FromHours(1);
 
+    // #35: updates apply without Velopack's progress window, so the next start checks the version actually changed.
+    // "v1.19.30" and "1.19.30" compare equal; anything unparseable counts as not installed.
+    internal static bool IsInstalled(string current, string expected)
+    {
+        static Version? Parse(string value)
+        {
+            string core = value.Trim().TrimStart('v', 'V').Split('-', '+')[0];
+            return Version.TryParse(core, out var version) ? version : null;
+        }
+        return Parse(current) is { } have && Parse(expected) is { } want && have >= want;
+    }
+
     internal static bool DisabledByPolicy => Evaluate(ReadPolicyValue(), Environment.GetEnvironmentVariable(EnvironmentVariable));
 
     internal static bool Evaluate(object? registryValue, string? environment) =>

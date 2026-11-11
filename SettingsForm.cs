@@ -69,6 +69,8 @@ internal sealed class SettingsForm : Form
     private AppSettingsSnapshot? _baseline;
     private readonly Label _saveStatus = new() { AutoSize = true, Padding = new Padding(0, 8, 12, 0) };
     private readonly CheckBox _autoStart = new() { Text = "Start monitoring automatically when the app opens", AutoSize = true };
+    private readonly CheckBox _startWithWindows = new() { Text = "Open Ping Watchdog when you sign in to Windows", AutoSize = true };
+    private readonly CheckBox _wallboardOnStartup = new() { Text = "Open the Wallboard when the app opens", AutoSize = true };
     private readonly Button _resetButton = new AuroraButton() { Text = "Restore default settings…", AutoSize = true };
 
     public SettingsForm(
@@ -116,7 +118,7 @@ internal sealed class SettingsForm : Form
         _nav.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _nav.SelectedIndex = 0;
 
-        foreach (var check in new[] { _autoStart, _restoreLastSite, _use12HourTime, _minimizeToTray,
+        foreach (var check in new[] { _autoStart, _startWithWindows, _wallboardOnStartup, _restoreLastSite, _use12HourTime, _minimizeToTray,
             _notifications, _showMainCli, _wallboardCli, _hideSuspects, _autoUpdates, _showHomeUpdateControl })
             check.CheckedChanged += (_, _) => UpdateDirtyState();
         foreach (var number in new[] { _interval, _timeout, _downAfter, _recoverAfter })
@@ -325,7 +327,8 @@ internal sealed class SettingsForm : Form
             _minimizeToTray,
             "When enabled, minimizing Ping Watchdog hides it to the notification area while monitoring continues."));
         stack.Controls.Add(Section("Startup view", _restoreLastSite, "All Hosts opens by default. Enable this to reopen the site you last selected."));
-        stack.Controls.Add(Section("Monitoring startup", _autoStart, "When enabled, saved hosts start monitoring on launch. Disabled hosts remain excluded."));
+        stack.Controls.Add(Section("Startup", new Control[] { _startWithWindows, _autoStart, _wallboardOnStartup },
+            "The Wallboard opens on the screen it was last on."));
 
         return page;
     }
@@ -768,6 +771,8 @@ internal sealed class SettingsForm : Form
             _appearance.SelectedIndex = Enum.IsDefined(s.Appearance) ? (int)s.Appearance : 0;
             _restoreLastSite.Checked = s.RestoreLastSiteOnStartup;
             _autoStart.Checked = s.StartMonitoringOnLaunch;
+            _startWithWindows.Checked = s.StartWithWindows;
+            _wallboardOnStartup.Checked = s.OpenWallboardOnStartup;
             _autoUpdates.Checked = s.AutoCheckUpdates;
             // Managed by policy: the controls give way to one line saying so.
             _updatesManaged.Visible = s.UpdatesManaged;
@@ -790,7 +795,8 @@ internal sealed class SettingsForm : Form
         EventHistoryHours = IndexToHistoryHours(_historyRange.SelectedIndex),
         Use12HourTime = _use12HourTime.Checked, RestoreLastSiteOnStartup = _restoreLastSite.Checked,
         Appearance = (AppearanceMode)Math.Max(0, _appearance.SelectedIndex),
-        StartMonitoringOnLaunch = _autoStart.Checked, HideSuspectEvents = _hideSuspects.Checked,
+        StartMonitoringOnLaunch = _autoStart.Checked, StartWithWindows = _startWithWindows.Checked,
+        OpenWallboardOnStartup = _wallboardOnStartup.Checked, HideSuspectEvents = _hideSuspects.Checked,
         PriorityAlarmSound = _alarmSound
     };
 
@@ -929,6 +935,7 @@ internal sealed class SettingsForm : Form
         if (!_provider().MonitoringActive)
         { _interval.Value = 2; _timeout.Value = 1000; _downAfter.Value = 3; _recoverAfter.Value = 2; }
         _minimizeToTray.Checked = true; _restoreLastSite.Checked = false; _autoStart.Checked = false;
+        _startWithWindows.Checked = false; _wallboardOnStartup.Checked = false;
         _appearance.SelectedIndex = 0;
         _use12HourTime.Checked = false; _notifications.Checked = true; SetAlarmSound("");
         _showMainCli.Checked = true; _wallboardCli.Checked = true;

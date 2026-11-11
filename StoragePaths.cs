@@ -3,8 +3,10 @@ namespace PingWatchdog;
 internal sealed record StorageLayout(string PackageDirectory, string DataDirectory, string StartupDirectory,
     string BrandDirectory, string DeletionMarker, bool Portable)
 {
+    // Logs sit beside Startup: %LOCALAPPDATA%\PingWatchdog\Logs, or Data\Logs in a portable copy.
+    internal string LogDirectory => Path.Combine(Path.GetDirectoryName(StartupDirectory)!, "Logs");
     internal string[] DeletionRoots => Portable ? new[] { DataDirectory }
-        : new[] { DataDirectory, StartupDirectory, BrandDirectory };
+        : new[] { DataDirectory, StartupDirectory, BrandDirectory, LogDirectory };
 }
 
 internal static class StoragePaths

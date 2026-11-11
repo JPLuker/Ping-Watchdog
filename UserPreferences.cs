@@ -8,6 +8,11 @@ internal sealed class UserPreferences
     public bool ShowUpdateControlOnHome { get; set; }
     public bool RestoreLastSiteOnStartup { get; set; }
     public bool StartMonitoringOnLaunch { get; set; }
+    public bool OpenWallboardOnStartup { get; set; }
+    // The display the Wallboard was last on (Screen.DeviceName); empty uses another screen than the main window.
+    public string WallboardScreen { get; set; } = "";
+    // Set just before an update installs; checked and cleared on the next start.
+    public string PendingUpdateVersion { get; set; } = "";
     public AppearanceMode Appearance { get; set; } = AppearanceMode.System;
     // Keeps automatic update checks to once a day across restarts.
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
@@ -75,6 +80,9 @@ public sealed partial class MainForm
 {
     private bool _restoreLastSiteOnStartup;
     private bool _startMonitoringOnLaunch;
+    private bool _openWallboardOnStartup;
+    private string _wallboardScreen = "";
+    private string _appliedUpdateVersion = "";
     private void ApplyStartupView()
     {
         if (!_restoreLastSiteOnStartup) _selectedSiteName = null;
@@ -94,6 +102,9 @@ public sealed partial class MainForm
         _showUpdateControlOnHome = preferences.ShowUpdateControlOnHome;
         _restoreLastSiteOnStartup = preferences.RestoreLastSiteOnStartup;
         _startMonitoringOnLaunch = preferences.StartMonitoringOnLaunch;
+        _openWallboardOnStartup = preferences.OpenWallboardOnStartup;
+        _wallboardScreen = preferences.WallboardScreen ?? "";
+        _appliedUpdateVersion = preferences.PendingUpdateVersion ?? "";
         _lastUpdateCheckUtc = preferences.LastUpdateCheckUtc;
         AuroraTheme.SetMode(preferences.Appearance);
     }
@@ -104,15 +115,32 @@ public sealed partial class MainForm
     private void RecordUpdateCheck(DateTimeOffset when)
     {
         _lastUpdateCheckUtc = when;
+        UpdateSavedPreference(p => p.LastUpdateCheckUtc = when);
+    }
+
+    // Remembers which display the Wallboard was on, so it opens there next time.
+    private void RecordWallboardScreen(string deviceName)
+    {
+        if (deviceName.Length == 0 || deviceName == _wallboardScreen) return;
+        _wallboardScreen = deviceName;
+        UpdateSavedPreference(p => p.WallboardScreen = deviceName);
+    }
+
+    private UserPreferences CurrentPreferences() => new()
+    {
+        ShowUpdateControlOnHome = _showUpdateControlOnHome, RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
+        StartMonitoringOnLaunch = _startMonitoringOnLaunch, OpenWallboardOnStartup = _openWallboardOnStartup,
+        WallboardScreen = _wallboardScreen, Appearance = AuroraTheme.Mode, LastUpdateCheckUtc = _lastUpdateCheckUtc
+    };
+
+    // Background bookkeeping: read the saved file, change one value, keep the rest. Failures stay quiet.
+    private void UpdateSavedPreference(Action<UserPreferences> change)
+    {
         if (!_persistSites) return;
         try
         {
-            var preferences = File.Exists(UserPreferencesPath) ? UserPreferenceStore.Read(UserPreferencesPath) : new UserPreferences
-            {
-                ShowUpdateControlOnHome = _showUpdateControlOnHome, RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
-                StartMonitoringOnLaunch = _startMonitoringOnLaunch, Appearance = AuroraTheme.Mode
-            };
-            preferences.LastUpdateCheckUtc = when;
+            var preferences = File.Exists(UserPreferencesPath) ? UserPreferenceStore.Read(UserPreferencesPath) : CurrentPreferences();
+            change(preferences);
             UserPreferenceStore.Save(UserPreferencesPath, preferences);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException) { }

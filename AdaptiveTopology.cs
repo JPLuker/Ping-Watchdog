@@ -22,26 +22,15 @@ internal sealed partial class WallboardCanvas
     private static float TopologyRowGutter(float height, int rows, float scale) =>
         rows <= 3 ? 24 * scale : Math.Clamp(height * 0.15f / rows, 10 * scale, 24 * scale);
 
-    // Hosts in one site usually share a prefix, so the end of an address is what tells them apart.
-    // Trim from the front ("…80.60") rather than the end ("10.23…"). Full values stay in tooltips and accessible names.
-    internal static string TrimAddressStart(Graphics g, string address, Font font, float width)
-    {
-        using var measure = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces };
-        bool Fits(string value) => g.MeasureString(value, font, int.MaxValue, measure).Width <= width;
-        if (string.IsNullOrEmpty(address) || Fits(address)) return address;
-        int low = 1, high = address.Length - 1, best = 0;
-        while (low <= high)
-        {
-            int keep = (low + high) / 2;
-            if (Fits("…" + address[^keep..])) { best = keep; low = keep + 1; }
-            else high = keep - 1;
-        }
-        return best == 0 ? "…" : "…" + address[^best..];
-    }
+    // Addresses are never shortened on the map (Joseph, #41: "Shortening ips doesn't help anything").
+    // The layout gives addresses room first; this records exactly what was drawn so tests can prove it.
+    private readonly List<string> _drawnAddresses = new();
+    internal IReadOnlyList<string> DrawnAddresses => _drawnAddresses.ToList();
 
     private void DrawFittedTopology(Graphics g, WallboardSnapshot snapshot, Rectangle bounds)
     {
         // FOCAL: every selected host. Reflow the groups and nodes instead of creating a scrollable canvas.
+        _drawnAddresses.Clear();
         var sites = snapshot.Sites.Where(site => site.Hosts.Count > 0).ToList();
         if (sites.Count == 0)
         {
@@ -58,17 +47,17 @@ internal sealed partial class WallboardCanvas
         // A block must hold its heading and at least one readable address row.
         float minimumBlock = heading + padding + line;
         int squareBound = (int)Math.Ceiling(Math.Sqrt(sites.Count));
-        int bestGroups = 1, relaxedGroups = 1;
-        double bestScore = -1, relaxedScore = -1;
-        float bestGutter = rowGutter, relaxedGutter = rowGutter;
-        int[] bestColumns = new int[sites.Count], relaxedColumns = new int[sites.Count];
+        int bestGroups = 1, relaxedGroups = 1, fullGroups = 1;
+        double bestScore = -1, relaxedScore = -1, fullScore = -1;
+        float bestGutter = rowGutter, relaxedGutter = rowGutter, fullGutter = rowGutter;
+        int[] bestColumns = new int[sites.Count], relaxedColumns = new int[sites.Count], fullColumns = new int[sites.Count];
         // Site names count too, so the layout trades a little host room for readable names.
         var nameWidths = sites.Select(site => g.MeasureString(site.Name, _siteFont, int.MaxValue, StringFormat.GenericTypographic).Width + 4 * scale).ToArray();
         var addressWidths = sites.Select(site => site.Hosts.Select(host => g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max() + 40 * scale).ToArray();
         // Keep the accepted square-ish search; widen it only when captions no longer fit.
         for (int groupColumns = 1; groupColumns <= sites.Count; groupColumns++)
         {
-            if (groupColumns > squareBound && bestScore >= 1) break;
+            if (groupColumns > squareBound && fullScore >= 1) break;
             int groupRows = (int)Math.Ceiling(sites.Count / (double)groupColumns);
             float gutter = TopologyRowGutter(content.Height, groupRows, scale);
             float groupWidth = (content.Width - gap * (groupColumns - 1)) / groupColumns;
@@ -76,25 +65,37 @@ internal sealed partial class WallboardCanvas
             if (groupWidth <= 1 || groupHeight <= 1) continue;
             bool readable = groupWidth >= 80 * scale && groupHeight >= minimumBlock;
             double score = double.MaxValue;
+            bool addressesFit = true;
             var columns = new int[sites.Count];
             for (int i = 0; i < sites.Count; i++)
             {
                 double nodeScore = -1;
+                bool nodeWidthFits = false;
                 float addressWidth = addressWidths[i];
                 for (int c = 1; c <= sites[i].Hosts.Count; c++)
                 {
                     int rows = (int)Math.Ceiling(sites[i].Hosts.Count / (double)c);
-                    double fit = Math.Min((groupWidth - padding * 2) / c / addressWidth,
-                        (groupHeight - heading - padding) / rows / (line * 2 + 8 * scale));
-                    if (fit > nodeScore) { nodeScore = fit; columns[i] = c; }
+                    double widthFit = (groupWidth - padding * 2) / c / addressWidth;
+                    double fit = Math.Min(widthFit, (groupHeight - heading - padding) / rows / (line * 2 + 8 * scale));
+                    // A column count that shows whole addresses always beats one that would cut them.
+                    bool widthFits = widthFit >= 1;
+                    if ((widthFits && !nodeWidthFits) || (widthFits == nodeWidthFits && fit > nodeScore))
+                    { nodeScore = fit; nodeWidthFits = widthFits; columns[i] = c; }
                 }
+                addressesFit &= nodeWidthFits;
                 double nameFit = (groupWidth - padding * 3) / nameWidths[i];
                 score = Math.Min(score, Math.Min(nodeScore, nameFit));
             }
+            if (readable && addressesFit && score > fullScore) { fullScore = score; fullGroups = groupColumns; fullColumns = columns; fullGutter = gutter; }
             if (readable && score > bestScore) { bestScore = score; bestGroups = groupColumns; bestColumns = columns; bestGutter = gutter; }
             if (score > relaxedScore) { relaxedScore = score; relaxedGroups = groupColumns; relaxedColumns = columns; relaxedGutter = gutter; }
         }
-        if (bestScore < 0)
+        if (fullScore >= 0)
+        {
+            // Whole addresses first: the most readable layout in which every address fits its cell.
+            bestGroups = fullGroups; bestColumns = fullColumns; bestGutter = fullGutter;
+        }
+        else if (bestScore < 0)
         {
             // Too many sites for this window to label everything: keep every marker separate.
             bestGroups = relaxedGroups; bestColumns = relaxedColumns; bestGutter = relaxedGutter;
@@ -109,6 +110,8 @@ internal sealed partial class WallboardCanvas
         using var text = new SolidBrush(WallboardStyle.Text);
         using var muted = new SolidBrush(WallboardStyle.Muted);
         using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        // Addresses are drawn whole, never trimmed or clipped.
+        using var addressFormat = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip, Trimming = StringTrimming.None };
         using var trunk = new Pen(Color.FromArgb(110, WallboardStyle.Accent), Math.Max(1, scale));
         float trunkX = 8 * scale, hubY = 16 * scale;
         using var hubBrush = new SolidBrush(WallboardStyle.Accent);
@@ -177,8 +180,12 @@ internal sealed partial class WallboardCanvas
                 if (twoLines)
                     g.DrawString(host.Label, _hostLabelFont, text, new RectangleF(tx, cy - line, tw, line + 2), format);
                 if (cellHeight >= line)
-                    g.DrawString(TrimAddressStart(g, host.Address, _hostIpFont, tw), _hostIpFont, twoLines ? muted : text,
-                        new RectangleF(tx, twoLines ? cy : cy - line / 2, tw, line + 2), format);
+                {
+                    float addressWidth = g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width + 2;
+                    g.DrawString(host.Address, _hostIpFont, twoLines ? muted : text,
+                        new RectangleF(tx, twoLines ? cy : cy - line / 2, Math.Max(tw, addressWidth), line + 2), addressFormat);
+                    _drawnAddresses.Add(host.Address);
+                }
             }
         }
     }

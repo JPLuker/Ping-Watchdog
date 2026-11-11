@@ -21,6 +21,8 @@ public sealed partial class MainForm
             {
                 Appearance = settings.Appearance, RestoreLastSiteOnStartup = settings.RestoreLastSiteOnStartup,
                 StartMonitoringOnLaunch = settings.StartMonitoringOnLaunch,
+                OpenWallboardOnStartup = settings.OpenWallboardOnStartup,
+                WallboardScreen = _wallboardScreen,
                 ShowUpdateControlOnHome = settings.ShowUpdateControlOnHome
             };
         if (File.Exists(_eventHistoryPath))

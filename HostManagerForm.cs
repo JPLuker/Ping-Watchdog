@@ -153,6 +153,7 @@ internal sealed class QuickAddForm : Form
         _grid.CellValueChanged += (_, _) => { if (!_updating) ValidateRows(); };
         _grid.CurrentCellDirtyStateChanged += (_, _) => { if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
         _grid.DataError += (_, e) => e.ThrowException = false;
+        GridPaste.Attach(_grid, () => _summary.Text = "Clipboard busy, try again");
         ValidateRows();
         AllowDrop = true; DragEnter += (_, e) => { if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy; };
         DragDrop += (_, e) =>
@@ -217,6 +218,13 @@ internal sealed class QuickAddForm : Form
     }
 
     internal void PreviewForTest(string text) => _paste.Text = text;
+    // Pastes into the Label column starting at the first row, the way Ctrl+V does on a selected cell.
+    internal string[] PasteLabelsForTest(string clipboardText)
+    {
+        _grid.CurrentCell = _grid.Rows[0].Cells[2];
+        GridPaste.PasteInto(_grid, clipboardText);
+        return _grid.Rows.Cast<DataGridViewRow>().Select(row => Cell(row, 2)).ToArray();
+    }
     internal void CheckKeyboardNavigation()
     {
         if (!_paste.Focused) throw new InvalidOperationException("Quick Add did not focus the address editor.");

@@ -6,9 +6,11 @@ internal sealed class UpdateFailureDialog : Form
     internal readonly Button Retry = new AuroraButton { Text = "Retry restart", AutoSize = true, DialogResult = DialogResult.Retry };
     internal readonly Button Later = new AuroraButton { Text = "Later", AutoSize = true, DialogResult = DialogResult.Cancel };
 
-    internal UpdateFailureDialog(string error)
+    internal UpdateFailureDialog(string error, string lead = "The update is still downloaded. Retry the restart now or apply it later.",
+        string title = "Update restart failed", string retry = "Retry restart")
     {
-        Text = "Update restart failed • Ping Watchdog";
+        Text = title + " • Ping Watchdog";
+        Retry.Text = retry;
         ClientSize = new Size(560, 280);
         MinimumSize = new Size(480, 280);
         StartPosition = FormStartPosition.CenterParent;
@@ -27,7 +29,7 @@ internal sealed class UpdateFailureDialog : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(new Label
         {
-            Text = "The update is still downloaded. Retry the restart now or apply it later.",
+            Text = lead,
             AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 12)
         }, 0, 0);
         root.Controls.Add(new TextBox
