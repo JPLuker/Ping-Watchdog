@@ -103,12 +103,12 @@ internal static class LiveRows
 internal sealed class CliTraceView : Border
 {
     private readonly ObservableCollection<CommandLogEntry> _rows = new();
-    private readonly ListBox _list = new() { Background = WatchdogTheme.Brush("#070C12"), MinHeight = 85, MaxHeight = 170 };
+    private readonly ListBox _list = new() { Background = WatchdogTheme.Card, MinHeight = 85, MaxHeight = 170 };
     private readonly CheckBox _follow = new() { Content = "Follow live", IsChecked = true };
     private readonly TextBlock _count = WatchdogTheme.Label("0 entries", 10, color: WatchdogTheme.Muted);
     public CliTraceView(Action clear)
     {
-        Background = WatchdogTheme.Brush("#070C12");
+        Background = WatchdogTheme.Card;
         BorderBrush = WatchdogTheme.Border;
         BorderThickness = new Thickness(1);
         MinHeight = 118;
@@ -117,7 +117,7 @@ internal sealed class CliTraceView : Border
         _list.ItemTemplate = new FuncDataTemplate<CommandLogEntry>((entry, _) => new TextBlock
         {
             // Avalonia clears content to null while recycling a virtualized container.
-            Text = entry?.Text ?? string.Empty, FontFamily = new FontFamily("monospace"), FontSize = 11,
+            Text = entry?.Text ?? string.Empty, FontFamily = new FontFamily("monospace"), FontSize = 13,
             Foreground = entry is null ? WatchdogTheme.Muted : entry.Success ? WatchdogTheme.Green : WatchdogTheme.Red,
             Margin = new Thickness(0, 1), TextWrapping = TextWrapping.NoWrap
         });
@@ -127,7 +127,7 @@ internal sealed class CliTraceView : Border
         var header = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12, Margin = new Thickness(8, 2),
-            Children = { WatchdogTheme.Label("CLI TRACE", 10, FontWeight.Bold, WatchdogTheme.Muted), _count, _follow, clearButton }
+            Children = { WatchdogTheme.Label("Ping activity", 14, FontWeight.Normal, WatchdogTheme.Secondary), _count, _follow, clearButton }
         };
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Children = { header, _list } };
         Grid.SetRow(_list, 1);

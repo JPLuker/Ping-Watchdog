@@ -19,7 +19,7 @@ internal sealed partial class WallboardWindow : Window
     private readonly LinuxUpdateService _updates;
     private readonly MainWindow _main;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(700) };
-    private readonly Canvas _topology = new() { Background = Theme.Brush("#070C12") };
+    private readonly Canvas _topology = new() { Background = Theme.Card };
     private readonly ScrollViewer _topologyScroll = new()
     {
         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
@@ -27,7 +27,7 @@ internal sealed partial class WallboardWindow : Window
     };
     private readonly TextBlock _clock = Theme.Label("", 24, FontWeight.Bold);
     private readonly TextBlock _date = Theme.Label("", 11, color: Theme.Muted);
-    private readonly TextBlock _state = Theme.Label("IDLE", 11, FontWeight.Bold);
+    private readonly TextBlock _state = Theme.Label("Stopped", 13);
     private readonly TextBlock _stats = Theme.Label("", 12, FontWeight.Bold);
     private readonly TextBlock _updateStatus = Theme.Label("", 10, color: Theme.Muted);
     private readonly TextBlock _screenStatus = Theme.Label("", 10, color: Theme.Muted);
@@ -80,7 +80,7 @@ internal sealed partial class WallboardWindow : Window
         _hostList.ItemsSource = _hostRows;
         _hostList.ItemTemplate = new FuncDataTemplate<HostRow>((_, _) => new TextBlock
         {
-            FontFamily = new FontFamily("monospace"), FontSize = 11,
+            FontFamily = new FontFamily("monospace"), FontSize = 13,
             Width = 300, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3),
             [!TextBlock.TextProperty] = new Binding(nameof(HostRow.WallboardText)),
             [!TextBlock.ForegroundProperty] = new Binding(nameof(HostRow.Foreground))
@@ -169,8 +169,8 @@ internal sealed partial class WallboardWindow : Window
         _activeOutages.TextWrapping = _recentHistory.TextWrapping = TextWrapping.Wrap;
         var reports = new StackPanel { Spacing = 10, Children =
         {
-            Theme.Label("ACTIVE OUTAGES", 12, FontWeight.Bold), _outageSummary, _activeOutages,
-            Theme.Label("OUTAGE HISTORY", 12), _historyFilter, _historySummary, _recentHistory
+            Theme.Label("Active outages", 16, FontWeight.SemiBold), _outageSummary, _activeOutages,
+            Theme.Label("Outage history", 16, FontWeight.SemiBold), _historyFilter, _historySummary, _recentHistory
         } };
         var history = Theme.Button("Full History / CSV"); history.Click += (_, _) => new HistoryWindow(_engine).Show(this);
         reports.Children.Add(history);
@@ -186,15 +186,15 @@ internal sealed partial class WallboardWindow : Window
             var snapshot = _engine.Snapshot();
             _clock.Text = DateTime.Now.ToString("h:mm:ss tt");
             _date.Text = DateTime.Now.ToString("dddd, MMMM d, yyyy");
-            _state.Text = snapshot.Monitoring ? "LIVE MONITORING" : "IDLE / CONFIG VIEW";
-            _state.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Cyan;
-            _startStop.Content = snapshot.Monitoring ? "Stop Monitoring" : "Start Monitoring";
-            _startStop.Background = Theme.Brush(snapshot.Monitoring ? "#5D262D" : "#1F7852");
+            _state.Text = snapshot.Monitoring ? "Monitoring" : "Stopped";
+            _state.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Secondary;
+            _startStop.Content = snapshot.Monitoring ? "Stop monitoring" : "Start monitoring";
+            Theme.SetPrimary(_startStop, !snapshot.Monitoring);
             _updateButton.IsVisible = snapshot.Settings.ShowUpdateControlOnHome;
             var hosts = snapshot.Hosts;
             int[] counts = { hosts.Count, hosts.Count(h => h.State == HostState.Online), hosts.Count(h => h.State == HostState.Suspect), hosts.Count(h => h.State == HostState.Offline) };
             for (int i = 0; i < counts.Length; i++) _statValues[i].Text = counts[i].ToString();
-            _stats.Text = $"{snapshot.SelectedSite ?? "ALL SITES"}   TOTAL {hosts.Count}   ONLINE {hosts.Count(h => h.State == HostState.Online)}   SUSPECT {hosts.Count(h => h.State == HostState.Suspect)}   OFFLINE {hosts.Count(h => h.State == HostState.Offline)}";
+            _stats.Text = $"{snapshot.SelectedSite ?? "All sites"} · {hosts.Count(h => h.State == HostState.Online)} online · {hosts.Count(h => h.State == HostState.Suspect)} suspect · {hosts.Count(h => h.State == HostState.Offline)} offline";
             _showCli = snapshot.Settings.WallboardShowCli;
             _cli.IsVisible = _showCli;
             _cli.Refresh(snapshot.Commands);
@@ -322,7 +322,7 @@ internal sealed partial class WallboardWindow : Window
     private void AddLine(Point start, Point end, IBrush brush, double thickness) => _topology.Children.Add(new Line { StartPoint = start, EndPoint = end, Stroke = brush, StrokeThickness = thickness, Opacity = 0.45 });
     private void AddCircle(double left, double top, double size, IBrush brush, IBrush? fill = null)
     {
-        var circle = new Ellipse { Width = size, Height = size, Fill = fill ?? Theme.Brush("#0F171F"), Stroke = brush, StrokeThickness = 2 };
+        var circle = new Ellipse { Width = size, Height = size, Fill = fill ?? Theme.Card, Stroke = brush, StrokeThickness = 2 };
         Canvas.SetLeft(circle, left); Canvas.SetTop(circle, top); _topology.Children.Add(circle);
     }
     private void AddText(string text, double left, double top, double size, IBrush brush, FontWeight weight, double width, bool centered = false)

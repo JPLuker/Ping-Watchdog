@@ -18,11 +18,11 @@ internal sealed partial class MainWindow
     private Control BuildLayout()
     {
         var root = new Grid { RowDefinitions = new RowDefinitions($"{Presentation.HeaderHeight},*,{Presentation.FooterHeight}") };
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Brush(Presentation.Header), Margin = new Thickness(0), };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Window, Margin = new Thickness(0), };
         header.Children.Add(new StackPanel {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(20, 10, 0, 8), VerticalAlignment = VerticalAlignment.Center,
             Children = { new Image { Source = BrandAssets.Logo, Width = 42, Height = 42, Stretch = Stretch.Uniform },
-                new StackPanel { Children = { Theme.Label("PING WATCHDOG", 25.3, FontWeight.SemiBold), Theme.Label("Availability monitor", 12.3, color: Theme.Muted) } } }
+                new StackPanel { Children = { Theme.Label("Ping Watchdog", 24, FontWeight.SemiBold) } } }
         });
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
         var wallboard = Theme.Button("Wallboard", true); wallboard.Click += (_, _) => OpenWallboard();
@@ -39,22 +39,22 @@ internal sealed partial class MainWindow
         Grid.SetColumn(actions, 1); header.Children.Add(actions); root.Children.Add(header);
         var workspace = new Grid { ColumnDefinitions = new ColumnDefinitions { _navigationColumn, new(GridLength.Star) } };
         Grid.SetRow(workspace, 1);
-        var nav = new Grid { Background = Theme.Brush(Presentation.Navigation) };
+        var nav = new Grid { Background = Theme.Window };
         var navContent = new Grid { RowDefinitions = new RowDefinitions("*,38,38,38,38"), Margin = new Thickness(12, 14, 10, 14) };
         _siteList.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = {
-            new Setter(ListBoxItem.BackgroundProperty, Theme.Brush("#121820")), new Setter(ListBoxItem.MinHeightProperty, 36d),
+            new Setter(ListBoxItem.BackgroundProperty, Theme.Window), new Setter(ListBoxItem.MinHeightProperty, 36d),
             new Setter(ListBoxItem.BorderThicknessProperty, new Thickness(1)), new Setter(ListBoxItem.BorderBrushProperty, Avalonia.Media.Brushes.Transparent),
             new Setter(ListBoxItem.MarginProperty, new Thickness(0, 2))
         } });
         _siteList.Styles.Add(new Style(s => s.OfType<ListBoxItem>().Class(":selected")) { Setters = {
-            new Setter(ListBoxItem.BackgroundProperty, Theme.Brush("#1A485B")), new Setter(ListBoxItem.BorderBrushProperty, Theme.Cyan)
+            new Setter(ListBoxItem.BackgroundProperty, Theme.Surface3), new Setter(ListBoxItem.BorderBrushProperty, Theme.Surface3)
         } });
-        _siteList.Background = Theme.Brush(Presentation.Navigation); _siteList.BorderThickness = new Thickness(0); _siteList.FontSize = 13.3;
+        _siteList.Background = Theme.Window; _siteList.BorderThickness = new Thickness(0); _siteList.FontSize = 13.3;
         Grid.SetRow(_siteList, 0); navContent.Children.Add(_siteList);
         var add = Theme.Button("+ Add Site", true); add.Click += async (_, _) => await AddSiteAsync();
         var organize = Theme.Button("Organize"); organize.Click += (_, _) => OpenOrganization();
         var rename = Theme.Button("Rename Site"); rename.Click += async (_, _) => await RenameSiteAsync();
-        var delete = Theme.Button("Delete Site"); delete.Background = Theme.Brush("#391C22"); delete.Click += async (_, _) => await DeleteSiteAsync();
+        var delete = Theme.Button("Delete site"); delete.Foreground = Theme.Red; delete.Click += async (_, _) => await DeleteSiteAsync();
         int navRow = 1;
         foreach (var b in new[] { add, organize, rename, delete }) { b.Margin = new Thickness(0, 3); b.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(b, navRow++); navContent.Children.Add(b); }
         nav.Children.Add(navContent); workspace.Children.Add(nav);
@@ -64,11 +64,11 @@ internal sealed partial class MainWindow
         stats.Children.Add(StatCard("Total hosts", _total, 0)); stats.Children.Add(StatCard("Online", _online, 1)); stats.Children.Add(StatCard("Suspect", _suspect, 2)); stats.Children.Add(StatCard("Offline", _offline, 3)); right.Children.Add(stats);
         var editor = new Grid { RowDefinitions = new RowDefinitions("30,Auto") };
         var editorHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        editorHead.Children.Add(_siteHeader); editorHead.Children.Add(Right(Theme.Label("Saved automatically • Applies live", 11.3, color: Theme.Muted)));
+        editorHead.Children.Add(_siteHeader); 
         editor.Children.Add(editorHead);
-        _hostEditor.Height = 60; _hostEditor.MinHeight = 60; _hostEditor.FontSize = 12.7;
+        _hostEditor.Height = 60; _hostEditor.MinHeight = 60; _hostEditor.FontSize = 13;
         _hostEditor.PlaceholderText = "One IP or hostname per line\n192.168.1.1\n8.8.8.8\nserver01";
-        _hostEditor.Background = Theme.Brush(Presentation.Input); _hostEditor.BorderBrush = Theme.Border;
+        _hostEditor.Background = Theme.Panel; _hostEditor.BorderBrush = Theme.Border;
         Grid.SetRow(_hostEditor, 1); editor.Children.Add(_hostEditor);
         var editorBorder = Theme.CardBorder(editor, new Thickness(0, 0, 0, 10)); editorBorder.BorderThickness = new Thickness(0); editorBorder.Padding = new Thickness(14, 10, 14, 12);
         Grid.SetRow(editorBorder, 1); right.Children.Add(editorBorder);
@@ -76,7 +76,7 @@ internal sealed partial class MainWindow
         var inputs = new WrapPanel();
         foreach (var c in new[] { Setting("Interval", _interval, "sec"), Setting("Timeout", _timeout, "ms"), Setting("Down after", _downAfter, "fails"), Setting("Recover after", _recoverAfter, "successes"), _showCli }) { c.Margin = new Thickness(0, 0, 16, 0); inputs.Children.Add(c); }
         timing.Children.Add(inputs);
-        _startStop.Content = "Start Monitoring"; _startStop.Background = Theme.Brush("#1F7852"); _stop.Background = Theme.Brush("#5D262D");
+        _startStop.Content = "Start monitoring"; Theme.SetPrimary(_startStop, true);
         _stop.Click += (_, _) => { if (_engine.Monitoring) _engine.StopMonitoring(); };
         var monitoring = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(8, 9, 0, 0), Children = { _startStop, _stop } };
         Grid.SetColumn(monitoring, 1); timing.Children.Add(monitoring);
@@ -91,7 +91,7 @@ internal sealed partial class MainWindow
         Grid.SetRow(_commandBox, 2); live.Children.Add(_commandBox);
         Grid.SetRow(live, 3); right.Children.Add(live);
         workspace.Children.Add(right); root.Children.Add(workspace);
-        var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Brush("#0B1017") };
+        var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Background = Theme.Window };
         _status.Margin = new Thickness(4, 4); footer.Children.Add(_status);
         var copyright = Theme.Label($"{_updates.Version} · © 2026 Joseph Luker · All rights reserved.", 11, color: Theme.Muted);
         copyright.Margin = new Thickness(0, 4, 12, 4); Grid.SetColumn(copyright, 1); footer.Children.Add(copyright);

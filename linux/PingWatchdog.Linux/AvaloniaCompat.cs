@@ -27,6 +27,13 @@ internal class CompatWindow : Avalonia.Controls.Window
         public static IBrush Yellow => global::PingWatchdog.Linux.Theme.Yellow;
         public static IBrush Red => global::PingWatchdog.Linux.Theme.Red;
         public static IBrush Unknown => global::PingWatchdog.Linux.Theme.Unknown;
+        public static IBrush Surface2 => global::PingWatchdog.Linux.Theme.Surface2;
+        public static IBrush Surface3 => global::PingWatchdog.Linux.Theme.Surface3;
+        public static IBrush Secondary => global::PingWatchdog.Linux.Theme.Secondary;
+        public static IBrush OnAccent => global::PingWatchdog.Linux.Theme.OnAccent;
+
+        public static void SetPrimary(Button button, bool primary) =>
+            global::PingWatchdog.Linux.Theme.SetPrimary(button, primary);
 
         public static IBrush Brush(string hex) =>
             global::PingWatchdog.Linux.Theme.Brush(hex);
@@ -42,7 +49,7 @@ internal class CompatWindow : Avalonia.Controls.Window
 
         public static TextBlock Label(
             string text,
-            double size = 12,
+            double size = 14,
             FontWeight? weight = null,
             IBrush? color = null) =>
             global::PingWatchdog.Linux.Theme.Label(text, size, weight, color);

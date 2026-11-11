@@ -3,12 +3,20 @@ namespace PingWatchdog.Shared;
 // No UI-framework types: both native applications compile this file.
 internal static class Presentation
 {
-    public const string Window = "#0A0E14", Header = "#0C121A", Navigation = "#0E141C",
-        Card = "#121922", Input = "#0B1118", Border = "#27313D", Text = "#EAF0F6",
-        Muted = "#8B99A9", Accent = "#39D9EE", Online = "#48CF89", Suspect = "#F4BE48",
-        Offline = "#FF6870", Unknown = "#8B99A9", WallboardBackground = "#05090E",
-        WallboardPanel = "#090F16", WallboardCard = "#0E151D",
-        WallboardOnline = "#4DD38D", WallboardSuspect = "#F4BD44", WallboardOffline = "#FF626D", WallboardUnknown = "#667A8D";
+    // Quiet Precision (InternalDesignGuidelines DESIGN.md B3), dark values. QuietPrecision(dark) gives both themes.
+    public const string Window = "#111110", Header = "#111110", Navigation = "#111110",
+        Card = "#191918", Input = "#191918", Border = "#30302D", Text = "#EDEDEA",
+        Muted = "#9C9B95", Accent = "#EDEDEA", Online = "#4CC26A", Suspect = "#D9A53A",
+        Offline = "#F47A73", Unknown = "#9C9B95", WallboardBackground = "#111110",
+        WallboardPanel = "#191918", WallboardCard = "#191918",
+        WallboardOnline = "#4CC26A", WallboardSuspect = "#D9A53A", WallboardOffline = "#F47A73", WallboardUnknown = "#9C9B95";
+
+    internal sealed record Palette(string Canvas, string Surface, string Surface2, string Surface3, string Border, string BorderStrong,
+        string Text, string Secondary, string Muted, string Accent, string OnAccent, string Focus, string Success, string Warning, string Danger);
+
+    internal static Palette QuietPrecision(bool dark) => dark
+        ? new("#111110", "#191918", "#212120", "#2B2B29", "#30302D", "#75746E", "#EDEDEA", "#B5B4AE", "#9C9B95", "#EDEDEA", "#111110", "#6EA8FE", "#4CC26A", "#D9A53A", "#F47A73")
+        : new("#FAFAF9", "#FFFFFF", "#F3F3F1", "#E9E9E6", "#DEDDD9", "#8E8D86", "#1B1B19", "#53524D", "#64635D", "#1B1B19", "#FFFFFF", "#1F5FD9", "#1A7531", "#875A00", "#C21F2B");
     public const int HeaderHeight = 74, FooterHeight = 28, SidebarWidth = 218,
         TableHeaderHeight = 38, TableRowHeight = 34, VisibleTopologyHosts = 12,
         CompactTableHeaderHeight = 32, CompactTableRowHeight = 28,

@@ -12,15 +12,22 @@ internal sealed class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
-        RequestedThemeVariant = ThemeVariant.Dark;
+        // Follow the desktop's light or dark preference (Quiet Precision has both).
+        RequestedThemeVariant = ThemeVariant.Default;
         Styles.Add(new Style(s => s.OfType<Avalonia.Controls.Window>()) { Setters = {
             new Setter(Avalonia.Controls.Window.FontFamilyProperty, new FontFamily("Segoe UI, Noto Sans, DejaVu Sans")),
-            new Setter(Avalonia.Controls.Window.FontSizeProperty, 12.7)
+            new Setter(Avalonia.Controls.Window.FontSizeProperty, Theme.BodyFontSize)
         } });
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Resolve the palette before any window or control reads a brush.
+        bool dark = Environment.GetEnvironmentVariable("WATCHDOG_THEME") is { } forced
+            ? forced.Equals("dark", StringComparison.OrdinalIgnoreCase)
+            : ActualThemeVariant == ThemeVariant.Dark;
+        Theme.Use(dark);
+        RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light;
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             if (LinuxUiRegressionTests.Enabled)

@@ -26,19 +26,44 @@ internal static class BrandAssets
     }
 }
 
+// Quiet Precision for the Linux beta (decided by Joseph 2026-11-11). Light or dark follows the desktop at
+// startup (Use is called before any window is built). Brushes are created once so they compare equal.
 internal static class Theme
 {
-    public static readonly IBrush Window = Brush(Presentation.Window);
-    public static readonly IBrush Panel = Brush(Presentation.Input);
-    public static readonly IBrush Card = Brush(Presentation.Card);
-    public static readonly IBrush Border = Brush(Presentation.Border);
-    public static readonly IBrush Text = Brush(Presentation.Text);
-    public static readonly IBrush Muted = Brush(Presentation.Muted);
-    public static readonly IBrush Cyan = Brush(Presentation.Accent);
-    public static readonly IBrush Green = Brush(Presentation.Online);
-    public static readonly IBrush Yellow = Brush(Presentation.Suspect);
-    public static readonly IBrush Red = Brush(Presentation.Offline);
-    public static readonly IBrush Unknown = Brush(Presentation.Unknown);
+    public static bool Dark { get; private set; } = true;
+    public static IBrush Window { get; private set; } = null!;
+    public static IBrush Panel { get; private set; } = null!;
+    public static IBrush Card { get; private set; } = null!;
+    public static IBrush Surface2 { get; private set; } = null!;
+    public static IBrush Surface3 { get; private set; } = null!;
+    public static IBrush Border { get; private set; } = null!;
+    public static IBrush BorderStrong { get; private set; } = null!;
+    public static IBrush Text { get; private set; } = null!;
+    public static IBrush Secondary { get; private set; } = null!;
+    public static IBrush Muted { get; private set; } = null!;
+    // Kept as Cyan for existing callers: the accent is ink in Quiet Precision.
+    public static IBrush Cyan { get; private set; } = null!;
+    public static IBrush OnAccent { get; private set; } = null!;
+    public static IBrush Focus { get; private set; } = null!;
+    public static IBrush Green { get; private set; } = null!;
+    public static IBrush Yellow { get; private set; } = null!;
+    public static IBrush Red { get; private set; } = null!;
+    public static IBrush Unknown { get; private set; } = null!;
+    public const double MinimumFontSize = 13, BodyFontSize = 14;
+
+    static Theme() => Use(true);
+
+    public static void Use(bool dark)
+    {
+        var p = Presentation.QuietPrecision(dark);
+        Dark = dark;
+        Window = Brush(p.Canvas); Panel = Brush(p.Surface); Card = Brush(p.Surface);
+        Surface2 = Brush(p.Surface2); Surface3 = Brush(p.Surface3);
+        Border = Brush(p.Border); BorderStrong = Brush(p.BorderStrong);
+        Text = Brush(p.Text); Secondary = Brush(p.Secondary); Muted = Brush(p.Muted);
+        Cyan = Brush(p.Accent); OnAccent = Brush(p.OnAccent); Focus = Brush(p.Focus);
+        Green = Brush(p.Success); Yellow = Brush(p.Warning); Red = Brush(p.Danger); Unknown = Brush(p.Muted);
+    }
 
     public static IBrush Brush(string hex) => new SolidColorBrush(Color.Parse(hex));
 
@@ -50,21 +75,31 @@ internal static class Theme
         _ => Unknown
     };
 
+    // B10: secondary buttons are surface-2 with a hairline; the primary ("accent") is ink. 8px corners.
     public static Button Button(string text, bool accent = false)
     {
         return new Button
         {
             Content = text,
             MinHeight = 32,
-            Padding = new Thickness(12, 5),
+            Padding = new Thickness(14, 5),
             Margin = new Thickness(0),
-            Background = accent ? Brush("#144552") : Brush("#19222D"),
-            Foreground = Text,
-            BorderBrush = accent ? Brush("#2AAABD") : Border,
+            Background = accent ? Cyan : Surface2,
+            Foreground = accent ? OnAccent : Text,
+            BorderBrush = accent ? Cyan : Border,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(0),
+            CornerRadius = new CornerRadius(8),
+            FontSize = BodyFontSize,
             HorizontalContentAlignment = HorizontalAlignment.Center
         };
+    }
+
+    // Marks a button as the one primary action, or returns it to secondary.
+    public static void SetPrimary(Button button, bool primary)
+    {
+        button.Background = primary ? Cyan : Surface2;
+        button.Foreground = primary ? OnAccent : Text;
+        button.BorderBrush = primary ? Cyan : Border;
     }
 
     public static Border CardBorder(Control child, Thickness? margin = null)
@@ -74,20 +109,21 @@ internal static class Theme
             Background = Card,
             BorderBrush = Border,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(0),
-            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(16),
             Margin = margin ?? new Thickness(4),
             Child = child
         };
     }
 
-    public static TextBlock Label(string text, double size = 12, FontWeight? weight = null, IBrush? color = null)
+    // A8: nothing below 13px.
+    public static TextBlock Label(string text, double size = 14, FontWeight? weight = null, IBrush? color = null)
     {
         return new TextBlock
         {
             Text = text,
-            FontSize = size,
-            FontWeight = weight ?? FontWeight.Normal,
+            FontSize = Math.Max(MinimumFontSize, size),
+            FontWeight = weight is { } w && w > FontWeight.SemiBold ? FontWeight.SemiBold : weight ?? FontWeight.Normal,
             Foreground = color ?? Text,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -161,7 +197,7 @@ internal sealed partial class MainWindow : Window
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly CancellationTokenSource _lifetime = new();
 
-    private readonly TextBlock _monitorState = Theme.Label("IDLE", 11, FontWeight.Bold, Theme.Cyan);
+    private readonly TextBlock _monitorState = Theme.Label("Stopped", 13, FontWeight.Normal, Theme.Secondary);
     private readonly TextBlock _total = Theme.Label("0", 24, FontWeight.Bold);
     private readonly TextBlock _online = Theme.Label("0", 24, FontWeight.Bold, Theme.Green);
     private readonly TextBlock _suspect = Theme.Label("0", 24, FontWeight.Bold, Theme.Yellow);
@@ -366,13 +402,12 @@ internal sealed partial class MainWindow : Window
         try
         {
             var snapshot = _engine.Snapshot();
-            _monitorState.Text = snapshot.Monitoring ? "MONITORING" : "IDLE";
-            _monitorState.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Cyan;
-            _startStop.Content = "Start Monitoring";
+            _monitorState.Text = snapshot.Monitoring ? "Monitoring" : "Stopped";
+            _monitorState.Foreground = snapshot.Monitoring ? Theme.Green : Theme.Secondary;
+            _startStop.Content = "Start monitoring";
             _startStop.IsEnabled = !snapshot.Monitoring; _stop.IsEnabled = snapshot.Monitoring;
             _siteHeader.Text = snapshot.SelectedSite is null ? "All Sites • Hosts" : $"{snapshot.SelectedSite} • Hosts";
             _hostTable.SetScope(snapshot.SelectedSite is null);
-            _startStop.Background = Theme.Brush("#1F7852");
 
             var allHosts = snapshot.Sites.SelectMany(site => site.Hosts).ToList();
             _total.Text = allHosts.Count.ToString();
@@ -807,7 +842,7 @@ internal sealed class SettingsWindow : Window
         } };
         root.Children.Add(header);
         var workspace = new Grid { ColumnDefinitions = new ColumnDefinitions("186,*") };
-        var nav = new ListBox { ItemsSource = Presentation.SettingsPages, Margin = new Thickness(14, 20, 10, 0), Background = Theme.Brush(Presentation.Navigation), BorderThickness = new Thickness(0) };
+        var nav = new ListBox { ItemsSource = Presentation.SettingsPages, Margin = new Thickness(14, 20, 10, 0), Background = Theme.Window, BorderThickness = new Thickness(0) };
         workspace.Children.Add(nav);
         var pages = new Control[] { GeneralPage(), MonitoringPage(), HistoryPage(), UpdatesPage() };
         var page = new ContentControl(); Grid.SetColumn(page, 1); workspace.Children.Add(page);
@@ -864,7 +899,7 @@ internal sealed class SettingsWindow : Window
     {
         var stack = new StackPanel { Spacing = 10, Children = { Theme.Label(title, 14, FontWeight.SemiBold) } };
         foreach (var control in controls) stack.Children.Add(control);
-        if (!string.IsNullOrWhiteSpace(description)) stack.Children.Add(new TextBlock { Text = description, FontSize = 12.7, Foreground = Theme.Muted, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrWhiteSpace(description)) stack.Children.Add(new TextBlock { Text = description, FontSize = 13, Foreground = Theme.Muted, TextWrapping = TextWrapping.Wrap });
         return Theme.CardBorder(stack, new Thickness(0));
     }
 
@@ -987,7 +1022,7 @@ internal sealed class HistoryWindow : Window
             Theme.Label("Outage History", 24, FontWeight.SemiBold),
             Theme.Label("Persistent availability events across monitoring sessions", 12.7, color: Theme.Muted)
         } });
-        _summary.Width = 220; _summary.FontSize = 11.3; _summary.TextWrapping = TextWrapping.Wrap; _summary.VerticalAlignment = VerticalAlignment.Center;
+        _summary.Width = 220; _summary.FontSize = 13; _summary.TextWrapping = TextWrapping.Wrap; _summary.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(_summary, 1); header.Children.Add(_summary);
         Content = new Grid { RowDefinitions = new RowDefinitions("58,Auto,*"), Margin = new Thickness(18), Children = {
             header, At(filters, 1), At(new HistoryTableView(_events), 2)

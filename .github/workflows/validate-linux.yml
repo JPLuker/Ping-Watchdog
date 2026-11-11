@@ -22,15 +22,15 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "8.0.x"
       - name: Validate Windows consumers of shared presentation code
         run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
       - name: Exercise Windows UI
         run: dotnet run --no-build --project PingWatchdog.csproj -c Release -- --ui-smoke-test
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: windows-reference-ui
@@ -52,8 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "8.0.x"
       - name: Install desktop test prerequisites
@@ -64,7 +64,16 @@ jobs:
         env:
           WATCHDOG_UI_PREVIEW: "1"
         run: timeout 120s dbus-run-session -- bash linux/test-desktop.sh
-      - uses: actions/upload-artifact@v7
+      # Artifacts aren't reachable from every review environment, so one configuration prints its captures.
+      - name: Print UI captures for review
+        if: always() && matrix.backend == 'x11' && matrix.scale == '1'
+        run: |
+          for f in ui-regression-images/*.png; do
+            [ -f "$f" ] || continue
+            echo "REVIEW_IMAGE_NAME $(basename "$f")"
+            echo "REVIEW_IMAGE_BEGIN$(base64 -w0 "$f")REVIEW_IMAGE_END"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: linux-ui-${{ matrix.backend }}-${{ matrix.scale }}

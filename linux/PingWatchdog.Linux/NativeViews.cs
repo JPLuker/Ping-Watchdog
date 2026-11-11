@@ -18,11 +18,11 @@ internal static class NativeControls
     public static NumericUpDown Number(decimal min, decimal max, decimal value, decimal increment, double width)
     {
         var number = new NumericUpDown { Minimum = min, Maximum = max, Value = value, Increment = increment,
-            Width = width, Height = 24, MinHeight = 24, FontSize = 12.7, Background = UiTheme.Brush(Presentation.Input), Foreground = UiTheme.Text };
+            Width = width, Height = 24, MinHeight = 24, FontSize = 13, Background = UiTheme.Panel, Foreground = UiTheme.Text };
         number.Template = new FuncControlTemplate<NumericUpDown>((owner, scope) =>
         {
             var text = new TextBox { Name = "PART_TextBox", MinHeight = 0, Padding = new Thickness(4, 0),
-                FontSize = 12.7, Background = UiTheme.Brush(Presentation.Input), Foreground = UiTheme.Text,
+                FontSize = 13, Background = UiTheme.Panel, Foreground = UiTheme.Text,
                 BorderThickness = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center };
             text.Bind(TextBox.TextProperty, new Binding(nameof(NumericUpDown.Text)) { Source = owner, Mode = BindingMode.TwoWay });
             var spinner = new ButtonSpinner { Name = "PART_Spinner", Content = text };
@@ -34,8 +34,8 @@ internal static class NativeControls
                 Grid.SetRowSpan(presenter, 2); grid.Children.Add(presenter);
                 foreach (var (name, glyph, row) in new[] { ("PART_IncreaseButton", "▴", 0), ("PART_DecreaseButton", "▾", 1) })
                 {
-                    var button = new RepeatButton { Name = name, Content = glyph, FontSize = 9, MinHeight = 0, MinWidth = 0,
-                        Padding = new Thickness(0), Background = UiTheme.Brush("#19222D"), Foreground = UiTheme.Text, Focusable = false };
+                    var button = new RepeatButton { Name = name, Content = glyph, FontSize = 13, MinHeight = 0, MinWidth = 0,
+                        Padding = new Thickness(0), Background = UiTheme.Surface2, Foreground = UiTheme.Text, Focusable = false };
                     names.Register(name, button); Grid.SetRow(button, row); Grid.SetColumn(button, 1); grid.Children.Add(button);
                 }
                 return grid;
@@ -58,8 +58,8 @@ internal sealed class HostTableView : Grid
     {
         _list = list; _compact = compact; _list.Height = double.NaN;
         RowDefinitions = new RowDefinitions($"{(_compact ? Presentation.CompactTableHeaderHeight : Presentation.TableHeaderHeight)},*");
-        Background = UiTheme.Brush(Presentation.Card);
-        _list.Background = UiTheme.Brush(Presentation.Card); _list.BorderThickness = new Thickness(0); _list.Padding = new Thickness(0);
+        Background = UiTheme.Card;
+        _list.Background = UiTheme.Card; _list.BorderThickness = new Thickness(0); _list.Padding = new Thickness(0);
         _list.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = {
             new Setter(ListBoxItem.PaddingProperty, new Thickness(0)), new Setter(ListBoxItem.MinHeightProperty, (double)(_compact ? Presentation.CompactTableRowHeight : Presentation.TableRowHeight)),
             new Setter(ListBoxItem.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch)
@@ -69,9 +69,9 @@ internal sealed class HostTableView : Grid
         {
             var row = BuildGrid(false); row.DataContext = host;
             _realized.Add(row); row.AttachedToVisualTree += (_, _) => { if (!_realized.Contains(row)) _realized.Add(row); ApplyWidths(row); }; row.DetachedFromVisualTree += (_, _) => _realized.Remove(row);
-            return new Border { BorderBrush = UiTheme.Brush("#1F2832"), BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
+            return new Border { BorderBrush = UiTheme.Border, BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
         });
-        _header.Content = _head; _header.Background = UiTheme.Brush("#161F2A"); Children.Add(_header);
+        _header.Content = _head; _header.Background = UiTheme.Card; Children.Add(_header);
         Grid.SetRow(_list, 1); Children.Add(_list);
         SizeChanged += (_, _) => UpdateWidths();
         _list.AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) =>
@@ -88,7 +88,7 @@ internal sealed class HostTableView : Grid
         int index = 0;
         foreach (var column in Columns)
         {
-            var text = UiTheme.Label(column.Header, _compact ? 12 : 12.7, FontWeight.Normal, UiTheme.Brush("#B7CDDC"));
+            var text = UiTheme.Label(column.Header, 13, FontWeight.Normal, UiTheme.Secondary);
             text.Margin = new Thickness(_compact ? 4 : 10, 0); text.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(text, index++); _head.Children.Add(text);
         }
@@ -162,10 +162,10 @@ internal sealed class HistoryTableView : Grid
         SizeChanged += (_, _) => { foreach (var row in _rows.ToArray()) Fit(row); };
         int index = 0;
         foreach (var column in Presentation.HistoryColumns) {
-            var text = UiTheme.Label(column.Header, 12.7, color: UiTheme.Brush("#B7CDDC")); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
+            var text = UiTheme.Label(column.Header, 13, color: UiTheme.Secondary); text.Margin = new Thickness(10, 0); text.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(text, index++); head.Children.Add(text);
         }
-        var header = new ScrollViewer { Content = head, Background = UiTheme.Brush("#161F2A"), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        var header = new ScrollViewer { Content = head, Background = UiTheme.Card, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Children.Add(header); Grid.SetRow(list, 1); Children.Add(list);
         list.Padding = new Thickness(0); list.Background = UiTheme.Card; list.BorderThickness = new Thickness(0);
         list.Styles.Add(new Style(s => s.OfType<ListBoxItem>()) { Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(0)), new Setter(ListBoxItem.MinHeightProperty, 34d) } });
@@ -175,7 +175,7 @@ internal sealed class HistoryTableView : Grid
             int i = 0;
             foreach (var column in Presentation.HistoryColumns) {
 
-                var text = new TextBlock { FontSize = 12.7, Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                var text = new TextBlock { FontSize = 13, Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
                 text.Bind(TextBlock.TextProperty, new Binding(column.Key)); text.Bind(ToolTip.TipProperty, new Binding(column.Key));
                 text.Bind(TextBlock.ForegroundProperty, new Binding(nameof(HistoryRow.Foreground)));
                 Grid.SetColumn(text, i++); row.Children.Add(text);
