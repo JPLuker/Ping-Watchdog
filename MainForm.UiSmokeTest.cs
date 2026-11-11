@@ -423,11 +423,14 @@ public sealed partial class MainForm
                 await Task.Delay(100);
                 Check(form._settingsForm?.Visible == true, "Settings did not open.");
                 form._settingsForm!.RunLayoutChecks();
+                DesignChecks.RunTests();
+                var designProblems = DesignChecks.Run(form).Concat(DesignChecks.Run(form._settingsForm!)).ToList();
+                Check(designProblems.Count == 0, "Design checks: " + string.Join(" | ", designProblems.Take(8)));
                 Capture(form._settingsForm!, "settings");
                 form._settingsForm!.Close();
 
                 // Landing-page and README captures: an example network with replies, shown as monitoring.
-                // The token is already canceled so no real pings run; the states are set directly.
+                // Every host is registered before monitoring is marked active, so no ping workers start; states are set directly.
                 using (var page = new MainForm(false, true, false))
                 {
                     page._minimizeToTray = false;
@@ -440,8 +443,6 @@ public sealed partial class MainForm
                         }).ToList() });
                     page.MaximumSize = new Size(1920, 1080);
                     page.Show(form);
-                    page._cts = new CancellationTokenSource();
-                    page._cts.Cancel();
                     var replyTime = DateTime.Now;
                     foreach (var site in page._sites)
                         foreach (var address in site.Hosts)
@@ -451,7 +452,9 @@ public sealed partial class MainForm
                                 { State = HostState.Online, LastRoundTripMs = ms, LastReply = replyTime, ConsecutiveSuccesses = 5 };
                             page.AppendCommandLog(site.Name, address, true, $"Reply from {address}: time={ms}ms TTL=128");
                         }
+                    page._cts = new CancellationTokenSource();
                     page.UpdateActionState();
+                    Check(page._hostTokens.IsEmpty, "Page captures started real ping workers.");
                     foreach (var appearance in new[] { AppearanceMode.Dark, AppearanceMode.Light })
                     {
                         AppTheme.SetMode(appearance);
@@ -466,8 +469,7 @@ public sealed partial class MainForm
                         await Task.Delay(150);
                         Capture(page, "page-list-" + appearance);
                     }
-                    page._cts.Dispose();
-                    page._cts = null;
+                    Check(page._hostTokens.IsEmpty, "Page captures started real ping workers.");
                     page.Close();
                 }
 
@@ -732,6 +734,8 @@ public sealed partial class MainForm
                         await Task.Delay(50);
                         Capture(hostEdit, "dialog-edit-host-" + appearance);
                         CompactDialog.CheckBounds(hostEdit);
+                        var editDesign = DesignChecks.Run(hostEdit);
+                        Check(editDesign.Count == 0, "Design checks: " + string.Join(" | ", editDesign));
                         Check(hostEdit.Address == "192.0.2.40" && hostEdit.Nickname == "Printer & scanner", "Host edit review changed the current values.");
                         DismissWithEscape(hostEdit);
                     }

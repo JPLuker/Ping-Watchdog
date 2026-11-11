@@ -229,8 +229,11 @@ internal static class AppTheme
                     "title" or "primaryText" or "statTotal" => p.Text, _ => p.Secondary
                 };
                 break;
-            case CheckBox check:
-                check.BackColor = Color.Transparent;
+            case CheckBox or RadioButton:
+                // A8: the whole row is the target and is at least 24px tall.
+                control.BackColor = Color.Transparent;
+                int minimum = (int)Math.Ceiling(24 * control.DeviceDpi / 96f);
+                if (control.MinimumSize.Height < minimum) control.MinimumSize = new Size(control.MinimumSize.Width, minimum);
                 break;
             case ToolStrip strip:
                 ApplyMenu(strip);
