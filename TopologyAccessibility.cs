@@ -183,9 +183,9 @@ internal sealed partial class WallboardCanvas
         bounds.Inflate(-2, -2);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         // Keyboard focus uses the shared focus ring color, not the accent (Quiet Precision B10).
-        using var pen = new Pen(AuroraTheme.Palette.Focus, Math.Max(2, DeviceDpi / 48f));
+        using var pen = new Pen(AppTheme.Palette.Focus, Math.Max(2, DeviceDpi / 48f));
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var ring = WallboardStyle.Rounded(bounds, (int)(AuroraTheme.RadiusSmall * DeviceDpi / 96f));
+        using var ring = WallboardStyle.Rounded(bounds, (int)(AppTheme.RadiusSmall * DeviceDpi / 96f));
         g.DrawPath(pen, ring);
     }
 

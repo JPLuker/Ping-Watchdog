@@ -38,7 +38,7 @@ internal sealed class EventHistoryForm : Form
         TextAlign = ContentAlignment.MiddleRight
     };
 
-    private readonly Button _exportButton = new AuroraButton()
+    private readonly Button _exportButton = new ThemeButton()
     {
         Text = "Export CSV",
         AutoSize = true, TabIndex = 3
@@ -78,7 +78,7 @@ internal sealed class EventHistoryForm : Form
         MinimumSize = new Size(820, 480);
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = AuroraTheme.LabelFont;
+        Font = AppTheme.LabelFont;
         BackColor = Color.FromArgb(11, 16, 23);
         ForeColor = Color.FromArgb(232, 238, 245);
 
@@ -86,9 +86,16 @@ internal sealed class EventHistoryForm : Form
         _siteCombo.DrawItem += DrawFilterItem;
         BuildGrid();
         BuildLayout();
-        AuroraTheme.Register(this);
-        AuroraTheme.Changed += ApplyEventColors;
-        Disposed += (_, _) => AuroraTheme.Changed -= ApplyEventColors;
+        AppTheme.Register(this);
+        AppTheme.Changed += ApplyEventColors;
+        Disposed += (_, _) => AppTheme.Changed -= ApplyEventColors;
+        // Stored kinds stay uppercase (CSV and saved history); the table shows sentence case (A2.4).
+        _grid.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "KindColumn" || e.Value is not string kind || kind.Length == 0) return;
+            e.Value = KindLabel(kind);
+            e.FormattingApplied = true;
+        };
 
         _windowCombo.Items.AddRange(Presentation.HistoryRanges.Cast<object>().ToArray());
 
@@ -162,7 +169,7 @@ internal sealed class EventHistoryForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 3,
-            Padding = new Padding(AuroraTheme.Space4),
+            Padding = new Padding(AppTheme.Space4),
             Margin = new Padding(0)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -181,7 +188,7 @@ internal sealed class EventHistoryForm : Form
         titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         titlePanel.AutoSize = true;
-        titlePanel.Margin = new Padding(0, 0, 0, AuroraTheme.Space3);
+        titlePanel.Margin = new Padding(0, 0, 0, AppTheme.Space3);
         titlePanel.Controls.Add(new Label
         {
             Text = "Outage history", AutoSize = true, Tag = "title",
@@ -196,7 +203,7 @@ internal sealed class EventHistoryForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, TabIndex = 1,
             Padding = Padding.Empty,
-            Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
+            Margin = new Padding(0, 0, 0, AppTheme.Space3)
         };
 
         filters.Controls.Add(FilterGroup("Range", _windowCombo, 0));
@@ -215,7 +222,7 @@ internal sealed class EventHistoryForm : Form
     private static void DrawFilterItem(object? sender, DrawItemEventArgs e)
     {
         if (sender is not ComboBox combo) return;
-        var palette = AuroraTheme.Palette;
+        var palette = AppTheme.Palette;
         bool selected = (e.State & DrawItemState.Selected) != 0;
         Color background = selected ? palette.Surface3 : palette.Surface;
         Color foreground = selected && SystemInformation.HighContrast ? SystemColors.HighlightText : palette.Text;
@@ -230,7 +237,7 @@ internal sealed class EventHistoryForm : Form
 
     private static TableLayoutPanel FilterGroup(string label, ComboBox combo, int tabIndex)
     {
-        combo.Font = AuroraTheme.LabelFont;
+        combo.Font = AppTheme.LabelFont;
         var group = new TableLayoutPanel
         {
             AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -256,10 +263,12 @@ internal sealed class EventHistoryForm : Form
         return base.ProcessDialogKey(keyData);
     }
 
+    internal static string KindLabel(string kind) => kind.Length == 0 ? kind : char.ToUpperInvariant(kind[0]) + kind[1..].ToLowerInvariant();
+
     private void ApplyEventColors()
     {
         if (IsDisposed || Disposing) return;
-        var palette = AuroraTheme.Palette;
+        var palette = AppTheme.Palette;
         foreach (DataGridViewRow row in _grid.Rows)
         {
             string kind = row.Cells["KindColumn"].Value?.ToString()?.ToUpperInvariant() ?? string.Empty;
@@ -290,7 +299,7 @@ internal sealed class EventHistoryForm : Form
         if (_exportButton.Enabled != (_grid.Rows.Count > 0))
             throw new InvalidOperationException("History export must reflect whether any events are shown.");
         foreach (DataGridViewRow row in _grid.Rows)
-            if (AuroraTheme.ContrastRatio(row.Cells["KindColumn"].Style.ForeColor, row.DefaultCellStyle.BackColor) < 4.5)
+            if (AppTheme.ContrastRatio(row.Cells["KindColumn"].Style.ForeColor, row.DefaultCellStyle.BackColor) < 4.5)
                 throw new InvalidOperationException("History event text does not meet contrast.");
     }
 

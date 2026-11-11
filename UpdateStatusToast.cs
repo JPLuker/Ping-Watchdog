@@ -21,8 +21,8 @@ public sealed partial class MainForm
         content.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         content.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        content.Controls.Add(new Label { Text = "Updates", AutoSize = true, Font = AuroraTheme.LabelFont }, 0, 0);
-        _updateToastBody = new Label { Dock = DockStyle.Fill, Font = AuroraTheme.CaptionFont, AutoEllipsis = true };
+        content.Controls.Add(new Label { Text = "Updates", AutoSize = true, Font = AppTheme.LabelFont }, 0, 0);
+        _updateToastBody = new Label { Dock = DockStyle.Fill, Font = AppTheme.CaptionFont, AutoEllipsis = true };
         content.Controls.Add(_updateToastBody, 0, 1);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft,
             WrapContents = false, Margin = Padding.Empty, Tag = "overlay" };
@@ -55,8 +55,8 @@ public sealed partial class MainForm
         _updateToastRestart!.Visible = _pendingUpdateManager != null && _pendingUpdateInfo != null;
         _updateToast.Visible = true;
         _updateToast.BringToFront();
-        AuroraTheme.Register(owner);
-        AuroraTheme.Apply(owner);
+        AppTheme.Register(owner);
+        AppTheme.Apply(owner);
         _updateToast.BringToFront();
         _updateToast.PerformLayout();
         _updateToast.Invalidate(true);
@@ -74,7 +74,7 @@ internal sealed class UpdateToastPanel : Panel
         ResizeRedraw = true;
     }
 
-    private int CornerRadius => Math.Max(1, LogicalToDeviceUnits(AuroraTheme.RadiusCard));
+    private int CornerRadius => Math.Max(1, LogicalToDeviceUnits(AppTheme.RadiusCard));
 
     protected override void OnHandleCreated(EventArgs e)
     {
@@ -109,7 +109,7 @@ internal sealed class UpdateToastPanel : Panel
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         using var edge = WallboardStyle.Rounded(bounds, Math.Max(1, CornerRadius - 1));
-        var palette = AuroraTheme.Palette;
+        var palette = AppTheme.Palette;
         var edgeColor = SystemInformation.HighContrast ? SystemColors.WindowText :
             Color.FromArgb((3 * BackColor.R + palette.Text.R) / 4,
                 (3 * BackColor.G + palette.Text.G) / 4, (3 * BackColor.B + palette.Text.B) / 4);

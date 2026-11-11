@@ -97,15 +97,15 @@ public sealed partial class MainForm
         menu.Items.Clear();
         menu.ShowImageMargin = false;
         menu.ShowCheckMargin = false;
-        menu.Renderer = new ToolStripProfessionalRenderer(new AuroraMenuColors());
-        menu.BackColor = AuroraTheme.Palette.Surface;
-        menu.ForeColor = AuroraTheme.Palette.Text;
+        menu.Renderer = new ToolStripProfessionalRenderer(new ThemeMenuColors());
+        menu.BackColor = AppTheme.Palette.Surface;
+        menu.ForeColor = AppTheme.Palette.Text;
         void Add(string title, Action action) => menu.Items.Add(title, null, (_, _) =>
         {
             try { action(); }
             catch (Exception ex) { MessageBox.Show(surface.FindForm(), ex.Message, "Host action failed"); }
         });
-        menu.Items.Add(new ToolStripMenuItem(AuroraTheme.MenuText(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address)) { Enabled = false });
+        menu.Items.Add(new ToolStripMenuItem(AppTheme.MenuText(string.IsNullOrWhiteSpace(host.Label) ? address : host.Label + " • " + address)) { Enabled = false });
         if (surface != _grid)
             Add("Edit in host list", () => ShowHostInList(site, address));
         Add("Copy address", () => Clipboard.SetText(address));
@@ -157,7 +157,7 @@ public sealed partial class MainForm
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 ApplyHostEdit(() => { DeleteManagedHosts(new() { host }); return $"Removed {shown}"; });
         });
-        AuroraTheme.ApplyMenu(menu);
+        AppTheme.ApplyMenu(menu);
         menu.Show(surface, location);
     }
 

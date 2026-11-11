@@ -155,7 +155,7 @@ internal sealed class ResponsivenessGuard : IDisposable
         internal void ShowOver(IntPtr window)
         {
             if (!GetWindowRect(window, out var rect)) return;
-            BackColor = AuroraTheme.Palette.Canvas;
+            BackColor = AppTheme.Palette.Canvas;
             Bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
             if (!Visible) Show();
             SetWindowPos(Handle, IntPtr.Zero, Left, Top, Width, Height, 0x0010 | 0x0040); // NOACTIVATE | SHOWWINDOW, top of z-order
@@ -163,7 +163,7 @@ internal sealed class ResponsivenessGuard : IDisposable
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            var p = AuroraTheme.Palette;
+            var p = AppTheme.Palette;
             e.Graphics.Clear(p.Canvas);
             float scale = DeviceDpi / 96f;
             using var font = new Font("Segoe UI", 11.25f, FontStyle.Regular);

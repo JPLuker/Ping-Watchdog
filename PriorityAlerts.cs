@@ -91,8 +91,8 @@ internal sealed class PriorityBanner : Panel
 {
     private readonly PriorityAlarm _alarm;
     private readonly Label _message = new() { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Tag = "primaryText", AutoEllipsis = true };
-    private readonly AuroraButton _acknowledge = new() { Text = "Acknowledge", AutoSize = true };
-    private readonly AuroraButton _acknowledgeAll = new() { Text = "Acknowledge all", AutoSize = true, Ghost = true };
+    private readonly ThemeButton _acknowledge = new() { Text = "Acknowledge", AutoSize = true };
+    private readonly ThemeButton _acknowledgeAll = new() { Text = "Acknowledge all", AutoSize = true, Ghost = true };
 
     internal PriorityBanner(PriorityAlarm alarm)
     {
@@ -139,7 +139,7 @@ internal sealed class PriorityBanner : Panel
 
     protected override void OnPaintBackground(PaintEventArgs e)
     {
-        var p = AuroraTheme.Palette;
+        var p = AppTheme.Palette;
         e.Graphics.Clear(p.Surface2);
         var first = _alarm.Active.FirstOrDefault();
         if (first is null) return;

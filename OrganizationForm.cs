@@ -14,7 +14,7 @@ internal sealed class OrganizationForm : Form
         ShowLines = true,
         ShowPlusMinus = true,
         ShowRootLines = true,
-        Font = AuroraTheme.LabelFont, AccessibleName = "Sites and folders",
+        Font = AppTheme.LabelFont, AccessibleName = "Sites and folders",
         ShowNodeToolTips = true, TabIndex = 1
     };
 
@@ -45,12 +45,12 @@ internal sealed class OrganizationForm : Form
         MinimumSize = new Size(620, 460);
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = AuroraTheme.LabelFont;
+        Font = AppTheme.LabelFont;
         BackColor = Color.FromArgb(10, 14, 20);
         ForeColor = Color.FromArgb(234, 240, 246);
 
         BuildLayout();
-        AuroraTheme.Register(this);
+        AppTheme.Register(this);
         WireActions();
 
         Shown += (_, _) => RefreshNow();
@@ -170,7 +170,7 @@ internal sealed class OrganizationForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
+            Margin = new Padding(0, 0, 0, AppTheme.Space3)
         };
         header.Controls.Add(new Label
         {
@@ -184,7 +184,7 @@ internal sealed class OrganizationForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, TabIndex = 0,
-            Margin = new Padding(0, 0, 0, AuroraTheme.Space3)
+            Margin = new Padding(0, 0, 0, AppTheme.Space3)
         };
         foreach (var button in new[]
         {
@@ -208,7 +208,7 @@ internal sealed class OrganizationForm : Form
 
     private static Button Button(string text)
     {
-        return new AuroraButton
+        return new ThemeButton
         {
             Text = text, AutoSize = true, MinimumSize = new Size(0, 32),
             Margin = new Padding(0, 0, 8, 4)

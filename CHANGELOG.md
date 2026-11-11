@@ -2,6 +2,18 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.29
+
+- New look: quieter neutral colors, black-and-white main buttons, color kept for host status, dots beside status words.
+- The map always shows full IP addresses.
+- Paste labels into Add hosts with Ctrl+V, including a whole column at once.
+- Edit host changes a host's address as well as its label.
+- Settings → General → Startup can open Ping Watchdog at sign-in, start monitoring, and open the Wallboard on the screen it was last on.
+- A busy window shows a dimmed Loading cover instead of freezing.
+- Updates install without a separate window and reopen Ping Watchdog.
+- Settings → Advanced → Show version on all screens.
+- Shorter wording in Settings and on the Wallboard.
+
 ## 1.19.28
 
 - Removed the selected-host count and Clear selection row above List. Selecting hosts no longer moves the table.

@@ -15,7 +15,7 @@ public sealed partial class MainForm
         _siteActionsMenu.Items.Add(new ToolStripSeparator());
         var delete = _siteActionsMenu.Items.Add("Delete site…", null, (_, _) => DeleteSite());
         delete.Enabled = _selectedSiteName is not null;
-        AuroraTheme.ApplyMenu(_siteActionsMenu);
+        AppTheme.ApplyMenu(_siteActionsMenu);
     }
 
     private void ShowSiteActions()
@@ -35,7 +35,7 @@ public sealed partial class MainForm
             item.CheckedChanged += (_, _) => column.Visible = item.Checked;
             _columnsMenu.Items.Add(item);
         }
-        AuroraTheme.ApplyMenu(_columnsMenu);
+        AppTheme.ApplyMenu(_columnsMenu);
         _columnsMenu.Show(_settingsFlowPanel!, new Point(0, _settingsFlowPanel!.Height));
     }
 }

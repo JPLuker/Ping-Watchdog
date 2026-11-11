@@ -769,7 +769,7 @@ internal sealed class WallboardForm : Form
         _loadingControls = true;
         try
         {
-            ((AuroraButton)_monitorButton).Primary = true;
+            ((ThemeButton)_monitorButton).Primary = true;
             _monitorButton.Text = state.Monitoring ? "Stop Monitoring" : "Start Monitoring";
             _monitorButton.BackColor = state.Monitoring
                 ? WallboardStyle.Selection
@@ -1849,7 +1849,7 @@ internal sealed partial class WallboardCanvas : Control
 
     private static Color StateColor(HostState state, int alpha)
     {
-        var p = AuroraTheme.Palette;
+        var p = AppTheme.Palette;
         Color value = state switch {
             HostState.Online => p.Teal, HostState.Suspect => p.Warning,
             HostState.Offline => p.Danger, _ => p.Secondary

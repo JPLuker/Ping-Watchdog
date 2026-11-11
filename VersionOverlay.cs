@@ -30,7 +30,7 @@ internal sealed class VersionOverlay : Control
         AccessibleName = "Version " + Text;
         SetStyle(ControlStyles.Selectable, false);
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
-        Font = AuroraTheme.CaptionFont;
+        Font = AppTheme.CaptionFont;
     }
 
     internal static void SetEnabled(bool enabled)
@@ -78,7 +78,7 @@ internal sealed class VersionOverlay : Control
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        var p = AuroraTheme.Palette;
+        var p = AppTheme.Palette;
         e.Graphics.Clear(Parent?.BackColor ?? p.Canvas);
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);

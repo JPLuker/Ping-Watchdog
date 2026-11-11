@@ -3,14 +3,14 @@ namespace PingWatchdog;
 // FOCAL: explicit restart consent. Native chrome and existing compact theme tokens.
 internal sealed class UpdateRestartDialog : Form
 {
-    private readonly Button _restart = new AuroraButton { Text = "Restart now", AutoSize = true, DialogResult = DialogResult.OK };
-    private readonly Button _later = new AuroraButton { Text = "Later", AutoSize = true, DialogResult = DialogResult.Cancel };
+    private readonly Button _restart = new ThemeButton { Text = "Restart now", AutoSize = true, DialogResult = DialogResult.OK };
+    private readonly Button _later = new ThemeButton { Text = "Later", AutoSize = true, DialogResult = DialogResult.Cancel };
 
     internal UpdateRestartDialog(string version, bool monitoring)
     {
         Text = "Install update • Ping Watchdog";
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = AuroraTheme.LabelFont;
+        Font = AppTheme.LabelFont;
         ClientSize = new Size(460, 200);
         MinimumSize = new Size(400, 220);
         StartPosition = FormStartPosition.CenterParent;
@@ -27,7 +27,7 @@ internal sealed class UpdateRestartDialog : Form
         root.Controls.Add(new Label
         {
             Text = $"Install version {version}?", AutoSize = true, Dock = DockStyle.Fill,
-            Font = AuroraTheme.LabelFont, Margin = new Padding(0, 0, 0, 12)
+            Font = AppTheme.LabelFont, Margin = new Padding(0, 0, 0, 12)
         }, 0, 0);
         root.Controls.Add(new Label
         {
@@ -49,8 +49,8 @@ internal sealed class UpdateRestartDialog : Form
         AcceptButton = _later;
         CancelButton = _later;
         Shown += (_, _) => _later.Focus();
-        AuroraTheme.Register(this);
-        AuroraTheme.Apply(this);
+        AppTheme.Register(this);
+        AppTheme.Apply(this);
     }
 
     internal void CheckLayout()

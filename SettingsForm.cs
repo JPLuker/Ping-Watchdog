@@ -19,7 +19,7 @@ internal sealed class SettingsForm : Form
         Dock = DockStyle.Fill,
         BorderStyle = BorderStyle.None,
         IntegralHeight = false,
-        Font = AuroraTheme.LabelFont,
+        Font = AppTheme.LabelFont,
         DrawMode = DrawMode.OwnerDrawFixed,
         ItemHeight = 32,
         AccessibleName = "Settings categories"
@@ -28,9 +28,9 @@ internal sealed class SettingsForm : Form
     private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, AccessibleName = "Appearance" };
 
     private readonly Panel _content = new() { Dock = DockStyle.Fill };
-    private readonly Button _saveButton = new AuroraButton() { Text = "Save changes", AutoSize = true };
-    private readonly Button _closeButton = new AuroraButton() { Text = "Close", AutoSize = true };
-    private readonly Button _saveDetails = new AuroraButton() { Text = "Details", AutoSize = true, Visible = false };
+    private readonly Button _saveButton = new ThemeButton() { Text = "Save changes", AutoSize = true };
+    private readonly Button _closeButton = new ThemeButton() { Text = "Close", AutoSize = true };
+    private readonly Button _saveDetails = new ThemeButton() { Text = "Details", AutoSize = true, Visible = false };
     private string? _saveError;
 
     private readonly CheckBox _minimizeToTray = new() { Text = "Minimize to notification area", AutoSize = true };
@@ -55,14 +55,14 @@ internal sealed class SettingsForm : Form
         Width = 180
     };
     private readonly CheckBox _hideSuspects = new() { Text = "Hide SUSPECT events by default", AutoSize = true };
-    private readonly Button _openHistoryButton = new AuroraButton() { Text = "Open history", AutoSize = true };
+    private readonly Button _openHistoryButton = new ThemeButton() { Text = "Open history", AutoSize = true };
 
     private readonly CheckBox _autoUpdates = new() { Text = "Check for updates automatically (once a day)", AutoSize = true };
     private readonly Label _updatesManaged = new() { Text = UpdatePolicy.ManagedText, AutoSize = true, Tag = "primaryText", Visible = false, Margin = new Padding(0, 12, 0, 10) };
     private readonly CheckBox _showHomeUpdateControl = new() { Text = "Developer: show update control in the main UI", AutoSize = true };
     private readonly Label _versionValue = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 10) };
     private readonly Label _updateStatus = new() { AutoSize = false, Height = 48, Width = 560 };
-    private readonly Button _updateButton = new AuroraButton() { Text = "Check for Updates", AutoSize = true };
+    private readonly Button _updateButton = new ThemeButton() { Text = "Check for Updates", AutoSize = true };
 
     private readonly Dictionary<string, Control> _pages = new(StringComparer.OrdinalIgnoreCase);
     private bool _loading;
@@ -72,7 +72,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _startWithWindows = new() { Text = "Open Ping Watchdog when you sign in to Windows", AutoSize = true };
     private readonly CheckBox _wallboardOnStartup = new() { Text = "Open the Wallboard when the app opens", AutoSize = true };
     private readonly CheckBox _versionOverlay = new() { Text = "Show version on all screens", AutoSize = true };
-    private readonly Button _resetButton = new AuroraButton() { Text = "Restore default settings…", AutoSize = true };
+    private readonly Button _resetButton = new ThemeButton() { Text = "Restore default settings…", AutoSize = true };
 
     public SettingsForm(
         Func<AppSettingsSnapshot> provider,
@@ -112,7 +112,7 @@ internal sealed class SettingsForm : Form
         _appearance.SelectedIndexChanged += (_, _) => UpdateDirtyState();
         BuildLayout();
         ApplyTheme();
-        Shown += (_, _) => AuroraTheme.Register(this);
+        Shown += (_, _) => AppTheme.Register(this);
 
         _nav.Items.AddRange(new object[] { "General", "Appearance", "Monitoring", "Notifications", "History", "Updates", "Data and storage", "Advanced", "About" });
         _nav.DrawItem += DrawCategory;
@@ -186,7 +186,7 @@ internal sealed class SettingsForm : Form
             : "Stop monitoring to change these.";
         // Tag keeps the color through later theme passes.
         _monitorLockLabel.Tag = editable ? null : "statSuspect";
-        _monitorLockLabel.ForeColor = editable ? AuroraTheme.Palette.Secondary : AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Warning);
+        _monitorLockLabel.ForeColor = editable ? AppTheme.Palette.Secondary : AppTheme.Palette.StatusText(AppTheme.Palette.Warning);
     }
 
     private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal increment, int width)
@@ -223,7 +223,7 @@ internal sealed class SettingsForm : Form
         {
             Text = "Settings",
             AutoSize = true,
-            Font = AuroraTheme.Title1Font,
+            Font = AppTheme.Title1Font,
             Tag = "title",
             Location = new Point(24, 20)
         });
@@ -309,7 +309,7 @@ internal sealed class SettingsForm : Form
                 throw new InvalidOperationException(category + ": Settings requires horizontal scrolling. Client=" + stack.ClientSize + "; Display=" + stack.DisplayRectangle + "; " + string.Join("; ", stack.Controls.Cast<Control>().Select(c => c.GetType().Name + " " + c.Bounds + " min=" + c.MinimumSize + " max=" + c.MaximumSize)));
             using var bitmap = new Bitmap(Width, Height);
             DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
-            bitmap.Save(Path.Combine(output, "dialog-settings-" + category.Replace(' ', '-') + "-" + AuroraTheme.Mode + ".png"));
+            bitmap.Save(Path.Combine(output, "dialog-settings-" + category.Replace(' ', '-') + "-" + AppTheme.Mode + ".png"));
         }
         Size = previous;
         SelectCategory("General");
@@ -324,8 +324,7 @@ internal sealed class SettingsForm : Form
             "Window behavior",
             _minimizeToTray,
             "Monitoring keeps running while it's hidden."));
-        stack.Controls.Add(Section("Startup view", _restoreLastSite, "Otherwise it opens on All sites."));
-        stack.Controls.Add(Section("Startup", new Control[] { _startWithWindows, _autoStart, _wallboardOnStartup },
+        stack.Controls.Add(Section("Startup", new Control[] { _startWithWindows, _autoStart, _wallboardOnStartup, _restoreLastSite },
             "The Wallboard opens on the screen it was last on."));
 
         return page;
@@ -349,9 +348,9 @@ internal sealed class SettingsForm : Form
         stack.Controls.Add(Section("Windows notifications", _notifications,
             "History still records outages when alerts are off."));
         var soundActions = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = Padding.Empty };
-        var choose = new AuroraButton { Text = "Choose sound…", AutoSize = true };
-        var test = new AuroraButton { Text = "Test", AutoSize = true };
-        var reset = new AuroraButton { Text = "Use Windows alarm", AutoSize = true, Ghost = true };
+        var choose = new ThemeButton { Text = "Choose sound…", AutoSize = true };
+        var test = new ThemeButton { Text = "Test", AutoSize = true };
+        var reset = new ThemeButton { Text = "Use Windows alarm", AutoSize = true, Ghost = true };
         choose.Click += (_, _) =>
         {
             using var dialog = new OpenFileDialog { Filter = "WAV sound|*.wav", Title = "Priority alarm sound" };
@@ -437,11 +436,11 @@ internal sealed class SettingsForm : Form
         // FOCAL: the existing staged Settings save action. Data operations stay secondary.
         var page = Page("Data and storage", "");
         var stack = (FlowLayoutPanel)page.Controls[1];
-        var backup = new AuroraButton { Text = "Create backup…", AutoSize = true, Enabled = _backupAction != null };
-        var restore = new AuroraButton { Text = "Restore backup…", AutoSize = true, Enabled = _restoreAction != null };
-        var open = new AuroraButton { Text = "Open data folder", AutoSize = true, Enabled = _openDataFolder != null };
-        var portable = new AuroraButton { Text = "Enable portable storage…", AutoSize = true, Enabled = _portableAction != null && _canEnablePortable };
-        _deleteDataButton = new AuroraButton { Text = "Delete saved data…", AutoSize = true, Destructive = true, Ghost = true, Enabled = _deleteDataAction != null };
+        var backup = new ThemeButton { Text = "Create backup…", AutoSize = true, Enabled = _backupAction != null };
+        var restore = new ThemeButton { Text = "Restore backup…", AutoSize = true, Enabled = _restoreAction != null };
+        var open = new ThemeButton { Text = "Open data folder", AutoSize = true, Enabled = _openDataFolder != null };
+        var portable = new ThemeButton { Text = "Enable portable storage…", AutoSize = true, Enabled = _portableAction != null && _canEnablePortable };
+        _deleteDataButton = new ThemeButton { Text = "Delete saved data…", AutoSize = true, Destructive = true, Ghost = true, Enabled = _deleteDataAction != null };
         backup.Click += (_, _) => _backupAction?.Invoke();
         restore.Click += (_, _) => _restoreAction?.Invoke();
         open.Click += (_, _) => _openDataFolder?.Invoke();
@@ -489,9 +488,9 @@ internal sealed class SettingsForm : Form
             Text = "Copyright © 2026 Joseph Luker. All rights reserved.",
             AutoSize = true, Margin = new Padding(0, 0, 0, 12)
         });
-        var license = new AuroraButton { Text = "View license", AutoSize = true };
-        var issue = new AuroraButton { Text = "Report an issue…", AutoSize = true };
-        var diagnostics = new AuroraButton { Text = "Review diagnostic info…", AutoSize = true };
+        var license = new ThemeButton { Text = "View license", AutoSize = true };
+        var issue = new ThemeButton { Text = "Report an issue…", AutoSize = true };
+        var diagnostics = new ThemeButton { Text = "Review diagnostic info…", AutoSize = true };
         var status = new Label { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
         license.Click += (_, _) =>
         {
@@ -514,7 +513,7 @@ internal sealed class SettingsForm : Form
             FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Margin = new Padding(0)
         };
-        var notices = new AuroraButton { Text = "Open third-party notices", AutoSize = true };
+        var notices = new ThemeButton { Text = "Open third-party notices", AutoSize = true };
         notices.Click += (_, _) =>
         {
             string folder = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices");
@@ -577,7 +576,7 @@ internal sealed class SettingsForm : Form
         {
             Text = title,
             AutoSize = true,
-            Font = AuroraTheme.Title2Font,
+            Font = AppTheme.Title2Font,
             Tag = "title"
         });
 
@@ -649,7 +648,7 @@ internal sealed class SettingsForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Padding = new Padding(AuroraTheme.Space4),
+            Padding = new Padding(AppTheme.Space4),
             Margin = new Padding(0, 0, 0, 12),
             BackColor = Color.FromArgb(18, 25, 34)
         };
@@ -735,8 +734,8 @@ internal sealed class SettingsForm : Form
 
     private void ApplyTheme()
     {
-        ((AuroraButton)_saveButton).Primary = true;
-        AuroraTheme.Apply(this);
+        ((ThemeButton)_saveButton).Primary = true;
+        AppTheme.Apply(this);
     }
 
     private void ShowSelectedPage()
@@ -844,24 +843,24 @@ internal sealed class SettingsForm : Form
 
     private void DrawCategory(object? sender, DrawItemEventArgs e)
     {
-        using var background = new SolidBrush(AuroraWell.WellColor);
+        using var background = new SolidBrush(ScrollWell.WellColor);
         e.Graphics.FillRectangle(background, e.Bounds);
         if (e.Index < 0 || e.Index >= _nav.Items.Count) return;
         bool selected = (e.State & DrawItemState.Selected) != 0;
         var bounds = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 2, Math.Max(1, e.Bounds.Width - 8), Math.Max(1, e.Bounds.Height - 4));
-        using var shape = WallboardStyle.Rounded(bounds, (int)(AuroraTheme.RadiusSmall * DeviceDpi / 96f));
+        using var shape = WallboardStyle.Rounded(bounds, (int)(AppTheme.RadiusSmall * DeviceDpi / 96f));
         if (selected)
         {
-            using var fill = new SolidBrush(AuroraTheme.Palette.Surface3);
+            using var fill = new SolidBrush(AppTheme.Palette.Surface3);
             e.Graphics.FillPath(fill, shape);
         }
-        TextRenderer.DrawText(e.Graphics, _nav.Items[e.Index].ToString(), AuroraTheme.LabelFont,
+        TextRenderer.DrawText(e.Graphics, _nav.Items[e.Index].ToString(), AppTheme.LabelFont,
             new Rectangle(bounds.X + 12, bounds.Y, Math.Max(1, bounds.Width - 24), bounds.Height),
-            selected ? AuroraTheme.Palette.SelectionText : AuroraTheme.Palette.Secondary,
+            selected ? AppTheme.Palette.SelectionText : AppTheme.Palette.Secondary,
             TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         if ((e.State & DrawItemState.Focus) != 0 && _nav.Focused)
         {
-            using var focus = new Pen(AuroraTheme.Palette.Focus, 2);
+            using var focus = new Pen(AppTheme.Palette.Focus, 2);
             e.Graphics.DrawPath(focus, shape);
         }
     }

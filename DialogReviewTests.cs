@@ -29,7 +29,7 @@ internal static class DialogReviewTests
     {
         using var bitmap = new Bitmap(form.Width, form.Height);
         form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
-        bitmap.Save(Path.Combine(output, "dialog-" + name + "-" + AuroraTheme.Mode + ".png"));
+        bitmap.Save(Path.Combine(output, "dialog-" + name + "-" + AppTheme.Mode + ".png"));
     }
 
     internal static async Task Run(Form owner, string output)

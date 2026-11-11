@@ -24,7 +24,7 @@ Online, Suspect (missed a reply, not yet an outage), Offline, plus Idle, Disable
 
 ## Look (Quiet Precision, native Windows)
 
-- **Tokens:** `AuroraTheme.cs` holds the palette, spacing, radii and type. Nothing else hard-codes a color, font or radius. The palette is the standards' B3 values exactly, light and dark.
+- **Tokens:** `AppTheme.cs` holds the palette, spacing, radii and type. Nothing else hard-codes a color, font or radius. The palette is the standards' B3 values exactly, light and dark.
 - **Accent:** ink. Primary buttons are near-black in light mode and near-white in dark. Hue is kept for host state.
 - **Surfaces:** canvas for the window and sidebar; `surface` with a 1px border for the map card, tables and the ping log; shadows only on the update popup and menus.
 - **Shape:** buttons and inputs 8px, list rows 6px, cards 12px, dialogs 16px. Filter chips are pills.

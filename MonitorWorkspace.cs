@@ -3,22 +3,22 @@ namespace PingWatchdog;
 public sealed partial class MainForm
 {
     private readonly TextBox _hostSearch = new() { PlaceholderText = "Search hosts", AccessibleName = "Search hosts", BorderStyle = BorderStyle.FixedSingle, Width = 220 };
-    private readonly Label _emptyHosts = new() { Text = "No hosts", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = AuroraTheme.BodyFont };
-    private readonly Label _emptyLog = new() { Text = "No ping activity", Dock = DockStyle.Fill, Padding = new Padding(12), Font = AuroraTheme.CaptionFont, Tag = "muted" };
+    private readonly Label _emptyHosts = new() { Text = "No hosts", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = AppTheme.BodyFont };
+    private readonly Label _emptyLog = new() { Text = "No ping activity", Dock = DockStyle.Fill, Padding = new Padding(12), Font = AppTheme.CaptionFont, Tag = "muted" };
     private readonly WallboardCanvas _monitorCanvas = new() { Dock = DockStyle.Fill, ShowCli = false, Embedded = true };
     private readonly SplitContainer _dashboardSplit = new() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterWidth = 8 };
 
     private bool _listView;
-    private readonly Label _searchLabel = new() { Text = "Search", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(0, 12, 8, 0) };
-    private readonly Button _addHostsButton = new AuroraButton { Text = "Add hosts", AutoSize = true };
+    private readonly Label _searchLabel = new() { Text = "Search", AutoSize = true, Font = AppTheme.LabelFont, Padding = new Padding(0, 12, 8, 0) };
+    private readonly Button _addHostsButton = new ThemeButton { Text = "Add hosts", AutoSize = true };
     private readonly ContextMenuStrip _addHostsMenu = new();
-    private readonly Button _columnPickerButton = new AuroraButton { Text = "Columns", AutoSize = true };
-    private readonly Button _mapTab = new AuroraButton { Text = "Map", AutoSize = true };
-    private readonly Button _listTab = new AuroraButton { Text = "List", AutoSize = true };
-    private AuroraWell? _siteWell;
+    private readonly Button _columnPickerButton = new ThemeButton { Text = "Columns", AutoSize = true };
+    private readonly Button _mapTab = new ThemeButton { Text = "Map", AutoSize = true };
+    private readonly Button _listTab = new ThemeButton { Text = "List", AutoSize = true };
+    private ScrollWell? _siteWell;
     private readonly ToolTip _addSiteTip = new();
     private Panel? _sectionDivider;
-    private readonly Button _outageHistoryButton = new AuroraButton { Text = "Outage history", AutoSize = true };
+    private readonly Button _outageHistoryButton = new ThemeButton { Text = "Outage history", AutoSize = true };
 
     private void BuildLayout()
     {
@@ -50,14 +50,14 @@ public sealed partial class MainForm
         _addSiteButton.AccessibleName = "Add site";
         _addSiteButton.Anchor = AnchorStyles.Right;
         _addSiteTip.SetToolTip(_addSiteButton, "Add site");
-        if (_addSiteButton is AuroraButton add) add.Ghost = true;
+        if (_addSiteButton is ThemeButton add) add.Ghost = true;
         _allSitesButton.Dock = DockStyle.Fill;
         _allSitesButton.Margin = Padding.Empty;
         _allSitesButton.Click += (_, _) => { if (_selectedSiteName is not null) SelectSiteScope(null); };
         scopeRow.Controls.Add(_allSitesButton, 0, 0);
         scopeRow.Controls.Add(_addSiteButton, 1, 0);
         navigation.Controls.Add(scopeRow, 0, 1);
-        _siteWell = new AuroraWell { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(4, 6, 14, 6), Tag = "well" };
+        _siteWell = new ScrollWell { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(4, 6, 14, 6), Tag = "well" };
         _siteList.Tag = "well";
         _siteWell.Controls.Add(_siteList);
         navigation.Controls.Add(_siteWell, 0, 2);
@@ -111,7 +111,7 @@ public sealed partial class MainForm
         var heading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Tag = "window" };
         heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _siteHeaderLabel.Font = AuroraTheme.Title1Font;
+        _siteHeaderLabel.Font = AppTheme.Title1Font;
         _siteHeaderLabel.AutoSize = false;
         _siteHeaderLabel.AutoEllipsis = true;
         _siteHeaderLabel.Dock = DockStyle.Fill;
@@ -123,13 +123,13 @@ public sealed partial class MainForm
         _addHostsMenu.Items.Add("Monitor temporarily…", null, (_, _) => OpenQuickAdd(true));
         _addHostsButton.Click += (_, _) =>
         {
-            AuroraTheme.ApplyMenu(_addHostsMenu);
+            AppTheme.ApplyMenu(_addHostsMenu);
             _addHostsMenu.Show(_addHostsButton, new Point(0, _addHostsButton.Height));
         };
         Disposed += (_, _) => _addHostsMenu.Dispose();
         actions.Controls.Add(_addHostsButton);
         actions.Controls.Add(_wallboardButton);
-        if (_startButton is AuroraButton primary) primary.Primary = true;
+        if (_startButton is ThemeButton primary) primary.Primary = true;
         _startButton.Text = "Start monitoring";
         actions.Controls.Add(_startButton);
         heading.Controls.Add(actions, 1, 0);
@@ -137,7 +137,7 @@ public sealed partial class MainForm
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Margin = Padding.Empty, Padding = new Padding(0, 8, 0, 8), Tag = "window" };
         _settingsFlowPanel = toolbar;
-        _hostSearch.Font = AuroraTheme.BodyFont;
+        _hostSearch.Font = AppTheme.BodyFont;
         _hostSearch.Margin = new Padding(0, 8, 8, 0);
         _hostSearch.TextChanged += (_, _) => RefreshGrid();
         _mapTab.Click += (_, _) => SetWorkspaceView(false);
@@ -157,7 +157,7 @@ public sealed partial class MainForm
         log.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         log.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var logHeading = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Tag = "window" };
-        logHeading.Controls.Add(new Label { Text = "Ping activity", AutoSize = true, Font = AuroraTheme.LabelFont, Padding = new Padding(0, 12, 16, 0) });
+        logHeading.Controls.Add(new Label { Text = "Ping activity", AutoSize = true, Font = AppTheme.LabelFont, Padding = new Padding(0, 12, 16, 0) });
         logHeading.Controls.Add(_clearLogButton);
         log.Controls.Add(logHeading, 0, 0);
         var output = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Tag = "card" };
@@ -229,7 +229,7 @@ public sealed partial class MainForm
         if (index < 0 || index >= _siteList.Items.Count) return false;
         int available = Math.Max(1, _siteList.ClientSize.Width - 8 - 18);
         string text = _siteList.Items[index]?.ToString() ?? string.Empty;
-        return TextRenderer.MeasureText(text, _siteItemFont, new Size(int.MaxValue, int.MaxValue), AuroraTheme.NameTextFlags).Width > available;
+        return TextRenderer.MeasureText(text, _siteItemFont, new Size(int.MaxValue, int.MaxValue), AppTheme.NameTextFlags).Width > available;
     }
 
     // Full site names on hover when the row shows an ellipsis.
@@ -257,7 +257,7 @@ public sealed partial class MainForm
             button.Padding = new Padding(12, 4, 12, 4);
             button.TextAlign = ContentAlignment.MiddleLeft;
             button.Width = Math.Max(button.PreferredSize.Width, _headerActionsPanel.ClientSize.Width - button.Margin.Horizontal);
-            if (button is AuroraButton navigation) navigation.Ghost = true;
+            if (button is ThemeButton navigation) navigation.Ghost = true;
         }
     }
 
@@ -274,8 +274,8 @@ public sealed partial class MainForm
         if (list) _mainSplit.BringToFront();
         else _monitorCanvas.BringToFront();
         if (activityWasHidden && !_dashboardSplit.Panel2Collapsed) SizeDashboard();
-        ((AuroraButton)_mapTab).Selected = !list;
-        ((AuroraButton)_listTab).Selected = list;
+        ((ThemeButton)_mapTab).Selected = !list;
+        ((ThemeButton)_listTab).Selected = list;
         _mapTab.Invalidate(); _listTab.Invalidate();
         _monitorCanvas.Invalidate();
     }

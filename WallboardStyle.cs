@@ -5,17 +5,17 @@ namespace PingWatchdog;
 // Wallboard and map names backed by the shared Quiet Precision theme.
 internal static class WallboardStyle
 {
-    internal static Color Background => AuroraTheme.Palette.Canvas;
-    internal static Color Panel => AuroraTheme.Palette.Surface;
-    internal static Color Line => AuroraTheme.Palette.Border;
-    internal static Color Text => AuroraTheme.Palette.Text;
-    internal static Color Muted => AuroraTheme.Palette.Secondary;
-    internal static Color Accent => AuroraTheme.Palette.Accent;
-    internal static Color Primary => AuroraTheme.Palette.Accent;
-    internal static Color Selection => AuroraTheme.Palette.Surface3;
-    internal static Color Green => AuroraTheme.Palette.Teal;
-    internal static Color Yellow => AuroraTheme.Palette.Warning;
-    internal static Color Red => AuroraTheme.Palette.Danger;
+    internal static Color Background => AppTheme.Palette.Canvas;
+    internal static Color Panel => AppTheme.Palette.Surface;
+    internal static Color Line => AppTheme.Palette.Border;
+    internal static Color Text => AppTheme.Palette.Text;
+    internal static Color Muted => AppTheme.Palette.Secondary;
+    internal static Color Accent => AppTheme.Palette.Accent;
+    internal static Color Primary => AppTheme.Palette.Accent;
+    internal static Color Selection => AppTheme.Palette.Surface3;
+    internal static Color Green => AppTheme.Palette.Teal;
+    internal static Color Yellow => AppTheme.Palette.Warning;
+    internal static Color Red => AppTheme.Palette.Danger;
 
     internal static GraphicsPath Rounded(Rectangle bounds, int radius)
     {
@@ -32,10 +32,10 @@ internal static class WallboardStyle
     internal static void DrawSurface(Graphics graphics, Rectangle bounds, Brush fill, Pen border)
     {
         // Cards: r-lg (12px), 1px border, no shadow (B4).
-        using var path = Rounded(bounds, AuroraTheme.RadiusCard);
+        using var path = Rounded(bounds, AppTheme.RadiusCard);
         graphics.FillPath(fill, path);
         graphics.DrawPath(border, path);
     }
 }
 
-internal sealed class WallboardButton : AuroraButton { }
+internal sealed class WallboardButton : ThemeButton { }

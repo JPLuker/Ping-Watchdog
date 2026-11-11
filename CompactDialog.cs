@@ -11,7 +11,7 @@ internal static class CompactDialog
     {
         form.Text = title;
         form.AutoScaleMode = AutoScaleMode.Dpi;
-        form.Font = AuroraTheme.LabelFont;
+        form.Font = AppTheme.LabelFont;
         form.ClientSize = new Size(width, 180);
         form.MinimumSize = new Size(400, 220);
         form.AutoSize = true;
@@ -23,7 +23,7 @@ internal static class CompactDialog
         for (int i = 0; i < fields.Length; i++)
         {
             var (prompt, input) = fields[i];
-            input.Font = AuroraTheme.LabelFont;
+            input.Font = AppTheme.LabelFont;
             input.Dock = DockStyle.Top;
             input.TabIndex = i * 2 + 1;
             input.Margin = new Padding(0, 0, 0, i + 1 < fields.Length ? 16 : 8);
@@ -31,10 +31,10 @@ internal static class CompactDialog
             prompt.TabIndex = i * 2;
             prompt.Margin = new Padding(0, 0, 0, 8);
         }
-        var save = new AuroraButton { Text = action, AutoSize = true, DialogResult = DialogResult.OK,
-            Font = AuroraTheme.LabelFont, MinimumSize = new Size(75, 32), TabIndex = 1 };
-        var cancel = new AuroraButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel,
-            Font = AuroraTheme.LabelFont, MinimumSize = new Size(75, 32), TabIndex = 0 };
+        var save = new ThemeButton { Text = action, AutoSize = true, DialogResult = DialogResult.OK,
+            Font = AppTheme.LabelFont, MinimumSize = new Size(75, 32), TabIndex = 1 };
+        var cancel = new ThemeButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel,
+            Font = AppTheme.LabelFont, MinimumSize = new Size(75, 32), TabIndex = 0 };
         cancel.Click += (_, _) => form.Close();
         var actions = new FlowLayoutPanel
         {
@@ -48,7 +48,7 @@ internal static class CompactDialog
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = rows,
-            Padding = new Padding(AuroraTheme.Space4)
+            Padding = new Padding(AppTheme.Space4)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (int i = 0; i < rows; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -61,7 +61,7 @@ internal static class CompactDialog
         form.Controls.Add(root);
         form.AcceptButton = save;
         form.CancelButton = cancel;
-        AuroraTheme.Register(form);
+        AppTheme.Register(form);
         var first = fields[0].Input;
         form.Shown += (_, _) => { first.Focus(); if (first is TextBoxBase text) text.SelectAll(); };
     }
@@ -69,12 +69,12 @@ internal static class CompactDialog
     internal static void StylePicker(ComboBox combo)
     {
         combo.FlatStyle = FlatStyle.Flat;
-        combo.Font = AuroraTheme.LabelFont;
+        combo.Font = AppTheme.LabelFont;
         combo.DrawMode = DrawMode.OwnerDrawFixed;
         combo.ItemHeight = 24;
         combo.DrawItem += (_, e) =>
         {
-            var p = AuroraTheme.Palette;
+            var p = AppTheme.Palette;
             bool selected = (e.State & DrawItemState.Selected) != 0;
             var background = selected ? p.Surface3 : p.Surface;
             var foreground = selected && SystemInformation.HighContrast ? SystemColors.HighlightText : p.Text;

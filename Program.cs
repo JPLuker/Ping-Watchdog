@@ -208,13 +208,13 @@ internal sealed class HostEditDialog : Form
             string? error = HostImport.Valid(_address.Text.Trim()) ? addressError(Address) : "Enter a valid IP address or host name";
             if (error is null) return;
             e.Cancel = true;
-            _addressPrompt.Text = error; _addressPrompt.Tag = "statOffline"; AuroraTheme.Apply(this);
+            _addressPrompt.Text = error; _addressPrompt.Tag = "statOffline"; AppTheme.Apply(this);
             _address.Focus(); _address.SelectAll();
         };
         _address.TextChanged += (_, _) =>
         {
             if (_addressPrompt.Tag is null) return;
-            _addressPrompt.Text = "Address"; _addressPrompt.Tag = null; AuroraTheme.Apply(this);
+            _addressPrompt.Text = "Address"; _addressPrompt.Tag = null; AppTheme.Apply(this);
         };
     }
 
@@ -232,11 +232,11 @@ internal sealed class SiteNameDialog : Form
     {
         _box.Text = current;
         CompactDialog.Build(this, title, _prompt, _box, actionText);
-        _box.PasteBusy += () => { _prompt.Text = "Clipboard busy, try again"; _prompt.Tag = "statSuspect"; AuroraTheme.Apply(this); };
+        _box.PasteBusy += () => { _prompt.Text = "Clipboard busy, try again"; _prompt.Tag = "statSuspect"; AppTheme.Apply(this); };
         _box.TextChanged += (_, _) =>
         {
             if (_prompt.Tag is null) return;
-            _prompt.Text = "Site / group name"; _prompt.Tag = null; AuroraTheme.Apply(this);
+            _prompt.Text = "Site / group name"; _prompt.Tag = null; AppTheme.Apply(this);
         };
     }
 }
@@ -439,7 +439,7 @@ public sealed partial class MainForm : Form
     private readonly ConcurrentDictionary<string, HostMonitor> _hosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _hostTokens = new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly ListBox _siteList = new AuroraListBox
+    private readonly ListBox _siteList = new WellListBox
     {
         Dock = DockStyle.Fill,
         BorderStyle = BorderStyle.None,
@@ -447,30 +447,30 @@ public sealed partial class MainForm : Form
         Font = new Font("Segoe UI", 10)
     };
 
-    private readonly Button _addSiteButton = new AuroraButton() { Text = "+ Add Site", AutoSize = true };
+    private readonly Button _addSiteButton = new ThemeButton() { Text = "+ Add Site", AutoSize = true };
     // Pinned scope: stays visible above the scrolling site list and is never one of its rows.
-    private readonly AuroraButton _allSitesButton = new() { Text = "All sites", AccessibleName = "All sites", AutoSize = false, Ghost = true, Outline = true, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly Button _organizeButton = new AuroraButton() { Text = "Organize", AutoSize = true };
-    private readonly Button _renameSiteButton = new AuroraButton() { Text = "Rename Site", AutoSize = true };
-    private readonly Button _deleteSiteButton = new AuroraButton() { Text = "Delete Site", AutoSize = true };
+    private readonly ThemeButton _allSitesButton = new() { Text = "All sites", AccessibleName = "All sites", AutoSize = false, Ghost = true, Outline = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Button _organizeButton = new ThemeButton() { Text = "Organize", AutoSize = true };
+    private readonly Button _renameSiteButton = new ThemeButton() { Text = "Rename Site", AutoSize = true };
+    private readonly Button _deleteSiteButton = new ThemeButton() { Text = "Delete Site", AutoSize = true };
     private readonly Label _autoSaveLabel = new()
     {
         Text = "Auto-save • live apply",
         AutoSize = true,
         Padding = new Padding(0, 7, 0, 0)
     };
-    private readonly Button _saveConfigButton = new AuroraButton() { Text = "Save Config", AutoSize = true };
-    private readonly Button _loadConfigButton = new AuroraButton() { Text = "Load Config", AutoSize = true };
-    private readonly Button _checkUpdateButton = new AuroraButton() { Text = "Updates", AutoSize = false, Width = 120 };
-    private readonly Button _wallboardButton = new AuroraButton()
+    private readonly Button _saveConfigButton = new ThemeButton() { Text = "Save Config", AutoSize = true };
+    private readonly Button _loadConfigButton = new ThemeButton() { Text = "Load Config", AutoSize = true };
+    private readonly Button _checkUpdateButton = new ThemeButton() { Text = "Updates", AutoSize = false, Width = 120 };
+    private readonly Button _wallboardButton = new ThemeButton()
     {
         Text = "Wallboard",
         AutoSize = true,
         AutoSizeMode = AutoSizeMode.GrowOnly,
         MinimumSize = new Size(88, 32)
     };
-    private readonly Button _settingsButton = new AuroraButton() { Text = "Settings", AutoSize = false, Width = 88 };
-    private readonly Button _moreButton = new AuroraButton()
+    private readonly Button _settingsButton = new ThemeButton() { Text = "Settings", AutoSize = false, Width = 88 };
+    private readonly Button _moreButton = new ThemeButton()
     {
         Text = "⋯",
         AutoSize = false,
@@ -503,7 +503,7 @@ public sealed partial class MainForm : Form
         Multiline = true,
         ScrollBars = ScrollBars.Vertical,
         Dock = DockStyle.Fill,
-        Font = AuroraTheme.MonoFont,
+        Font = AppTheme.MonoFont,
         PlaceholderText = "One IP or hostname per line\r\n192.168.1.1\r\n8.8.8.8\r\nserver01"
     };
 
@@ -540,15 +540,15 @@ public sealed partial class MainForm : Form
         Width = 90
     };
 
-    private readonly Button _startButton = new AuroraButton() { Text = "Start Monitoring", AutoSize = true };
-    private readonly Button _stopButton = new AuroraButton() { Text = "Stop", AutoSize = true, Enabled = false };
+    private readonly Button _startButton = new ThemeButton() { Text = "Start Monitoring", AutoSize = true };
+    private readonly Button _stopButton = new ThemeButton() { Text = "Stop", AutoSize = true, Enabled = false };
     private readonly CheckBox _showCommandView = new()
     {
         Text = "Show ping log",
         AutoSize = true,
         Padding = new Padding(8, 5, 0, 0)
     };
-    private readonly Button _clearLogButton = new AuroraButton() { Text = "Clear", AutoSize = true };
+    private readonly Button _clearLogButton = new ThemeButton() { Text = "Clear", AutoSize = true };
     private readonly Label _totalValueLabel = CreateStatValueLabel();
     private readonly Label _onlineValueLabel = CreateStatValueLabel();
     private readonly Label _suspectValueLabel = CreateStatValueLabel();
@@ -580,7 +580,7 @@ public sealed partial class MainForm : Form
         Dock = DockStyle.Fill,
         ReadOnly = true,
         BorderStyle = BorderStyle.None,
-        Font = AuroraTheme.MonoFont,
+        Font = AppTheme.MonoFont,
         DetectUrls = false,
         HideSelection = false
     };
@@ -689,7 +689,7 @@ public sealed partial class MainForm : Form
         Text = "Ping Watchdog";
         AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterScreen;
-        Font = AuroraTheme.BodyFont;
+        Font = AppTheme.BodyFont;
         KeyPreview = true;
 
         var workingArea = Screen.PrimaryScreen?.WorkingArea
@@ -913,8 +913,8 @@ public sealed partial class MainForm : Form
         RefreshSiteList(_selectedSiteName);
         LoadHostEditor();
         ApplyDarkTheme();
-        AuroraTheme.Changed += RefreshAppearance;
-        Disposed += (_, _) => AuroraTheme.Changed -= RefreshAppearance;
+        AppTheme.Changed += RefreshAppearance;
+        Disposed += (_, _) => AppTheme.Changed -= RefreshAppearance;
         UpdateActionState();
         RefreshGrid();
     }
@@ -928,7 +928,7 @@ public sealed partial class MainForm : Form
 
         try
         {
-            int enabled = AuroraTheme.Palette.Dark ? 1 : 0;
+            int enabled = AppTheme.Palette.Dark ? 1 : 0;
             if (DwmSetWindowAttribute(Handle, 20, ref enabled, sizeof(int)) != 0)
                 DwmSetWindowAttribute(Handle, 19, ref enabled, sizeof(int));
         }
@@ -964,7 +964,7 @@ public sealed partial class MainForm : Form
         StoragePaths.RunTests();
         DataDeletionStore.RunTests();
         DeleteDataDialog.RunTests();
-        AuroraButton.RunDestructiveContrastTests();
+        ThemeButton.RunDestructiveContrastTests();
         form._configWriteBlocked = true;
         if (form.TrySaveSites())
             throw new InvalidOperationException("Update persistence guard allowed a protected configuration.");
@@ -995,7 +995,7 @@ public sealed partial class MainForm : Form
         if (!newerFormatRejected || form._sites.Count != originalSiteCount)
             throw new InvalidOperationException("Newer configuration mutated the active sites.");
         DisplayTime.RunTests();
-        AuroraTheme.RunTests();
+        AppTheme.RunTests();
         HostManagerTests.Run();
         RunHostManagementIntegrationTests();
         var host = new HostMonitor("Test Site", "127.0.0.1");
@@ -1143,16 +1143,16 @@ public sealed partial class MainForm : Form
                 Expect(dense.DrawnSiteHeadings.Count == siteCount, $"{siteCount} sites at {viewport} dropped site names.");
         }
 
-        Expect(EventHistoryForm.KindFont.SizeInPoints >= AuroraTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
+        Expect(EventHistoryForm.KindFont.SizeInPoints >= AppTheme.CaptionFont.SizeInPoints, "History event type text is below the reading floor.");
 
         // The All sites outline is quieter than muted text but still meets the 3:1 component floor.
         foreach (bool dark in new[] { false, true })
         {
-            var palette = AuroraPalette.Create(dark);
-            var outline = AuroraTheme.SoftOutline(palette, palette.Surface);
-            double outlineRatio = AuroraTheme.ContrastRatio(outline, palette.Surface);
+            var palette = ThemePalette.Create(dark);
+            var outline = AppTheme.SoftOutline(palette, palette.Surface);
+            double outlineRatio = AppTheme.ContrastRatio(outline, palette.Surface);
             Expect(outlineRatio >= 3.0, $"{(dark ? "Dark" : "Light")} outline contrast is {outlineRatio:0.00}:1.");
-            Expect(outlineRatio < AuroraTheme.ContrastRatio(palette.Muted, palette.Surface), $"{(dark ? "Dark" : "Light")} outline is not softer than muted.");
+            Expect(outlineRatio < AppTheme.ContrastRatio(palette.Muted, palette.Surface), $"{(dark ? "Dark" : "Light")} outline is not softer than muted.");
         }
 
         // A lone host stacks under its site at a natural row height instead of floating mid-block.
@@ -1247,16 +1247,16 @@ public sealed partial class MainForm : Form
         using (var nameFont = new Font("Segoe UI Semibold", 10.5f))
         {
             const string ampersandName = "Women & Children's Center";
-            int asTyped = TextRenderer.MeasureText(ampersandName, nameFont, new Size(int.MaxValue, int.MaxValue), AuroraTheme.NameTextFlags).Width;
+            int asTyped = TextRenderer.MeasureText(ampersandName, nameFont, new Size(int.MaxValue, int.MaxValue), AppTheme.NameTextFlags).Width;
             int asShortcut = TextRenderer.MeasureText(ampersandName, nameFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.SingleLine).Width;
             Expect(asTyped > asShortcut, "Site rows still treat & as a shortcut marker.");
         }
-        Expect(AuroraTheme.MenuText("Women & Children's Center") == "Women && Children's Center", "Menu names would hide their &.");
+        Expect(AppTheme.MenuText("Women & Children's Center") == "Women && Children's Center", "Menu names would hide their &.");
         using (var themedForm = new Form())
         {
             var nameLabel = new Label { Text = "Women & Children's Center" };
             themedForm.Controls.Add(nameLabel);
-            AuroraTheme.Apply(themedForm);
+            AppTheme.Apply(themedForm);
             Expect(!nameLabel.UseMnemonic, "Themed labels still treat & as a shortcut marker.");
         }
 
@@ -1581,7 +1581,7 @@ public sealed partial class MainForm : Form
             using var bitmap = new Bitmap(window.Width, window.Height);
             window.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             var origin = window.Bounds.Location;
-            var expected = AuroraWell.WellColor;
+            var expected = ScrollWell.WellColor;
             var samples = new List<(string Where, Point At)>();
             int item = list.ItemHeight, width = list.ClientSize.Width;
             for (int i = list.TopIndex; i + 1 < list.Items.Count && (i - list.TopIndex + 2) * item <= list.ClientSize.Height; i++)
@@ -1705,8 +1705,8 @@ public sealed partial class MainForm : Form
                 // Themed scroll indicator: present only when rows overflow, follows scrolling, never overlaps the list.
                 using (var scrollHost = new Form { ClientSize = new Size(240, 320), StartPosition = FormStartPosition.Manual, Location = new Point(40, 40), ShowInTaskbar = false })
                 {
-                    var scrollWell = new AuroraWell { Dock = DockStyle.Fill, Padding = new Padding(4, 6, 14, 6) };
-                    var scrollList = new AuroraListBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false, ItemHeight = 40, DrawMode = DrawMode.OwnerDrawFixed };
+                    var scrollWell = new ScrollWell { Dock = DockStyle.Fill, Padding = new Padding(4, 6, 14, 6) };
+                    var scrollList = new WellListBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false, ItemHeight = 40, DrawMode = DrawMode.OwnerDrawFixed };
                     scrollWell.Controls.Add(scrollList);
                     scrollHost.Controls.Add(scrollWell);
                     scrollHost.Show();
@@ -1975,7 +1975,7 @@ public sealed partial class MainForm : Form
                     review.SetWorkspaceView(true);
                     foreach (var appearance in new[] { AppearanceMode.Dark, AppearanceMode.Light })
                     {
-                        AuroraTheme.SetMode(appearance);
+                        AppTheme.SetMode(appearance);
                         review.ClientSize = new Size(1060, 680);
                         review.ApplyResponsiveLayout();
                         await Task.Delay(150);
@@ -2034,9 +2034,9 @@ public sealed partial class MainForm : Form
                             !clip.IsVisible(review._updateToast.Width - 1, review._updateToast.Height - 1) &&
                             clip.IsVisible(review._updateToast.Width / 2, review._updateToast.Height / 2),
                             "Popup did not clip its corners on first display.");
-                        Check(review._updateToast.BackColor != AuroraTheme.Palette.Surface,
+                        Check(review._updateToast.BackColor != AppTheme.Palette.Surface,
                             "Update popup uses the map card surface.");
-                        Check(AuroraTheme.ContrastRatio(AuroraTheme.Palette.Text, review._updateToast.BackColor) >= 4.5,
+                        Check(AppTheme.ContrastRatio(AppTheme.Palette.Text, review._updateToast.BackColor) >= 4.5,
                             "Update popup text contrast is insufficient.");
                         Check(review.Controls.GetChildIndex(review._updateToast) == 0,
                             "Update status is behind the main workspace.");
@@ -2122,14 +2122,14 @@ public sealed partial class MainForm : Form
                 form._wallboardForm!.Close();
                 await Task.Delay(100);
                 Check(form.Visible, "Closing Wallboard did not restore the main window.");
-                var appearanceBefore = AuroraTheme.Mode;
+                var appearanceBefore = AppTheme.Mode;
                 foreach (var appearance in new[] { AppearanceMode.Light, AppearanceMode.Dark })
                 {
-                    AuroraTheme.SetMode(appearance);
+                    AppTheme.SetMode(appearance);
                     form.OpenSettings();
                     await Task.Delay(100);
-                    Check(form.BackColor == AuroraTheme.Palette.Canvas, "Main appearance did not update.");
-                    Check(form._settingsForm!.BackColor == AuroraTheme.Palette.Canvas, "Open Settings appearance did not update.");
+                    Check(form.BackColor == AppTheme.Palette.Canvas, "Main appearance did not update.");
+                    Check(form._settingsForm!.BackColor == AppTheme.Palette.Canvas, "Open Settings appearance did not update.");
                     Capture(form, "appearance-main-" + appearance);
                     Capture(form._settingsForm!, "appearance-settings-" + appearance);
                     await form._settingsForm!.ReviewNavigation(output);
@@ -2258,7 +2258,7 @@ public sealed partial class MainForm : Form
                         category.Close();
                     }
                 }
-                AuroraTheme.SetMode(appearanceBefore);
+                AppTheme.SetMode(appearanceBefore);
                 File.WriteAllText(Path.Combine(output, "passed.txt"), "UI smoke test passed.");
                 Environment.ExitCode = 0;
             }
@@ -2405,7 +2405,7 @@ public sealed partial class MainForm : Form
     private void DrawSiteItem(object? sender, DrawItemEventArgs e)
     {
         // Fill the whole row with the well first so gaps and unselected rows blend; only the selection gets a pill.
-        using (var well = new SolidBrush(AuroraWell.WellColor))
+        using (var well = new SolidBrush(ScrollWell.WellColor))
             e.Graphics.FillRectangle(well, e.Bounds);
 
         if (e.Index < 0 || e.Index >= _siteList.Items.Count)
@@ -2415,20 +2415,20 @@ public sealed partial class MainForm : Form
         var bounds = new Rectangle(4, e.Bounds.Y + 4, Math.Max(1, _siteList.ClientSize.Width - 8), Math.Max(1, e.Bounds.Height - 8));
 
         using var background = new SolidBrush(selected
-            ? AuroraTheme.Palette.Surface3
-            : AuroraWell.WellColor);
+            ? AppTheme.Palette.Surface3
+            : ScrollWell.WellColor);
         using var textBrush = new SolidBrush(selected
-            ? AuroraTheme.Palette.Text
-            : AuroraTheme.Palette.Secondary);
+            ? AppTheme.Palette.Text
+            : AppTheme.Palette.Secondary);
 
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var rowPath = WallboardStyle.Rounded(bounds, (int)(AuroraTheme.RadiusSmall * DeviceDpi / 96f));
+        using var rowPath = WallboardStyle.Rounded(bounds, (int)(AppTheme.RadiusSmall * DeviceDpi / 96f));
         e.Graphics.FillPath(background, rowPath);
         if (selected)
         {
             // Accent bar marks the selected site beyond fill and text weight alone.
             int bar = Math.Max(3, (int)(3 * DeviceDpi / 96f)), barInset = bounds.Height / 4;
-            using var accent = new SolidBrush(AuroraTheme.Palette.Accent);
+            using var accent = new SolidBrush(AppTheme.Palette.Accent);
             using var barPath = WallboardStyle.Rounded(new Rectangle(bounds.X + 4, bounds.Y + barInset, bar, Math.Max(1, bounds.Height - barInset * 2)), bar / 2);
             e.Graphics.FillPath(accent, barPath);
         }
@@ -2440,11 +2440,11 @@ public sealed partial class MainForm : Form
             _siteItemFont,
             new Rectangle(bounds.X + 12, bounds.Y, bounds.Width - 18, bounds.Height),
             textBrush.Color,
-            TextFormatFlags.VerticalCenter | AuroraTheme.NameTextFlags);
+            TextFormatFlags.VerticalCenter | AppTheme.NameTextFlags);
 
         if ((e.State & DrawItemState.Focus) != 0 && ShowFocusCues)
         {
-            using var focus = new Pen(AuroraTheme.Palette.Focus, 2);
+            using var focus = new Pen(AppTheme.Palette.Focus, 2);
             e.Graphics.DrawPath(focus, rowPath);
         }
     }
@@ -4637,7 +4637,7 @@ public sealed partial class MainForm : Form
             GetUpdateActionText(),
             _restoreLastSiteOnStartup,
             _startMonitoringOnLaunch,
-            AuroraTheme.Mode,
+            AppTheme.Mode,
             _priorityAlarmSound,
             UpdatesManaged,
             _persistSites && StartupRegistration.IsEnabled(),
@@ -4688,7 +4688,7 @@ public sealed partial class MainForm : Form
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             { throw new InvalidOperationException("Windows did not save the sign-in setting. " + ex.Message, ex); }
         }
-        AuroraTheme.SetMode(settings.Appearance);
+        AppTheme.SetMode(settings.Appearance);
         _eventHistoryHours = NormalizeEventHistoryHours(settings.EventHistoryHours);
         _hideSuspectEvents = settings.HideSuspectEvents;
         DisplayTime.Use12HourTime = settings.Use12HourTime;
@@ -5052,8 +5052,8 @@ public sealed partial class MainForm : Form
         _commandBox.SelectionStart = _commandBox.TextLength;
         _commandBox.SelectionLength = 0;
         _commandBox.SelectionColor = entry.Success
-            ? AuroraTheme.Palette.Text
-            : AuroraTheme.Palette.StatusText(AuroraTheme.Palette.Danger);
+            ? AppTheme.Palette.Text
+            : AppTheme.Palette.StatusText(AppTheme.Palette.Danger);
 
         _commandBox.AppendText(command + Environment.NewLine);
         _commandBox.SelectionColor = _commandBox.ForeColor;
@@ -5068,8 +5068,8 @@ public sealed partial class MainForm : Form
     private void RefreshAppearance()
     {
         if (IsDisposed) return;
-        AuroraTheme.ApplyMenu(_appMenu);
-        AuroraTheme.ApplyMenu(_hostQuickMenu);
+        AppTheme.ApplyMenu(_appMenu);
+        AppTheme.ApplyMenu(_hostQuickMenu);
         RefreshGrid();
         RebuildCommandView();
         _siteList.Invalidate();
@@ -5077,12 +5077,12 @@ public sealed partial class MainForm : Form
 
     private void ApplyDarkTheme()
     {
-        AuroraTheme.Initialize(this);
-        AuroraTheme.Apply(this);
-        ((AuroraButton)_startButton).Primary = true;
-        ((AuroraButton)_stopButton).Primary = true;
-        AuroraTheme.ApplyMenu(_appMenu);
-        AuroraTheme.ApplyMenu(_hostQuickMenu);
+        AppTheme.Initialize(this);
+        AppTheme.Apply(this);
+        ((ThemeButton)_startButton).Primary = true;
+        ((ThemeButton)_stopButton).Primary = true;
+        AppTheme.ApplyMenu(_appMenu);
+        AppTheme.ApplyMenu(_hostQuickMenu);
     }
 
     private void ShowNotification(
@@ -5268,7 +5268,7 @@ public sealed partial class MainForm : Form
             cell.Style.Font = _statusCellFont;
             cell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
-            row.DefaultCellStyle.BackColor = status == "Offline" ? AuroraTheme.Palette.Surface2 : Color.Empty;
+            row.DefaultCellStyle.BackColor = status == "Offline" ? AppTheme.Palette.Surface2 : Color.Empty;
         }
 
         int online = rows.Count(h => h.Status.StartsWith("Online", StringComparison.Ordinal));

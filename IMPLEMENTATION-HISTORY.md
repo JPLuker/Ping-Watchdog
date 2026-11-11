@@ -64,3 +64,212 @@ Windows runs 39480743453 (1.17.0) and 39481434578 (1.17.1) passed the existing m
 ## Connected topology refinement — 2026-10-20
 
 Refine the current fitted topology rather than restoring the old renderer. A shared Monitor trunk connects every selected site; each site branches into its fitted host columns. Connection gutters are reserved before packing so lines stay outside host text. Site groups use balanced rows instead of an unrestricted strip of narrow columns. Existing theme tokens, native font floor, quick actions and no-scroll fitting remain in place. Removed the Show/Hide controls feature and its F10 shortcut from Wallboard at Joseph’s request. The normal toolbar remains directly available and still wraps to fit. Windows run 39483113901 passed monitoring/configuration/updater checks, published startup and UI exercises, recovery and packaging. Populated light/dark topology and dense fullscreen captures were inspected, plus the 900px Wallboard toolbar with actions visible and no controls toggle. Existing node-fit, caption-overlap and host-hit checks passed. v1.17.3 installer, portable package and updater-feed assets were verified published. Physical DPI/accessibility and workday acceptance remain open.
+
+# Roadmap log moved from ROADMAP.md (2026-11-11)
+
+## Host access and snooze correction — 2026-10-20
+
+Iterations v1.18.0–v1.18.2 add keyboard selection and context actions for topology/outage hosts, per-host accessible objects, visible focus and state-specific marker shapes. Native themed controls below the reading floor are normalized, including independent recovery text.
+
+Joseph clarified snooze semantics: pause the host's probes, hide it from active outages and live command output for the hour, then resume automatically. The worker is cancelled without restarting unrelated hosts; late results are rejected, saved snoozes are honored, and an all-snoozed session stays alive for expiry. Historical events remain available. Menus now say Snooze host / Resume monitoring.
+
+New regression coverage exercises worker cancellation, late-result isolation, expiry, manual resume, saved snoozes, all-snoozed sessions, keyboard and accessible action targets, stale host removal and snoozed outage filtering. Windows runs 39487281012 and 39488095116 passed storage/snooze/accessibility regressions, published startup/UI, independent recovery and package/publication gates. An intermediate v1.18.1 run passed its tests/packaging but GitHub rejected publication with HTTP 403; the final v1.18.2 release published successfully and was verified as latest with installer, portable and update feeds. Rendered light/dark Main/Hosts/Settings and dense topology were inspected; the final sparse-map focus capture was inspected. Physical screen-reader/DPI acceptance remains open. The final-release target moves to a later minor because this behavior/accessibility iteration uses 1.18.0; maintenance acceptance remains open.
+
+
+### Settings persistence and navigation — 2026-10-20
+
+v1.18.4 persists configuration and user preferences before applying Settings to the live session. Failure keeps the draft, Save changes and unsaved-close protection intact, with an inline error and an on-demand Details action. Preference reads no longer replace damaged/unsupported files with defaults; saves validate originals and use rolling atomic backups. If config commit fails after preferences were written, the previous preferences are restored where possible, with explicit failure reporting if restoration also fails.
+
+Settings category navigation now uses shared selected/focus styling, Display is renamed Appearance, and redundant page subtitles are removed. Native Enter/Escape behavior complements Ctrl+S and staged save/discard/cancel.
+
+Coverage includes locked destinations, real config-commit failure and preference restoration, malformed/newer preference preservation, failed-save draft retention and successful retry, plus both-theme save-error captures at a constrained width. Windows run 39490797950 passed persistence/retry regressions, published startup/UI, recovery, packaging and publication. Normal 900×650 and save-error 760×650 Settings captures were inspected in both themes; error controls fit. v1.18.3 was withheld after the new UI review ran before Shown initialized its draft; the corrected test waits for initialization and keeps the bounds checks. v1.18.4 installer, portable, full/delta packages and feeds were verified.
+
+
+### About and reviewable support information — 2026-10-20
+
+v1.18.6 makes Settings > About the single home for installed version and license access; the existing About menu opens that page. The license viewer reads the exact embedded proprietary LICENSE. Report an issue opens the repository issue chooser in the system browser, with visible failure feedback.
+
+Diagnostic information is generated from an explicit allowlist of assembly build identity, Windows/.NET/architecture and data/recovery locations. It does not read inventory, settings contents, history or recovery reports. An owned review window shows exactly what Copy diagnostic info copies and warns that paths can include the Windows username. No automatic upload occurs. Clipboard errors remain visible, with selection/Ctrl+C available; Escape closes the review. Existing staged Settings edits are preserved when opening About.
+
+Automated checks cover the bundled license, report fields, exact copying and clipboard failure. Both-theme About and diagnostic captures were inspected. Windows run 39492663542 passed self-tests, published startup/UI, independent recovery, packaging and publication. Installer, portable package and full/delta/feed assets were verified for v1.18.6.
+
+The first v1.18.5 review exposed full-width support buttons from the Settings page fitter. v1.18.6 groups them inside a compact action container; both versions passed their build gates and were published, with v1.18.6 the final reviewed update.
+
+This is the support-information batch, not acceptance of every supporting dialog, third-party notices, actual screen-reader/DPI behavior or the final maintenance release.
+
+
+### Complete backup and restore — 2026-10-20
+
+v1.18.9 adds Settings > Data and storage, complete-backup creation, explicit replacement restore and Open data folder. DATA-RECOVERY.md defines included/excluded data, replacement and retention behavior. A complete backup covers all saved sites/folders and host metadata, enabled state and snoozes, saved preferences and outage history. Temporary monitoring sessions, command output, binaries and startup reports are excluded. Settings drafts are not exported.
+
+Backups are validated before file replacement. Restore requires stopped monitoring, defaults its confirmation to No, respects Settings save/discard/cancel, replaces rather than merges, and restarts the application. Four destinations are updated: authoritative config, preferences, history and the legacy inventory. Closing after a successful restore suppresses autosave of the previous in-memory setup.
+
+A flushed recovery journal stores exact original bytes and missing-file state before writes begin. Renaming that journal is the commit point. Failures attempt rollback; an interrupted transaction is rolled back at the very start of the next MainForm construction, before UI handlers, data loading or autosave. Failure to finish recovery retains the pending record and prevents normal startup. Successful originals and rollback records are retained for recovery, without automatic cleanup yet. This is journaled recovery across multiple files, not a claim that the filesystem atomically replaces four files together or that physical power-loss behavior was tested.
+
+Tests exercise round-trip labels/categories/snooze/preferences/history, original byte preservation including damaged bytes, missing-original deletion on rollback, a commit failure after two writes, simulated interrupted-restore recovery, locked-file refusal, malformed/incomplete/newer backup refusal and live-data-folder export protection. A MainForm regression ensures a protected startup configuration cannot be exported as a fallback complete backup.
+
+Windows run 39497671069 passed self-tests, published startup/UI, independent recovery, packaging and publication. Actual light/dark Data and storage captures were inspected. Installer, portable, full/delta packages and both update feeds were verified. v1.18.7's fixture escaping was corrected before the working v1.18.8 build; v1.18.8 published successfully, then v1.18.9 corrected the storage category mnemonic rendering and protected legacy-config fallback export.
+
+Actual installed/portable restart-and-restore acceptance, multi-instance usage, physical power loss and final workday/DPI/screen-reader trials remain open. The portable ZIP still uses AppData; folder-local storage and deliberate full deletion are separate tasks.
+
+
+### Portable storage, deletion and display-only Wallboard — 2026-10-21
+
+v1.18.13 adds explicit opt-in folder-local storage. Existing copies keep their per-user AppData location until enabled. The current saved setup is staged and committed to a new Data folder before a portable marker activates it; original AppData remains intact. Existing destination data is refused, not merged. For Velopack layouts, the Data folder and marker are in the package root, outside current/app-* directories replaced by updates. Setup-installed copies cannot enable the feature through Settings. Preferences, backup/restore, support diagnostics, brand assets and startup reports share the active storage layout.
+
+Delete saved data requires stopped monitoring, an exact typed DELETE confirmation with folder scope, and normal Settings draft protection. It closes the app without writing stale memory. Active data, rolling backups, restore journals/originals, startup reports and brand assets are removed; external backups, inactive storage copies and installation packages are retained. Linked files/folders are refused. A deletion intent outside the data directory survives partial failure and is completed before saved data or restore journals can load. An empty config prevents example hosts from returning. This is ordinary filesystem deletion, not secure erasure.
+
+The startup guard recreates only fresh current-attempt diagnostics after a deletion retry, retaining the independent recovery/updater path if startup then fails. PORTABLE-AND-DELETION.md documents scope, retained copies, migration failures and retry behavior.
+
+Joseph clarified that the visible Wallboard top toolbar must be removed. The canvas now occupies a single full-window content cell; keyboard shortcuts and host context actions remain. AGENTS.md records this direction, superseding the earlier wrapping-toolbar deviation.
+
+Windows run 39615057833 passed self-tests, published startup/UI, independent recovery including a new process-level deletion-retry crash case, packaging and publication. Tests cover explicit routing, package-root/current layout, preserved originals, rejected destination collisions and installed-mode activation, unsupported portable markers, interrupted/locked deletion retry, empty post-deletion inventory, retained external/installation/inactive data, exact confirmation and cancellation. Light/dark Settings and deletion-confirmation renders, plus the toolbar-free Wallboard, were inspected. Installer, portable, full/delta packages and both feeds were verified.
+
+The v1.18.10 UI gate withheld publication after finding the direct Form child did not settle to full-window bounds. v1.18.11 returned to a one-cell layout, passed/published and was inspected; v1.18.12 additionally protected recovery after a deletion retry. v1.18.13 corrects light-mode destructive text contrast and adds 4.5:1 text-pair tests for both themes and interactive surfaces. Human installed/portable migration, actual portable package updates, read-only drives, real concurrent copies, deletion/restart acceptance and the final desktop/workday trials remain pending.
+
+
+### Many-site map, long names and font floor — 2026-10-22
+
+v1.18.14 answers issue #5. Map sites now follow the site list order (folder, then name), so both views are alphabetical. The fitted topology keeps its accepted square-ish search but widens to more site columns when captions stop fitting, and row gutters shrink past three rows. When a window cannot label every site, site headings are dropped and hosts use the whole block, so blocks never overlap. Every host stays drawn and reachable by mouse, keyboard and accessible name.
+
+The site list shows the full name on hover when a row is truncated. History event-type and header text was 8.5pt (about 11px, under the 12px absolute minimum) and is now 9.75pt (13 logical px).
+
+Regression checks cover 24 sites at 1600×1000 and 900×650 (all names drawn) and 60 sites at 900×650, with IPv6 and long names: no heading or host overlap, every host present. They also cover map/list order, truncation detection and the History font floor. Windows validation run 39803989941 passed self-tests and UI regressions. The first run (39803642344) failed to compile a test helper call and was corrected. Rendered captures from this run were not inspected: the session could not download artifacts. Joseph's visual check with his real site list, physical DPI and large-text acceptance remain open.
+
+
+### Pinned All sites and sidebar separation — 2026-10-22
+
+Joseph's screenshots showed the real #5 problem: the site list and the sidebar actions blended into one column. v1.18.15 pins All sites above the list as its own button with the enabled host count, places the list in a rounded inset well with an accent bar on the selected site, and adds a divider before the actions. Wallboard moved beside Start monitoring and Manage sites into More (right-click on the list still offers the same actions), leaving Outage history, Settings, Check for updates and More. Map addresses now trim from the front so the distinguishing end stays visible. The Sites/Add site header is deliberately left for the Hosts overhaul (#7).
+
+Windows validation run 39808709209 passed self-tests and UI regressions, including pinned-scope selection both ways, the host count, four sidebar actions, non-overlapping sidebar sections and IPv4/IPv6 address trimming. Rendered captures were not inspected from the session; Joseph's visual check remains the acceptance step.
+
+v1.18.16 follow-up: Joseph's v1.18.15 photo showed two-tone rows. DrawSiteItem filled each row with the sidebar Surface color before drawing the pill in the well color. Rows, gaps, empty list space and the well now paint one token; only the selected site draws a pill, and the list paints its own erase background. Validation run 39810357378 passed, including a new UI check that samples rendered pixels (row gap, unselected row, empty space, well padding) against the well color.
+
+v1.18.17 follow-up from Joseph's v1.18.16 photos: the native dark scrollbar is replaced by a thin, draggable indicator drawn in the well; All sites is outlined when unselected; the map weighs site-name width in its layout; host rows cap at a natural height and stack from the top. Validation run 39812671262 passed, including a standalone 50-row scroll-indicator test, lone-host stacking and twelve real-length site names fitting at 1600×1000.
+
+v1.18.18 softens the All sites outline to the quietest per-theme color that keeps 3:1 contrast (validation 39817568151, build 39817898861). Joseph confirmed the v1.18.17 sidebar; #5 is closed. The Sites/Add site header moves to the Hosts overhaul (#7).
+
+
+### Paste, Quick Add and the Hosts overhaul — 2026-10-22
+
+Joseph chose to do the Hosts overhaul (#7) before release hardening, with Hosts as a page in the main window and edits saving instantly with Undo. v1.18.19 is the first part: names paste reliably (busy-clipboard retry, HTML/RTF-only copies, hidden characters removed, busy state reported; #6), Quick Add opens on the site in view and creates a typed new site, and the Sites header uses a + button. Validation 39819409144 and build 39819815923 passed; installer, portable, full + delta and feed published. The Hosts page itself follows in a later build.
+
+v1.18.20 fixes "&" in site and host names (it rendered as an underline; mnemonic processing is now off for names).
+
+### Priority hosts — 2026-10-22
+
+Joseph added one feature by explicit request: priority hosts that keep alerting until acknowledged. v1.19.0: Mark as priority from the host menu (accent ring on the map, "Priority" in list status, announced to screen readers). Offline and recovery on a priority host start an alarm (Windows alarm or a chosen .wav) that rings immediately and every 15 seconds; snoozed hosts do not ring. A banner in the main window and Wallboard offers Acknowledge and Acknowledge all, and the Windows notification (alarm scenario) has its own Acknowledge button. The sound is set in Settings > Notifications > Priority alarm. Validation 39828890857 passed self-tests and UI regressions, including end-to-end offline/recovery alarms and notification acknowledgement; build 39831813534 published installer, portable, full + delta and feed. Not yet established: the real Windows notification button, sound playback, and behaviour while minimized to the tray, which need Joseph's check. The final maintenance target moves to v1.20.0.
+
+Next: List view becomes the place to edit hosts (multi-select actions, instant save with Undo), replacing the separate Hosts window (#7).
+
+### Host editing in the List — 2026-10-22
+
+v1.19.1 makes the List the place to edit hosts (#7). Filter chips (All, Priority, Offline, Disabled, Snoozed) show counts; selecting hosts swaps the chips for an action bar (Mark/Remove priority, Enable/Disable, Move to site, Set group, Monitoring, Keep in a site, Remove). Edits save immediately with an eight-second Undo (Ctrl+Z); double-click/F2 renames, Delete removes. The separate Hosts window is retired; More > Hosts and the Wallboard action open the List. Validation 39839194817 passed self-tests and UI regressions, including bulk priority, filters, Remove priority and Undo. The first publish run (39839598754) stopped before release because the appearance review step still expected the two retired Hosts-window screenshots; the count was corrected and run 39840180803 published installer, portable, full + delta and feed. Joseph's hands-on check of the new List remains.
+
+v1.19.2: Joseph could not find the filter. In v1.19.1 the action bar replaced the chips whenever a row was selected, which in practice was nearly always. Chips now keep their own top row, and the action bar is a second row beneath them (validation 39842073825, build 39842467718). The UI test now checks both rows are on screen together.
+
+### Wallboard highlight and release hardening — 2026-10-22
+
+v1.19.3 fades the map/Wallboard keyboard highlight after 8 seconds and shows it only after key use (#8). v1.19.4 hardens publication: actions pinned to commit SHAs, a guard that stops when the version is already published, vulnerable-package gates in build and validation, three-attempt delta download with a visible warning instead of a silent gap, required-asset verification, SHA256SUMS.txt, and an unsigned-build notice on the release page. Dependabot proposes weekly Actions and NuGet updates. Build 39846402344 exercised every new step; the published SHA256SUMS.txt matches the update feed's package hashes.
+
+v1.19.5 aligns updates with DATA-AND-UPDATES 3.2/3.3: automatic checks at most once a day (persisted across restarts, rearmed if the clock moves back) and an IT policy (HKLM\Software\Policies\PingWatchdog DisableUpdates = 1, or PINGWATCHDOG_DISABLE_UPDATES=1) that stops all checks, hides the sidebar action and shows "Updates are managed by your organization" in Settings. The publish guard now lets workflow-only pushes (such as Dependabot action updates) build and test without publishing; build 39849289579 confirmed that path.
+
+
+
+### Update restart safety — 2026-10-23
+
+v1.19.7 replaces the generic Yes/No restart prompt with Restart now / Later. Enter and Escape defer by default. The prompt follows an open Settings window or Wallboard; restart failures use the same owner. Restart first invokes Settings' existing save/discard/cancel protection and stops if Settings remains open or configuration persistence fails. Monitoring and Wallboard are not stopped until that guard succeeds. Independent recovery now supports Escape to close and names its details/status for accessibility.
+
+Windows release run 39961911594 passed dependency vulnerability checks, self-tests (including protected-config restart persistence), published startup/UI and isolated recovery tests. Light/dark update-confirmation captures were downloaded and inspected; the actions and wrapped text fit. Installer, portable, full/delta, update feeds and SHA256SUMS.txt are published; latest is v1.19.7. The first candidate v1.19.6 was not published: its new self-test exposed a guard-order bug in test mode, corrected before this passing run.
+
+Remaining: physical keyboard/DPI/screen-reader acceptance, real installed/portable restart and upgrade, corrupt-download tests, broader supporting-window review, public docs and final maintenance acceptance. Issue #12 has no screenshot; the existing update toast says Dismiss, so this batch does not establish reproduction or resolution of the specific reported “okay” state.
+
+
+### Update integrity and recovery lifetime — 2026-10-23
+
+v1.19.8 adds tests of the actual pinned Velopack 1.2.161 UpdateManager download path. Isolated fixtures advertise a valid SHA-256/SHA-1 and size, then deliver same-length corrupted bytes, a truncated package, or an interrupted transfer after writing partial bytes. Each must throw the expected checksum/IO exception, leave no full or partial package, and report no pending restart. Retrying the same manager/update with valid bytes must download again, stage exactly the original package and report it ready. This runs in the Windows self-test gate.
+
+The recovery UI also runs its real RecoveryUpdates adapter against the verifier: a corrupted package leaves installation unavailable, preserves the original crash details and keeps Check for updates usable; a valid retry offers installation. A test factory supplies the isolated manager without replacing verification. No executable updater is included or launched, no real feed/network is contacted, and no installed app or user data is touched by these fixtures.
+
+Recovery now rejects check/download completions after the window closes, even if the transport ignores cancellation. Queued progress is limited to its active attempt so it cannot replace the final ready/error status. Additional recovery regressions cover closing during both the check and download phases.
+
+Windows release run 39964182359 passed dependency checks, real integrity/self-tests, published startup/UI and isolated recovery regression gates. Installer, portable ZIP, full/delta, RELEASES, releases.win.json and SHA256SUMS.txt were verified on the published v1.19.8 latest release. This batch changes no layout. It establishes full-package verification/cleanup/retry and recovery state handling, not live GitHub transport reliability, delta application, installed/portable upgrade, physical accessibility or final maintenance acceptance.
+
+Verifier source reviewed: [UpdateManager.cs at 1.2.161](https://github.com/velopack/velopack/blob/1.2.161/src/lib-csharp/UpdateManager.cs), including DownloadUpdatesAsync, VerifyPackageChecksumAsync and CleanPackagesExcept. The transport fixture is intentionally synthetic; verification and cache cleanup run in the library itself.
+
+Next: remaining supporting-window focus/ownership/Escape/layout review, then release documentation and hands-on candidate acceptance. Include an owner-close cancellation check with an open Settings draft; the main FormClosing handler currently performs shutdown work without inspecting an inherited cancellation flag.
+
+
+### Supporting windows and canceled exit — 2026-10-23
+
+v1.19.13 fixes the owner-close path: Main honors a canceled owned-window close before shutdown, and explicitly resolves Settings opened from the independent Wallboard before closing windows or stopping workers. Explicit Settings discard reloads its committed baseline so owner preflight does not ask again. Tests cover retaining the draft on Cancel/failed save, resolving discard, and a native main-window close veto with Settings owned by Main or Wallboard while a localhost monitoring session is active.
+
+History now uses wrapping paired filters, accessible filter names and readable theme-based event colors instead of hard-coded dark row colors. It disables export when empty, owns export error dialogs, supports Escape, and reserves native dropdown height. Read-only dropdown values draw with the current palette while retaining native selection/keyboard semantics. Organization uses the shared buttons, wrapping actions, a compact header, named tree and Escape. Category uses content-sized rows, DPI scaling and native confirm/cancel actions with visible bounds.
+
+Windows run 39968819793 passed vulnerability/self-tests, published startup/UI and isolated recovery gates. Both-theme History populated/empty captures (820/1080 widths), Organization root/disabled-action captures (620/900 widths), and category captures were inspected. Geometric checks cover parent and full-window bounds; History event text contrast is checked. All installer/portable/full/delta/feed/checksum assets were verified on the v1.19.13 latest release.
+
+Earlier v1.19.9/10 candidates were withheld by the UI gate for a native History dropdown height/clipping defect. v1.19.11/12 passed and published as authorized iterations; visual review then exposed white native fields in dark mode. The final follow-up restores category field styling and explicitly draws the read-only History values using theme colors. These iterations do not establish physical DPI, open-dropdown/high-contrast/Narrator acceptance, dense-folder behavior or every supporting window as complete.
+
+Next: review Quick Add (including temporary Quick Monitor), label/site-name and folder-picker dialogs, then public documentation/notices and exact-candidate manual acceptance. Preserve the accepted dashboard/topology and display-only Wallboard.
+
+
+### Quick Add and compact dialogs — 2026-10-23
+
+v1.19.16 completes the tested desktop-state review for Quick Add, temporary Quick Monitor, host label, site name and destination-folder dialogs. Quick Add separates paste/import actions, destination fields, editable preview and confirmation. Empty or invalid-only previews cannot be confirmed; theme-aware preview rows retain readable status words. Pasted LF/CRLF input displays as separate native editor lines, preserving the caret when normalization changes line endings. The label/site/folder dialogs share measured native layouts, accessible input names, initial focus and confirm/cancel actions.
+
+[Windows run 39996325322](https://github.com/JPLuker/Ping-Watchdog/actions/runs/39996325322) passed dependency vulnerability checks, self-tests, published startup/UI, isolated recovery, packaging and publication. Added UI assertions cover four displayed paste lines, mixed new/existing/duplicate/invalid previews, no inventory mutation before confirmation, Escape dismissal, preserved naming/folder values, control bounds, preview space and status-text contrast. Visual review covered both-theme mixed previews at 850px, light previews at 1100px, representative empty previews, and all three compact naming/folder dialogs in both themes. These screenshots do not establish physical DPI, open-dropdown, high-contrast, Narrator or complete tab-order acceptance.
+
+v1.19.14 passed and published as an authorized iteration; visual review then found excessive destination spacing, light-theme row artifacts and concatenated pasted lines. v1.19.15 was withheld by the new spacing assertion: it compared coordinates from different parents. v1.19.16 fixes that assertion in form coordinates and passes the additional native-line check.
+
+The [v1.19.16 release](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.19.16) is verified as latest with installer, portable ZIP, full/delta packages, RELEASES, releases.win.json and SHA256SUMS.txt. No main/Wallboard redesign or Linux change was introduced.
+
+Next: refresh public README and the packaged README-FIRST quick start, then privacy/security/support/maintenance material and download-page checks. The existing quick start contains obsolete UI and updater descriptions; public readiness remains unchecked. Final candidate installation/upgrade, physical accessibility, workday monitoring and license/notice acceptance remain open. Issue #12 has not been reproduced or closed by this dialog work.
+
+
+### Supporting-window keyboard and narrow-layout review — 2026-11-03
+
+v1.19.20 fixes Settings labels with measured sizing, constrains nested labels and checkboxes to the visible page, and refits when native scrollbars change the client area. Monitoring units and priority-sound actions wrap; appearance/history pickers use themed selected values. Settings timing fields have accessible names. Initial focus is explicit in Settings, Quick Add/Quick Monitor and recovery; Quick Add's footer follows its visual order.
+
+Diagnostic-copy feedback now has a separate wrapping row, preserving the review text and actions at minimum size. Recovery status is selectable and vertically scrollable with bounded height, so long failures cannot displace the original exception or recovery actions. High-contrast selection text uses the system highlight foreground in Settings navigation and grid rows; physical high-contrast acceptance remains open.
+
+Windows run [41713463433](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41713463433) passed core self-tests, published startup/UI tests and isolated recovery checks. New coverage traverses all nine Settings categories at minimum size in both themes, checks entry by Tab, readable timing-label bounds and absence of horizontal scrolling; checks Quick Add/Quick Monitor initial focus and tab order through source actions into destination fields; exercises diagnostic-copy failure, support/recovery ownership, Escape dismissal and long recovery errors. The existing monitoring/snooze/disabled-state and canceled-exit regressions also passed. All eighteen minimum-size Settings captures and six diagnostic/license/recovery captures were visually inspected.
+
+v1.19.17 was withheld because the new test enumerated a native list while changing its selection; v1.19.18 passed and published, but visual inspection found missing Settings labels and horizontal scrolling. v1.19.19 was withheld by the new no-horizontal-scroll assertion. v1.19.20 fixes the remaining scrollbar-dependent layout.
+
+This is automated desktop-state evidence, not full item-1 acceptance: physical DPI/large-text, open dropdowns, complete forward/reverse keyboard traversal, Narrator, high contrast, dense-folder and popup desktop-composition checks remain open. The accepted dashboard/topology and toolbar-free Wallboard were preserved. Linux and issue #12 were not changed. Next: hands-on supporting-window acceptance, then item 2 (the reported updater “okay” state); public documentation remains a separate milestone.
+
+The final v1.19.20 Windows run completed successfully. Latest-release assets were verified: installer, portable ZIP, full/delta packages, both update feeds and SHA256SUMS.txt.
+
+
+### Update restart failure actions — 2026-11-03
+
+v1.19.21 replaces the remaining updater MessageBoxButtons.OK path (failure in ApplyPendingUpdateAndRestart) with a named Retry restart / Later dialog. Long error text is selectable and scrollable; the window follows Settings, Wallboard or Main through UpdateDialogOwner. Enter and Escape defer by default. Retry is queued back to the message loop and invokes the existing restart confirmation and Settings/save guards, avoiding recursive retry calls. The downloaded update remains available.
+
+Windows run [41732966848](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41732966848) passed core regressions, packaged startup/UI and isolated recovery checks. The new review verifies safe accept/cancel defaults, initial focus, ownership, Escape dismissal and minimum-size bounds with long errors; light/dark screenshots were inspected. The existing save-failure/canceled-close and download-integrity tests also pass. This does not establish a real installed-package apply failure/retry on a user's machine.
+
+Issue #12 remains open: its report has no screenshot, and this identifies one concrete remaining OK dialog without proving it was the exact reported screen. Next: current README and packaged quick start, followed by public-release documentation; final hands-on updater and supporting-window acceptance remains pending.
+
+The v1.19.21 run completed successfully; latest-release installer, portable ZIP, full/delta packages, both feeds and checksums were verified.
+
+### Windows user documentation — 2026-11-04
+
+The README and packaged quick start cover adding hosts, temporary monitoring, List editing and Undo, priority alarms, snooze, backups, portable storage and daily updates. The README includes Map and List screenshots captured from v1.19.21 using sample hosts. CHANGELOG.md records recent Windows releases.
+
+[Windows run 41839121965](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41839121965) passed and verified the quick start in both the portable ZIP and full update package against the source file before publishing v1.19.22. Next: privacy/network disclosure, security reporting, support and maintenance policy, issue templates and third-party notices. Final manual acceptance remains open.
+
+### Public release materials — 2026-11-04
+
+v1.19.23 adds public support, security and privacy documentation, issue forms and packaged third-party attribution accessible from Settings → About. [Windows validation and packaging](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41840460522) passed. The build inventoried 21 resolved packages and verified the notice inventory and collected files in the portable ZIP and full updater package. The installer, ZIP, full/delta packages, feeds and checksums were published. The About action was visually inspected in both themes.
+
+License review distinguished Microsoft binary distribution terms from MIT components. The SDK BuildTools and SDK.NET.Ref packages point to Microsoft's Windows SDK license URL in their NuGet metadata. Velopack's full MIT license and vendor attribution are supplied from its pinned upstream tag. Windows App SDK section 3 covers distribution conditions including end-user terms. Owner confirmation of final proprietary licensing and acceptance of applicable distribution terms remains open. Private vulnerability reporting was disabled on the last check. Next build milestone: the download page.
+
+
+### Usage-test fixes and public page — 2026-11-04
+
+v1.19.24 addresses #25. List updates changed cells without replacing unchanged rows or clearing/restoring their selection. Changed membership still rebuilds the visible set and restores selection by site/address. A double-buffered table reduces erase/repaint flicker. Add hosts groups saved and temporary monitoring. List exposes Host actions, and Map/Wallboard hosts can open their selected row via Edit in host list. All sites and Add site share one row without the redundant Sites heading. The update popup uses an opaque elevated surface and visible accent edge.
+
+[PR validation 41947990003](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41947990003) passed core and UI tests, including row identity, no selection churn, retained scroll position, filters/Undo, direct host navigation and popup text contrast. Light/dark host-action and standalone popup captures and the narrow main layout were inspected. Full-window DrawToBitmap captures omit overlapping panels, so desktop popup composition remains a hands-on check.
+
+[Release run 41948392625](https://github.com/JPLuker/Ping-Watchdog/actions/runs/41948392625) passed published startup/UI, isolated recovery, packaged guide/notice verification and publication. Installer, portable ZIP, full/delta packages, both update feeds and SHA256SUMS.txt are published. Final human acceptance remains open; #25 stays available for confirmation or further usage reports.
+
+The public GitHub Pages deployment succeeded and the finished page was fetched successfully at https://jpluker.github.io/Ping-Watchdog/. Joseph accepted the page design. Next: test these usage fixes on Windows, then finish exact-candidate upgrade/accessibility/workday acceptance and owner licensing/security items in #4.

@@ -3,8 +3,8 @@ namespace PingWatchdog;
 internal sealed class UpdateFailureDialog : Form
 {
     // FOCAL: retry a failed restart. Keep the downloaded package and defer by default.
-    internal readonly Button Retry = new AuroraButton { Text = "Retry restart", AutoSize = true, DialogResult = DialogResult.Retry };
-    internal readonly Button Later = new AuroraButton { Text = "Later", AutoSize = true, DialogResult = DialogResult.Cancel };
+    internal readonly Button Retry = new ThemeButton { Text = "Retry restart", AutoSize = true, DialogResult = DialogResult.Retry };
+    internal readonly Button Later = new ThemeButton { Text = "Later", AutoSize = true, DialogResult = DialogResult.Cancel };
 
     internal UpdateFailureDialog(string error, string lead = "The update is still downloaded. Retry the restart now or apply it later.",
         string title = "Update restart failed", string retry = "Retry restart")
@@ -15,13 +15,13 @@ internal sealed class UpdateFailureDialog : Form
         MinimumSize = new Size(480, 280);
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = AuroraTheme.LabelFont;
+        Font = AppTheme.LabelFont;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
-            Padding = new Padding(AuroraTheme.Space4)
+            Padding = new Padding(AppTheme.Space4)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -53,7 +53,7 @@ internal sealed class UpdateFailureDialog : Form
         Controls.Add(root);
         AcceptButton = CancelButton = Later;
         Later.Click += (_, _) => Close();
-        AuroraTheme.Register(this);
+        AppTheme.Register(this);
         Shown += (_, _) => Later.Focus();
     }
 
@@ -71,7 +71,7 @@ internal sealed class UpdateFailureDialog : Form
             throw new InvalidOperationException("Update failure has no retry action.");
         using var bitmap = new Bitmap(dialog.Width, dialog.Height);
         dialog.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
-        bitmap.Save(Path.Combine(output, "dialog-update-failure-" + AuroraTheme.Mode + ".png"));
+        bitmap.Save(Path.Combine(output, "dialog-update-failure-" + AppTheme.Mode + ".png"));
         DialogReviewTests.Escape(dialog);
     }
 }

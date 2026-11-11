@@ -109,7 +109,7 @@ public sealed partial class MainForm
         _appliedUpdateVersion = preferences.PendingUpdateVersion ?? "";
         VersionOverlay.SetEnabled(preferences.ShowVersionOverlay);
         _lastUpdateCheckUtc = preferences.LastUpdateCheckUtc;
-        AuroraTheme.SetMode(preferences.Appearance);
+        AppTheme.SetMode(preferences.Appearance);
     }
 
     private DateTimeOffset? _lastUpdateCheckUtc;
@@ -133,7 +133,7 @@ public sealed partial class MainForm
     {
         ShowUpdateControlOnHome = _showUpdateControlOnHome, RestoreLastSiteOnStartup = _restoreLastSiteOnStartup,
         StartMonitoringOnLaunch = _startMonitoringOnLaunch, OpenWallboardOnStartup = _openWallboardOnStartup,
-        WallboardScreen = _wallboardScreen, Appearance = AuroraTheme.Mode, LastUpdateCheckUtc = _lastUpdateCheckUtc,
+        WallboardScreen = _wallboardScreen, Appearance = AppTheme.Mode, LastUpdateCheckUtc = _lastUpdateCheckUtc,
         ShowVersionOverlay = VersionOverlay.Enabled
     };
 

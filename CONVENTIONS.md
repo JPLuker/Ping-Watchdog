@@ -10,11 +10,11 @@ Code rules for Ping Watchdog (Windows, .NET 8 WinForms). The standards' SOP.md P
 
 ## UI
 
-- Colors, fonts, radii and spacing come from `AuroraTheme` (palette, `Space*`, `Radius*`, `*Font`). No `Color.FromArgb`, hex or `new Font` for UI elsewhere, except the theme's own tests.
-- Controls get their colors from `AuroraTheme.Apply` through their `Tag` role: `window`, `nav`, `card`, `header`, `well`, `divider`, `overlay`, and for labels `title`, `primaryText`, `muted`, `accentText`, `statOnline`, `statSuspect`, `statOffline`. Set the tag, not the color, so theme changes keep it.
-- Buttons are `AuroraButton`: `Primary` (one per view), default (secondary), `Ghost`, `Outline` + `Ghost` for chips, `Destructive`.
+- Colors, fonts, radii and spacing come from `AppTheme` (palette, `Space*`, `Radius*`, `*Font`). No `Color.FromArgb`, hex or `new Font` for UI elsewhere, except the theme's own tests.
+- Controls get their colors from `AppTheme.Apply` through their `Tag` role: `window`, `nav`, `card`, `header`, `well`, `divider`, `overlay`, and for labels `title`, `primaryText`, `muted`, `accentText`, `statOnline`, `statSuspect`, `statOffline`. Set the tag, not the color, so theme changes keep it.
+- Buttons are `ThemeButton`: `Primary` (one per view), default (secondary), `Ghost`, `Outline` + `Ghost` for chips, `Destructive`.
 - Layout uses docking, tables and flow panels. Sizes scale with `DeviceDpi / 96f`.
-- Labels that show user text set `UseMnemonic = false`; menu text goes through `AuroraTheme.MenuText` so `&` shows.
+- Labels that show user text set `UseMnemonic = false`; menu text goes through `AppTheme.MenuText` so `&` shows.
 - Text input that can receive pasted text uses `PlainTextBox`, `ClipboardText.AttachPlainPaste` or `GridPaste`, so remote-session and HTML-only clipboards work.
 
 ## Data

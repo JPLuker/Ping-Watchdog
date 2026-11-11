@@ -6,7 +6,7 @@ internal static class HostUi
 {
     internal static Button Button(string text, Action action)
     {
-        var b = new AuroraButton { Text = text, Font = AuroraTheme.LabelFont, AutoSize = true, MinimumSize = new Size(75, 32), FlatStyle = FlatStyle.Flat,
+        var b = new ThemeButton { Text = text, Font = AppTheme.LabelFont, AutoSize = true, MinimumSize = new Size(75, 32), FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(25, 34, 45), ForeColor = Color.White, Margin = new Padding(3) };
         b.Click += (_, _) => action(); return b;
     }
@@ -22,8 +22,8 @@ internal static class HostUi
     {
         f.Text = title + " • Ping Watchdog"; f.Size = new Size(1100, 720); f.MinimumSize = new Size(850, 580);
         f.StartPosition = FormStartPosition.CenterParent; f.AutoScaleMode = AutoScaleMode.Dpi;
-        f.Shown += (_, _) => AuroraTheme.Register(f);
-        f.Font = AuroraTheme.LabelFont; f.BackColor = Color.FromArgb(10, 14, 20); f.ForeColor = Color.White;
+        f.Shown += (_, _) => AppTheme.Register(f);
+        f.Font = AppTheme.LabelFont; f.BackColor = Color.FromArgb(10, 14, 20); f.ForeColor = Color.White;
     }
     internal static FlowLayoutPanel Bar() => new() { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
 }
@@ -36,11 +36,11 @@ internal sealed class QuickAddForm : Form
     private readonly DataGridView _grid = HostUi.Grid();
     private readonly Label _summary = new() { AutoSize = true, Padding = new Padding(4, 8, 0, 4) };
     // Typeable: an unknown name creates that site when hosts are added.
-    private readonly ComboBox _site = new() { Width = 240, Font = AuroraTheme.LabelFont, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown,
+    private readonly ComboBox _site = new() { Width = 240, Font = AppTheme.LabelFont, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown,
         AutoCompleteMode = AutoCompleteMode.SuggestAppend, AutoCompleteSource = AutoCompleteSource.ListItems, AccessibleName = "Site" };
     private readonly Label _siteStatus = new() { AutoSize = true, Padding = new Padding(4, 10, 8, 0) };
     private readonly Func<string, string?> _siteNameError;
-    private readonly TextBox _group = new() { Width = 180, AccessibleName = "Group", Font = AuroraTheme.LabelFont };
+    private readonly TextBox _group = new() { Width = 180, AccessibleName = "Group", Font = AppTheme.LabelFont };
     private readonly Button _importButton;
     private readonly Button _assignGroup;
     private readonly Func<List<ManagedHost>> _provider;
@@ -134,7 +134,7 @@ internal sealed class QuickAddForm : Form
         footer.FlowDirection = FlowDirection.RightToLeft;
         footer.TabIndex = 4;
         _importButton = HostUi.Button(temporary ? "Start quick monitor" : "Add hosts", Import);
-        ((AuroraButton)_importButton).Primary = true;
+        ((ThemeButton)_importButton).Primary = true;
         var cancel = HostUi.Button("Cancel", Close);
         cancel.DialogResult = DialogResult.Cancel;
         cancel.TabIndex = 0;
@@ -145,9 +145,9 @@ internal sealed class QuickAddForm : Form
         Shown += (_, _) => _paste.Focus();
         root.Controls.Add(footer, 0, 7);
         Controls.Add(root);
-        AuroraTheme.Register(this);
-        AuroraTheme.Changed += ApplyPreviewColors;
-        Disposed += (_, _) => AuroraTheme.Changed -= ApplyPreviewColors;
+        AppTheme.Register(this);
+        AppTheme.Changed += ApplyPreviewColors;
+        Disposed += (_, _) => AppTheme.Changed -= ApplyPreviewColors;
         _grid.SelectionChanged += (_, _) => _assignGroup.Enabled = _grid.SelectedRows.Count > 0;
         _paste.TextChanged += (_, _) => NormalizeAndParse(); _site.SelectedIndexChanged += (_, _) => ValidateRows(); _site.TextChanged += (_, _) => ValidateRows();
         _grid.CellValueChanged += (_, _) => { if (!_updating) ValidateRows(); };
@@ -170,7 +170,7 @@ internal sealed class QuickAddForm : Form
 
     private static TableLayoutPanel FieldGroup(string label, Control input, int width)
     {
-        input.Font = AuroraTheme.LabelFont;
+        input.Font = AppTheme.LabelFont;
         input.Dock = DockStyle.Top;
         input.Margin = new Padding(0, 0, 0, 8);
         var group = new TableLayoutPanel
@@ -182,7 +182,7 @@ internal sealed class QuickAddForm : Form
         group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         group.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         group.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        group.Controls.Add(new Label { Text = label, AutoSize = true, Font = AuroraTheme.LabelFont, Margin = new Padding(0, 0, 0, 8) }, 0, 0);
+        group.Controls.Add(new Label { Text = label, AutoSize = true, Font = AppTheme.LabelFont, Margin = new Padding(0, 0, 0, 8) }, 0, 0);
         group.Controls.Add(input, 0, 1);
         return group;
     }
@@ -190,7 +190,7 @@ internal sealed class QuickAddForm : Form
     private void ApplyPreviewColors()
     {
         if (IsDisposed || Disposing) return;
-        var palette = AuroraTheme.Palette;
+        var palette = AppTheme.Palette;
         foreach (DataGridViewRow row in _grid.Rows)
         {
             string status = Cell(row, 5);
@@ -213,7 +213,7 @@ internal sealed class QuickAddForm : Form
         if (previewTop - actionBottom > 100)
             throw new InvalidOperationException("Destination layout reserved excess blank space above the preview.");
         foreach (DataGridViewRow row in _grid.Rows)
-            if (AuroraTheme.ContrastRatio(row.Cells[5].Style.ForeColor, AuroraTheme.Palette.Surface) < 4.5)
+            if (AppTheme.ContrastRatio(row.Cells[5].Style.ForeColor, AppTheme.Palette.Surface) < 4.5)
                 throw new InvalidOperationException("Import status text does not meet contrast.");
     }
 
@@ -261,7 +261,7 @@ internal sealed class QuickAddForm : Form
     {
         // Tag keeps the color through later theme passes; set it now so typing doesn't re-theme the window.
         _siteStatus.Text = text; _siteStatus.Tag = role;
-        var p = AuroraTheme.Palette;
+        var p = AppTheme.Palette;
         _siteStatus.ForeColor = role == "accentText" ? p.Accent : role == "statSuspect" ? p.StatusText(p.Warning) : p.Secondary;
     }
     private void NormalizeAndParse()

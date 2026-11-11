@@ -53,7 +53,7 @@ internal static class SupportInfo
         {
             Text = title + " • Ping Watchdog", Width = 760, Height = 540,
             MinimumSize = new Size(600, 400), StartPosition = FormStartPosition.CenterParent,
-            AutoScaleMode = AutoScaleMode.Dpi, Font = AuroraTheme.LabelFont
+            AutoScaleMode = AutoScaleMode.Dpi, Font = AppTheme.LabelFont
         };
         var root = new TableLayoutPanel
         {
@@ -83,8 +83,8 @@ internal static class SupportInfo
             Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true, Margin = new Padding(0, 12, 0, 0)
         };
-        var copyButton = new AuroraButton { Text = "Copy diagnostic info", AutoSize = true };
-        var close = new AuroraButton { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var copyButton = new ThemeButton { Text = "Copy diagnostic info", AutoSize = true };
+        var close = new ThemeButton { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
         var status = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0), AccessibleName = "Copy status" };
         copyButton.Click += (_, _) =>
         {
@@ -108,8 +108,8 @@ internal static class SupportInfo
         form.Controls.Add(root);
         form.CancelButton = close;
         close.Click += (_, _) => form.Close();
-        AuroraTheme.Apply(form);
-        form.Shown += (_, _) => { AuroraTheme.Register(form); text.Focus(); text.Select(0, 0); };
+        AppTheme.Apply(form);
+        form.Shown += (_, _) => { AppTheme.Register(form); text.Focus(); text.Select(0, 0); };
         return form;
     }
 

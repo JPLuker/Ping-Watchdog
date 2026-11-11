@@ -3,15 +3,15 @@ namespace PingWatchdog;
 internal sealed class DeleteDataDialog : Form
 {
     private readonly TextBox _confirmation = new() { AccessibleName = "Type DELETE to confirm", Dock = DockStyle.Fill };
-    private readonly AuroraButton _delete = new() { Text = "Delete and close", AutoSize = true, Enabled = false, Destructive = true, Primary = true };
+    private readonly ThemeButton _delete = new() { Text = "Delete and close", AutoSize = true, Enabled = false, Destructive = true, Primary = true };
     internal DeleteDataDialog(StorageLayout layout)
     {
         // FOCAL: explicitly confirmed deletion. Compact native surface with normal Escape cancellation.
         Text = "Delete saved data • Ping Watchdog";
         Width = 680; Height = 480; MinimumSize = new Size(600, 440);
         StartPosition = FormStartPosition.CenterParent; AutoScaleMode = AutoScaleMode.Dpi;
-        Font = AuroraTheme.LabelFont;
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(AuroraTheme.Space6) };
+        Font = AppTheme.LabelFont;
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(AppTheme.Space6) };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -33,14 +33,14 @@ internal sealed class DeleteDataDialog : Form
         _confirmation.Margin = new Padding(0, 8, 0, 12);
         root.Controls.Add(_confirmation, 0, 3);
         var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
-        var cancel = new AuroraButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var cancel = new ThemeButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
         _delete.Click += (_, _) => { if (_confirmation.Text == "DELETE") { DialogResult = DialogResult.OK; Close(); } };
         _confirmation.TextChanged += (_, _) => _delete.Enabled = _confirmation.Text == "DELETE";
         buttons.Controls.Add(_delete); buttons.Controls.Add(cancel);
         root.Controls.Add(buttons, 0, 4);
         Controls.Add(root); CancelButton = cancel; AcceptButton = cancel;
-        AuroraTheme.Apply(this);
-        Shown += (_, _) => { AuroraTheme.Register(this); _confirmation.Focus(); };
+        AppTheme.Apply(this);
+        Shown += (_, _) => { AppTheme.Register(this); _confirmation.Focus(); };
     }
 
     internal static void RunTests()

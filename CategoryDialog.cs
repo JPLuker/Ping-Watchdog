@@ -25,15 +25,15 @@ internal sealed class CategoryDialog : Form
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = AuroraTheme.LabelFont;
+        Font = AppTheme.LabelFont;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         _box.Items.AddRange(SuggestedCategories);
         _box.Text = current;
-        var save = new AuroraButton { Text = "Save category", DialogResult = DialogResult.OK, AutoSize = true, TabIndex = 1 };
-        var cancel = new AuroraButton { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true, TabIndex = 0 };
+        var save = new ThemeButton { Text = "Save category", DialogResult = DialogResult.OK, AutoSize = true, TabIndex = 1 };
+        var cancel = new ThemeButton { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true, TabIndex = 0 };
         var buttons = new FlowLayoutPanel
         {
             AutoSize = true, Dock = DockStyle.Fill,
@@ -45,7 +45,7 @@ internal sealed class CategoryDialog : Form
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3,
-            Padding = new Padding(AuroraTheme.Space4)
+            Padding = new Padding(AppTheme.Space4)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (int i = 0; i < 3; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -55,7 +55,7 @@ internal sealed class CategoryDialog : Form
         Controls.Add(root);
         AcceptButton = save;
         CancelButton = cancel;
-        AuroraTheme.Register(this);
+        AppTheme.Register(this);
         Shown += (_, _) => { _box.Focus(); _box.SelectAll(); };
     }
 

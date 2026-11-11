@@ -9,7 +9,7 @@ internal enum AppearanceMode { System, Light, Dark }
 // Quiet Precision (InternalDesignGuidelines DESIGN.md Part B, v2.0), approved by Joseph 2026-11-11:
 // "use the new visual style". Warm neutrals, ink as the accent, semantic colors only for state.
 // Every text role passes 4.5:1 on canvas, surface, surface-2 and surface-3 (RunTests measures it).
-internal sealed record AuroraPalette(bool Dark, Color Canvas, Color Surface, Color Surface2,
+internal sealed record ThemePalette(bool Dark, Color Canvas, Color Surface, Color Surface2,
     Color Surface3, Color Text, Color Secondary, Color Muted, Color Accent, Color OnAccent,
     Color Success, Color Warning, Color Danger, Color Info, Color Border, Color BorderStrong, Color Focus)
 {
@@ -20,7 +20,7 @@ internal sealed record AuroraPalette(bool Dark, Color Canvas, Color Surface, Col
     internal Color StatusText(Color semantic) => SystemInformation.HighContrast ? Text : semantic;
     // The sidebar is the canvas itself: chrome recedes, structure comes from spacing and one border.
     internal Color Nav => Canvas;
-    internal static AuroraPalette Create(bool dark)
+    internal static ThemePalette Create(bool dark)
     {
         Color C(string value) => ColorTranslator.FromHtml(value);
         return dark
@@ -31,7 +31,7 @@ internal sealed record AuroraPalette(bool Dark, Color Canvas, Color Surface, Col
     }
 }
 
-internal static class AuroraTheme
+internal static class AppTheme
 {
     // B6 spacing (4px base) and B5 shape. Buttons are rounded rectangles; pills are for chips and toggles.
     internal const int Space1 = 4, Space2 = 8, Space3 = 12, Space4 = 16, Space5 = 20, Space6 = 24, Space8 = 32;
@@ -49,10 +49,10 @@ internal static class AuroraTheme
     private static readonly HashSet<Form> Windows = new();
     private static Form? _dispatcher;
     internal static AppearanceMode Mode { get; private set; } = AppearanceMode.System;
-    internal static AuroraPalette Palette { get; private set; } = Resolve();
+    internal static ThemePalette Palette { get; private set; } = Resolve();
     internal static event Action? Changed;
 
-    private static AuroraPalette Resolve()
+    private static ThemePalette Resolve()
     {
         if (SystemInformation.HighContrast)
             return new(false, SystemColors.Window, SystemColors.Window, SystemColors.Control, SystemColors.Highlight,
@@ -65,7 +65,7 @@ internal static class AuroraTheme
             try { dark = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int value && value == 0; }
             catch { dark = false; }
         }
-        return AuroraPalette.Create(dark);
+        return ThemePalette.Create(dark);
     }
 
     internal static void Initialize(Form main)
@@ -158,7 +158,7 @@ internal static class AuroraTheme
         string role = control.Tag as string ?? "";
         control.ForeColor = p.Text;
         control.BackColor = role is "overlay" ? (SystemInformation.HighContrast ? SystemColors.Window : p.Surface3)
-            : role is "divider" ? p.Border : role is "well" ? AuroraWell.WellColor : role is "nav" ? p.Nav
+            : role is "divider" ? p.Border : role is "well" ? ScrollWell.WellColor : role is "nav" ? p.Nav
             : role is "card" or "header" ? p.Surface : p.Canvas;
         switch (control)
         {
@@ -188,7 +188,7 @@ internal static class AuroraTheme
                 grid.RowTemplate.Height = Math.Max(grid.RowTemplate.Height, (int)(36 * grid.DeviceDpi / 96f));
                 foreach (DataGridViewRow row in grid.Rows) { row.DefaultCellStyle.BackColor = Color.Empty; row.DefaultCellStyle.ForeColor = Color.Empty; }
                 break;
-            case AuroraButton button:
+            case ThemeButton button:
                 button.Font = LabelFont;
                 button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0;
                 button.BackColor = p.Surface2; button.ForeColor = p.Text;
@@ -212,7 +212,7 @@ internal static class AuroraTheme
                 number.BackColor = p.Surface; number.ForeColor = p.Text;
                 break;
             case ListBox list:
-                list.BackColor = role is "well" ? AuroraWell.WellColor : p.Surface; list.ForeColor = p.Text;
+                list.BackColor = role is "well" ? ScrollWell.WellColor : p.Surface; list.ForeColor = p.Text;
                 break;
             case TreeView tree:
                 tree.BackColor = p.Surface; tree.ForeColor = p.Text;
@@ -237,7 +237,7 @@ internal static class AuroraTheme
                 break;
         }
         if (control.ContextMenuStrip != null) ApplyMenu(control.ContextMenuStrip);
-        if (control is DataGridView or RichTextBox or ListBox) ThemeScrollbars(control);
+        if (control is DataGridView or RichTextBox or ListBox or ScrollableControl { AutoScroll: true }) ThemeScrollbars(control);
         // Grid editors and up/down internals manage their own layout and fonts.
         if (control is not DataGridView && control is not NumericUpDown)
             foreach (Control child in control.Controls) ApplyControl(child);
@@ -256,7 +256,7 @@ internal static class AuroraTheme
     }
 
     // Quietest outline that still meets the 3:1 UI-component floor against its background.
-    internal static Color SoftOutline(AuroraPalette p, Color background)
+    internal static Color SoftOutline(ThemePalette p, Color background)
     {
         if (SystemInformation.HighContrast) return p.Text;
         for (double t = .5; t > 0; t -= .05)
@@ -279,7 +279,7 @@ internal static class AuroraTheme
     internal static void ApplyMenu(ToolStrip menu)
     {
         menu.BackColor = Palette.Surface; menu.ForeColor = Palette.Text;
-        menu.Renderer = new ToolStripProfessionalRenderer(new AuroraMenuColors());
+        menu.Renderer = new ToolStripProfessionalRenderer(new ThemeMenuColors());
         foreach (ToolStripItem item in menu.Items)
         {
             item.BackColor = Palette.Surface; item.ForeColor = Palette.Text;
@@ -297,7 +297,7 @@ internal static class AuroraTheme
         double Ratio(Color a, Color b) => (Math.Max(L(a), L(b)) + .05) / (Math.Min(L(a), L(b)) + .05);
         foreach (bool dark in new[] { false, true })
         {
-            var p = AuroraPalette.Create(dark);
+            var p = ThemePalette.Create(dark);
             // Every text role, including state words, on every surface it can sit on.
             foreach (var text in new[] { p.Text, p.Secondary, p.Muted, p.Success, p.Warning, p.Danger })
                 foreach (var surface in new[] { p.Canvas, p.Surface, p.Surface2, p.Surface3 })
@@ -312,36 +312,36 @@ internal static class AuroraTheme
     }
 }
 
-internal sealed class AuroraMenuColors : ProfessionalColorTable
+internal sealed class ThemeMenuColors : ProfessionalColorTable
 {
-    public override Color ToolStripDropDownBackground => AuroraTheme.Palette.Surface;
-    public override Color MenuItemSelected => AuroraTheme.Palette.Surface2;
-    public override Color MenuItemBorder => AuroraTheme.Palette.Surface2;
-    public override Color MenuBorder => AuroraTheme.Palette.Border;
-    public override Color ImageMarginGradientBegin => AuroraTheme.Palette.Surface;
-    public override Color ImageMarginGradientMiddle => AuroraTheme.Palette.Surface;
-    public override Color ImageMarginGradientEnd => AuroraTheme.Palette.Surface;
-    public override Color SeparatorDark => AuroraTheme.Palette.Border;
-    public override Color SeparatorLight => AuroraTheme.Palette.Surface;
+    public override Color ToolStripDropDownBackground => AppTheme.Palette.Surface;
+    public override Color MenuItemSelected => AppTheme.Palette.Surface2;
+    public override Color MenuItemBorder => AppTheme.Palette.Surface2;
+    public override Color MenuBorder => AppTheme.Palette.Border;
+    public override Color ImageMarginGradientBegin => AppTheme.Palette.Surface;
+    public override Color ImageMarginGradientMiddle => AppTheme.Palette.Surface;
+    public override Color ImageMarginGradientEnd => AppTheme.Palette.Surface;
+    public override Color SeparatorDark => AppTheme.Palette.Border;
+    public override Color SeparatorLight => AppTheme.Palette.Surface;
 }
 
 // Rounded inset that gives a scrolling region a visible edge against its surroundings.
 // The well, its list background and unselected rows all read this one token so they cannot drift apart.
 // It also draws the list's scroll indicator in its right padding instead of a native scrollbar.
-internal sealed class AuroraWell : Panel
+internal sealed class ScrollWell : Panel
 {
     // The site list sits directly on the sidebar: no box around it (B4, "structure is felt, not seen").
-    internal static Color WellColor => AuroraTheme.Palette.Nav;
+    internal static Color WellColor => AppTheme.Palette.Nav;
     private bool _thumbHover, _dragging;
     private int _dragOffset;
-    public AuroraWell()
+    public ScrollWell()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
-        ControlAdded += (_, e) => { if (e.Control is AuroraListBox list) list.ScrollStateChanged += () => RefreshIndicator(list); };
+        ControlAdded += (_, e) => { if (e.Control is WellListBox list) list.ScrollStateChanged += () => RefreshIndicator(list); };
     }
 
     private (int Top, int Count, int Rows) _lastScroll = (-1, -1, -1);
-    private void RefreshIndicator(AuroraListBox list)
+    private void RefreshIndicator(WellListBox list)
     {
         var state = (list.TopIndex, list.Items.Count, list.VisibleRows);
         if (state == _lastScroll) return;
@@ -349,7 +349,7 @@ internal sealed class AuroraWell : Panel
         Invalidate(new Rectangle(Math.Max(0, ClientSize.Width - (int)(14 * DeviceDpi / 96f)), 0, ClientSize.Width, ClientSize.Height));
     }
 
-    private AuroraListBox? List => Controls.OfType<AuroraListBox>().FirstOrDefault();
+    private WellListBox? List => Controls.OfType<WellListBox>().FirstOrDefault();
 
     // Track sits in the right padding beside the list; null when everything already fits.
     internal Rectangle? ScrollTrack
@@ -381,15 +381,15 @@ internal sealed class AuroraWell : Panel
 
     protected override void OnPaintBackground(PaintEventArgs e)
     {
-        e.Graphics.Clear(Parent?.BackColor ?? AuroraTheme.Palette.Surface);
+        e.Graphics.Clear(Parent?.BackColor ?? AppTheme.Palette.Surface);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         if (ClientRectangle.Width <= 1 || ClientRectangle.Height <= 1) return;
-        using var path = WallboardStyle.Rounded(new Rectangle(0, 0, ClientSize.Width - 1, ClientSize.Height - 1), AuroraTheme.RadiusMedium);
+        using var path = WallboardStyle.Rounded(new Rectangle(0, 0, ClientSize.Width - 1, ClientSize.Height - 1), AppTheme.RadiusMedium);
         using var fill = new SolidBrush(WellColor);
         e.Graphics.FillPath(fill, path);
         if (ScrollThumb is Rectangle thumb)
         {
-            var p = AuroraTheme.Palette;
+            var p = AppTheme.Palette;
             using var thumbBrush = new SolidBrush(_thumbHover || _dragging ? p.Secondary : p.Muted);
             using var thumbPath = WallboardStyle.Rounded(thumb, Math.Max(1, thumb.Width / 2));
             e.Graphics.FillPath(thumbBrush, thumbPath);
@@ -431,7 +431,7 @@ internal sealed class AuroraWell : Panel
 
 // Site list without a native scrollbar: the well draws a themed indicator, and the list scrolls itself.
 // It also paints its own erase background so Windows cannot substitute a themed color.
-internal sealed class AuroraListBox : ListBox
+internal sealed class WellListBox : ListBox
 {
     private const int WmEraseBackground = 0x0014, WmSize = 0x0005, WmKeyDown = 0x0100, WmTimer = 0x0113, WmVScroll = 0x0115,
         WmMouseMove = 0x0200, WmLButtonDown = 0x0201, WmMouseWheel = 0x020A, LbAddString = 0x0180, LbResetContent = 0x0184,
@@ -481,7 +481,7 @@ internal sealed class AuroraListBox : ListBox
 }
 
 // FOCAL: only the primary task action receives the solid accent.
-internal class AuroraButton : Button
+internal class ThemeButton : Button
 {
     internal bool Primary { get; set; }
     internal bool Destructive { get; set; }
@@ -490,10 +490,10 @@ internal class AuroraButton : Button
     // Outline keeps a ghost button recognizable as a control when it is not selected.
     internal bool Outline { get; set; }
     private bool _hover, _pressed;
-    public AuroraButton()
+    public ThemeButton()
     {
         FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
-        Padding = new Padding(AuroraTheme.Space4, AuroraTheme.Space1, AuroraTheme.Space4, AuroraTheme.Space1);
+        Padding = new Padding(AppTheme.Space4, AppTheme.Space1, AppTheme.Space4, AppTheme.Space1);
     }
     public override Size GetPreferredSize(Size proposedSize)
     {
@@ -538,7 +538,7 @@ internal class AuroraButton : Button
     protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
     protected override void OnLostFocus(EventArgs e) { _pressed = false; base.OnLostFocus(e); Invalidate(); }
     // Ghost actions and unselected navigation sit back in text-2 (B10); selected and default buttons use text.
-    internal Color ResolveTextColor(AuroraPalette p) =>
+    internal Color ResolveTextColor(ThemePalette p) =>
         !Enabled ? p.Muted : Destructive ? (Primary ? (p.Dark ? p.Canvas : Color.White) : p.StatusText(p.Danger))
         : Primary ? p.OnAccent : Ghost && !Selected && !_hover ? p.Secondary : p.Text;
 
@@ -564,10 +564,10 @@ internal class AuroraButton : Button
             if ((Math.Max(a, b) + .05) / (Math.Min(a, b) + .05) < 4.5)
                 throw new InvalidOperationException("Destructive action text does not meet the reading contrast floor.");
         }
-        using var action = new AuroraButton { Destructive = true, Ghost = true, Enabled = true };
+        using var action = new ThemeButton { Destructive = true, Ghost = true, Enabled = true };
         foreach (bool dark in new[] { false, true })
         {
-            var palette = AuroraPalette.Create(dark);
+            var palette = ThemePalette.Create(dark);
             action.Primary = false;
             foreach (var background in new[] { palette.Canvas, palette.Surface2, palette.Surface3 })
                 Check(action.ResolveTextColor(palette), background);
@@ -578,14 +578,14 @@ internal class AuroraButton : Button
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        var p = AuroraTheme.Palette;
+        var p = AppTheme.Palette;
         e.Graphics.Clear(Parent?.BackColor ?? p.Canvas);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         int inset = Math.Max(4, (int)(4 * DeviceDpi / 96f));
         var bounds = Rectangle.Inflate(ClientRectangle, -inset, -inset);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         // B5: actions are rounded rectangles; outlined chips (filters, scope) stay pills so they read as "choose".
-        int radius = Outline ? bounds.Height / 2 : Math.Min(bounds.Height / 2, (int)Math.Round(AuroraTheme.RadiusMedium * DeviceDpi / 96f));
+        int radius = Outline ? bounds.Height / 2 : Math.Min(bounds.Height / 2, (int)Math.Round(AppTheme.RadiusMedium * DeviceDpi / 96f));
         using var path = WallboardStyle.Rounded(bounds, radius);
         var background = Parent?.BackColor ?? p.Surface;
         Color fillColor;
@@ -600,7 +600,7 @@ internal class AuroraButton : Button
         bool edged = (!Primary && !Ghost) || (Outline && Ghost && !Selected && !_pressed && !(_hover && Enabled));
         if (edged)
         {
-            var edgeColor = Outline ? AuroraTheme.SoftOutline(p, background) : p.Border;
+            var edgeColor = Outline ? AppTheme.SoftOutline(p, background) : p.Border;
             using var edge = new Pen(edgeColor, Math.Max(1, DeviceDpi / 96f));
             e.Graphics.DrawPath(edge, path);
         }

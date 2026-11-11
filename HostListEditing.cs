@@ -7,7 +7,7 @@ public sealed partial class MainForm
 {
     private bool _refreshingHostRows;
     private HostFilter _hostFilter = HostFilter.All;
-    private readonly Dictionary<HostFilter, AuroraButton> _filterChips = new();
+    private readonly Dictionary<HostFilter, ThemeButton> _filterChips = new();
     private Panel? _listHeader;
     private FlowLayoutPanel? _filterBar;
     private string _priorityActionText = "Mark as priority";
@@ -32,7 +32,7 @@ public sealed partial class MainForm
         _filterBar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = true, Tag = "window", Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 4) };
         foreach (var filter in Enum.GetValues<HostFilter>())
         {
-            var chip = new AuroraButton { Text = FilterName(filter), AutoSize = true, Ghost = true, Outline = true, AccessibleName = FilterName(filter) + " hosts" };
+            var chip = new ThemeButton { Text = FilterName(filter), AutoSize = true, Ghost = true, Outline = true, AccessibleName = FilterName(filter) + " hosts" };
             chip.Click += (_, _) => SetHostFilter(filter);
             _filterChips[filter] = chip;
             _filterBar.Controls.Add(chip);
@@ -44,7 +44,7 @@ public sealed partial class MainForm
         var undoLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Tag = "card" };
         undoLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         undoLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        var undo = new AuroraButton { Text = "Undo", AutoSize = true, Anchor = AnchorStyles.Right };
+        var undo = new ThemeButton { Text = "Undo", AutoSize = true, Anchor = AnchorStyles.Right };
         undo.Click += (_, _) => UndoLastHostEdit();
         undoLayout.Controls.Add(_undoMessage, 0, 0);
         undoLayout.Controls.Add(undo, 1, 0);
@@ -350,7 +350,7 @@ public sealed partial class MainForm
         if (_canKeepSelection) menu.Items.Add("Keep in a site…", null, (_, _) => KeepSelectionInSite());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Remove…", null, (_, _) => RemoveSelection());
-        AuroraTheme.ApplyMenu(menu);
+        AppTheme.ApplyMenu(menu);
         menu.Show(anchor, location);
     }
 
@@ -412,15 +412,15 @@ internal static class HostEditDialogs
             StartPosition = FormStartPosition.CenterParent, AutoScaleMode = AutoScaleMode.Dpi, ClientSize = new Size(420, height),
             ShowInTaskbar = false
         };
-        var ok = new AuroraButton { Text = "Save", AutoSize = true, Primary = true, DialogResult = DialogResult.OK };
-        var cancel = new AuroraButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var ok = new ThemeButton { Text = "Save", AutoSize = true, Primary = true, DialogResult = DialogResult.OK };
+        var cancel = new ThemeButton { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(12) };
         buttons.Controls.Add(ok); buttons.Controls.Add(cancel);
         content.Dock = DockStyle.Fill;
         form.Controls.Add(content);
         form.Controls.Add(buttons);
         form.AcceptButton = ok; form.CancelButton = cancel;
-        form.Shown += (_, _) => AuroraTheme.Register(form);
+        form.Shown += (_, _) => AppTheme.Register(form);
         return form;
     }
 
