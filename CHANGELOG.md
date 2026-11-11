@@ -2,6 +2,12 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.30
+
+- Checkboxes and their labels have a larger click target.
+- Landing page and README use the new look and fresh screenshots.
+- Internal cleanup: the code is split into smaller files by feature, with measured design checks in the automated tests. Nothing else changes.
+
 ## 1.19.29
 
 - New look: quieter neutral colors, black-and-white main buttons, color kept for host status, dots beside status words.

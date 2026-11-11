@@ -6,7 +6,7 @@ Code rules for Ping Watchdog (Windows, .NET 8 WinForms). The standards' SOP.md P
 
 - One feature per file where it's practical. `MainForm` is a partial class split across files (`MonitorWorkspace.cs`, `HostListEditing.cs`, `HostManagement.cs`, …). New main-window features get their own partial file rather than growing `Program.cs`.
 - Every file starts with a comment saying what it's for.
-- Aim for files under ~800 lines. `WallboardForm.cs` (1,900) and `MainForm.cs` (900) are still over; split them by feature as you touch them, without changing behavior.
+- Aim for files under ~800 lines. `WallboardCanvas.cs` (990), `WallboardForm.cs` (920) and `MainForm.cs` (900) are still over; split them by feature as you touch them, without changing behavior.
 
 ## UI
 

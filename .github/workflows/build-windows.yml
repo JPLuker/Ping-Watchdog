@@ -196,15 +196,9 @@ jobs:
           @"
           # Ping Watchdog $env:WATCHDOG_VERSION
 
-          - New look: quieter neutral colors, black-and-white main buttons, color kept for host status, dots beside status words.
-          - The map always shows full IP addresses.
-          - Paste labels into Add hosts with Ctrl+V, including a whole column at once.
-          - Edit host changes a host's address as well as its label.
-          - Settings → General → Startup can open Ping Watchdog at sign-in, start monitoring, and open the Wallboard on the screen it was last on.
-          - A busy window shows a dimmed Loading cover instead of freezing.
-          - Updates install without a separate window and reopen Ping Watchdog.
-          - Settings → Advanced → Show version on all screens.
-          - Shorter wording in Settings and on the Wallboard.
+          - Checkboxes and their labels have a larger click target.
+          - Landing page and README use the new look and fresh screenshots.
+          - Internal cleanup: the code is split into smaller files by feature, with measured design checks in the automated tests. Nothing else changes.
 
 
           "@ | Set-Content release-notes.md

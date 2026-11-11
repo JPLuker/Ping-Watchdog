@@ -14,7 +14,7 @@ Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site
 
 ## Where we are (2026-11-11)
 
-Standards pass, released as **1.19.29**:
+Standards pass, released as **1.19.29** (features and look) and **1.19.30** (code split, design checks, landing page):
 
 - **Theme:** `AppTheme.cs` (was `AuroraTheme.cs`). `ThemePalette.Create` holds the Quiet Precision values; `Nav` is the canvas; `Teal` maps to `Success`. Fonts `Title1Font`…`MonoFont`, radii `RadiusXs`…`RadiusDialog`. `ThemeButton.OnPaint` draws 8px rounded rectangles (pills only when `Outline`), ink primary, `Focus` ring. Types renamed: `ThemeButton`, `ScrollWell`, `WellListBox`, `ThemeMenuColors`.
 - **Status dots:** `HostResultsGrid.OnCellPainting` paints dot + word for `StatusColumn`; `StatusDot()` maps state to color.
@@ -30,6 +30,8 @@ Standards pass, released as **1.19.29**:
 
 ## What's next
 
-**Claude:** split `Program.cs` (models, dialogs, self-tests and UI smoke test into their own files; behavior unchanged); landing page and README screenshots in the new look; measured design checks in the smoke test. See ROADMAP.md.
+- **1.19.30:** `Program.cs` is now `Program`, `Models`, `HostDialogs`, `MainForm` and `MainForm.*.cs` feature partials (Sites, Organization, Monitoring, History, WallboardBridge, SettingsBridge, Updates, PingLog, LegacyGridMenu, SelfTests, UiSmokeTest). `WallboardCanvas.cs` split from `WallboardForm.cs`. `DesignChecks.cs` runs in the UI smoke test. The smoke test also renders `page-map-*` / `page-list-*` (example network, monitoring) used for `docs/` and README screenshots. Landing page CSS uses the Quiet Precision tokens.
+
+**Claude:** see ROADMAP.md → Claude's list.
 
 **Joseph:** the checks in TESTING.md, and the questions in ROADMAP.md → Joseph's list.

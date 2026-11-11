@@ -8,18 +8,20 @@ Ordered by who can do the work: Claude's list first, then Joseph's. Ideas go her
 
 ## Claude's list
 
-1. Standards pass, in progress on the `work/issue-40-41` branch until it merges:
+1. Standards pass (1.19.29 and 1.19.30):
    - [x] #40 and #41 fixes (paste labels, edit address, startup and Wallboard screen, loading cover, whole addresses)
    - [x] #35 updates install without Velopack's window
    - [x] Quiet Precision tokens, buttons, tables, status dots, focus ring
    - [x] Say-less copy pass in Settings and Wallboard
    - [x] Version overlay (Settings → Advanced)
    - [ ] Quiet Precision on the remaining windows: Outage history, Organization, Quick Add, update popup, Wallboard header
-   - [ ] Split `Program.cs` (5,200 lines) and `WallboardForm.cs` by feature, behavior unchanged
-   - [ ] Rename `Aurora*` types to theme names
-   - [ ] Landing page in Quiet Precision with new screenshots (`docs/`)
-   - [ ] Release notes, README and README-FIRST screenshots for the new look
-2. Measured design checks in the UI smoke test: contrast of drawn text, target sizes, one primary per view.
+   - [x] Split `Program.cs` and `WallboardForm.cs` by feature, behavior unchanged
+   - [x] Rename `Aurora*` types to theme names
+   - [x] Landing page in Quiet Precision with new screenshots (`docs/`)
+   - [x] Release notes and README screenshots for the new look
+   - [x] Measured design checks in the UI smoke test (one primary, 24px targets, 12px floor, label contrast)
+2. Split `WallboardCanvas.cs`, `WallboardForm.cs` and `MainForm.cs` below 800 lines as they're touched.
+3. Dark scrollbars on the Outage history table (native scrollbar stays light in dark mode).
 
 ## Joseph's list
 
