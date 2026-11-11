@@ -21,7 +21,7 @@ internal sealed class SettingsForm : Form
         IntegralHeight = false,
         Font = AuroraTheme.LabelFont,
         DrawMode = DrawMode.OwnerDrawFixed,
-        ItemHeight = 36,
+        ItemHeight = 32,
         AccessibleName = "Settings categories"
     };
 

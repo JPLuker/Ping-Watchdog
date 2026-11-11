@@ -1258,6 +1258,19 @@ public sealed partial class MainForm : Form
             Expect(!nameLabel.UseMnemonic, "Themed labels still treat & as a shortcut marker.");
         }
 
+        // The accepted map look: five branches of five hosts sit in one row at the default window size, labels shown.
+        using (var accepted = new WallboardCanvas { Size = new Size(740, 345), ShowCli = false,
+            Snapshot = new WallboardSnapshot(true, DateTime.Now, Enumerable.Range(1, 5).Select(site => new WallboardSiteSnapshot($"Branch {site}",
+                Enumerable.Range(1, 5).Select(host => new WallboardHostSnapshot($"Branch {site}", $"192.0.2.{site * 10 + host}", host == 2 ? "Printer" : host == 3 ? "Cloudkey" : "", HostState.Online, 1, null)).ToArray())).ToArray(),
+                Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) })
+        using (var acceptedBitmap = new Bitmap(740, 345))
+        {
+            accepted.DrawToBitmap(acceptedBitmap, new Rectangle(0, 0, 740, 345));
+            var tops = accepted.SiteHeadingBounds.Select(h => h.Bounds.Top).Distinct().Count();
+            Expect(accepted.SiteHeadingBounds.Count == 5 && tops == 1, $"Five branches used {tops} rows instead of one.");
+            Expect(accepted.DrawnAddresses.Count == 25, "The accepted map lost addresses.");
+        }
+
         // #41: the map always shows whole addresses, and the layout leaves room for them.
         foreach (var (siteCount, hostsPerSite, viewport) in new[] { (5, 5, new Size(1000, 500)), (12, 4, new Size(1280, 720)), (24, 2, new Size(1600, 1000)) })
         {
@@ -1272,7 +1285,7 @@ public sealed partial class MainForm : Form
             Expect(drawn.SequenceEqual(expected), $"{siteCount}x{hostsPerSite} at {viewport} drew {drawn.Length} of {expected.Length} addresses; first missing: {expected.Except(drawn).FirstOrDefault() ?? "none"}.");
             using var g = Graphics.FromImage(fullBitmap);
             foreach (var cell in full.HostCellBounds)
-                Expect(g.MeasureString("10.233.123.204", full.HostAddressFont, int.MaxValue, StringFormat.GenericTypographic).Width <= cell.Width - 20 * full.DeviceDpi / 96f,
+                Expect(g.MeasureString("10.233.123.204", full.HostAddressFont, int.MaxValue, StringFormat.GenericTypographic).Width <= cell.Width - 24 * full.DeviceDpi / 96f,
                     $"{siteCount}x{hostsPerSite} at {viewport}: a {cell.Width}px host cell is too narrow for a whole address.");
         }
 

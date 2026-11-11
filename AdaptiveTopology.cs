@@ -54,6 +54,8 @@ internal sealed partial class WallboardCanvas
         // Site names count too, so the layout trades a little host room for readable names.
         var nameWidths = sites.Select(site => g.MeasureString(site.Name, _siteFont, int.MaxValue, StringFormat.GenericTypographic).Width + 4 * scale).ToArray();
         var addressWidths = sites.Select(site => site.Hosts.Select(host => g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max() + 40 * scale).ToArray();
+        // What a cell really needs for a whole address: the text plus the marker lead-in (see tx/tw below).
+        var addressNeeds = addressWidths.Select(width => width - 40 * scale + 28 * scale).ToArray();
         // Keep the accepted square-ish search; widen it only when captions no longer fit.
         for (int groupColumns = 1; groupColumns <= sites.Count; groupColumns++)
         {
@@ -77,8 +79,8 @@ internal sealed partial class WallboardCanvas
                     int rows = (int)Math.Ceiling(sites[i].Hosts.Count / (double)c);
                     double widthFit = (groupWidth - padding * 2) / c / addressWidth;
                     double fit = Math.Min(widthFit, (groupHeight - heading - padding) / rows / (line * 2 + 8 * scale));
-                    // A column count that shows whole addresses always beats one that would cut them.
-                    bool widthFits = widthFit >= 1;
+                    // A column count that shows whole addresses always beats one that would overflow them.
+                    bool widthFits = (groupWidth - padding * 2) / c >= addressNeeds[i];
                     if ((widthFits && !nodeWidthFits) || (widthFits == nodeWidthFits && fit > nodeScore))
                     { nodeScore = fit; nodeWidthFits = widthFits; columns[i] = c; }
                 }
