@@ -24,6 +24,15 @@ jobs:
         run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
       - name: UI regression checks
         run: dotnet run --project PingWatchdog.csproj -c Release -- --ui-smoke-test
+      # Artifacts aren't reachable from every review environment, so the captures are also printed to the log.
+      - name: Print UI captures for review
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem "ui-smoke-test" -Filter "*.png" -Recurse -ErrorAction SilentlyContinue | Sort-Object Name) {
+            Write-Output ("REVIEW_IMAGE_NAME " + $file.Name)
+            Write-Output ("REVIEW_IMAGE_BEGIN" + [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName)) + "REVIEW_IMAGE_END")
+          }
       - continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()

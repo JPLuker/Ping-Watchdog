@@ -1,39 +1,45 @@
 # Working agreement
 
-This repository is standalone Ping Watchdog. Keep Windows work separate from Linux unless Joseph explicitly changes the scope.
+Standalone Ping Watchdog for Windows. Linux is a separate beta track under `linux/`; keep Windows work separate unless Joseph changes the scope.
 
-## Required design review
+## Read first, every session
 
-Read DESIGN.md in full before implementing or modifying Windows UI. It tracks the Aurora Glass v1.5 defaults and supersedes prior visual references. Follow its token system and native-platform conventions, preserve accessibility floors, and apply Part 21 to unintentional gaps. Documented deviations below take precedence over visual defaults. ROADMAP.md and the open maintenance checklist define the remaining final-release milestones. Do not claim an unimplemented theme, uninspected rendering, or unperformed acceptance check as complete.
+1. The standards in [InternalDesignGuidelines](https://github.com/JPLuker/InternalDesignGuidelines): README, then SOP.md Part 1 (keep building until done or truly blocked), WORKING-WITH-JOSEPH.md and WORKFLOW.md. Read the file for the kind of work you're doing (README table).
+2. Open GitHub issues. They're the handoff between sessions. Close an issue once the fix is pushed and proven, with the closing message from WORKFLOW.md 1.2 (version and Eastern timestamp).
+3. [HANDOFF.md](HANDOFF.md), then [DECISIONS.md](DECISIONS.md) and [NO_LIST.md](NO_LIST.md). Don't make Joseph repeat himself.
+4. [DESIGN.md](DESIGN.md) before any UI work, and [CONVENTIONS.md](CONVENTIONS.md) before code.
 
-Keep the product, documentation, and release materials focused exclusively on Ping Watchdog. Do not add cross-promotion, external-product references, promotional cards, or upgrade prompts.
+Keep the product, docs and release materials about Ping Watchdog only: no cross-promotion, external-product references, promotional cards or upgrade prompts.
 
-## Execution
+## Identity
 
-Use the established chat scope when a request refers to a shared design or feature.
+- Visual style: Quiet Precision (DESIGN.md Part B of the standards), approved by Joseph 2026-11-11: "use the new visual style, redo literally anything that the standards recommended as long as you maintain the functionality of the app"
+- Accent: ink (light `#1B1B19` / dark `#EDEDEA`). Color is reserved for host state, so no hue competes with green/amber/red.
+- Neutrals: warm (default)
+- Semantic shifts: none
+- Display font: none (Segoe UI Semibold for titles)
+- Shape: default (buttons 8px, cards 12px, dialogs 16px; pills only for filter chips)
+- Density: default; tables at 36px rows
+- Signature detail: the connected map (Monitor → sites → hosts)
 
-Do not let optional clarification block implementation. State a reasonable assumption and continue independent work. Use a normal, brief question only when missing information makes a safe implementation impossible; avoid a blocking question tool for optional choices. If the user stops work, stop immediately. An unanswered question is never permission for a restricted action.
+## Every push
 
-Preserve unrelated changes, verify the current remote main before editing, and push authorized changes. Report actual validation and any limits honestly.
+1. Bump `Version` in `PingWatchdog.csproj` (patch for fixes and small changes, minor for features; 1.20.0 and other milestone numbers are Joseph's to call). Never reuse a published version.
+2. Update the release notes step in `.github/workflows/build-windows.yml`, `CHANGELOG.md`, `HANDOFF.md` and `ROADMAP.md` in the same commit.
+3. Validate on a branch first (`gh workflow run validate-windows.yml --ref <branch>`), read the log, and look at the screenshots it prints. Then merge to `main`; the build workflow publishes an updater-accessible release with installer, portable package and update feed.
+4. Confirm the push landed (`git ls-remote origin refs/heads/main`) and the release published. Documentation-only changes need no binary release.
 
-## Delivering updates
-
-Joseph requires an updater-accessible Windows release after every implementation build, not only a source push or an Actions artifact. Keep automatic publication enabled after the existing tests pass. Before each subsequent implementation push, increment Version in PingWatchdog.csproj and refresh release notes; never reuse a published version. Verify the release includes installer, portable package, and update-feed assets. Report incomplete final-release acceptance honestly without withholding iterative updates. Documentation-only changes need no new binary release.
-
-## Standards and handoff
-
-Read the relevant documents in [InternalDesignGuidelines](https://github.com/JPLuker/InternalDesignGuidelines). The 2026-10-20 audit used commit `63eae9e89f3278dbd1443a3dc54c6186a877efbc`. Its README distinguishes flexible defaults from firm accessibility, privacy, security and untested-release rules. Explicit session instructions remain authoritative.
-
-Read open GitHub issues before starting a session. [Maintenance mode checklist #4](https://github.com/JPLuker/Ping-Watchdog/issues/4) tracks the final-release work; RELEASE-AUDIT.md records evidence and limitations. Do not repeat the old migration backlog or infer passing human tests from CI.
-
-The existing LICENSE is proprietary by deliberate project choice. Preserve it; the standards' suggested open-source default does not authorize relicensing. Record final license confirmation before maintenance publication.
+Report actual validation and its limits honestly. CI captures are "rendered on the CI runner", not device tests.
 
 ## Deviations
 
-- **Compact native Windows UI:** use Segoe UI and Consolas, opaque dense surfaces, native form chrome and controls where appropriate. Do not introduce expensive glass/material effects solely to match a web reference. Accessibility floors still apply.
-- **Permanent update action:** Joseph explicitly requested Check for updates in the sidebar and a bottom-right in-app status popup. Keep it discoverable rather than moving it solely into Settings to satisfy P12 or moving the popup solely to match the default toast position.
-- **Fitted connected topology:** Joseph requested every selected node visible without map scrolling and accepted the v1.17.3 connected branch style. Preserve that baseline; fix long values, keyboard access, non-color state and actual density defects rather than restoring old radial graphics or repeatedly redesigning the map.
-- **Display-only Wallboard:** Joseph explicitly asked to remove the visible top toolbar. Keep the canvas full-window, Escape/F11 exit, keyboard shortcuts and host context actions. Do not restore the toolbar or a Show/Hide controls toggle.
-- **Staged Settings:** retain Save changes, Ctrl+S and save/discard/cancel protection for the grouped monitoring/preference form. This is intentional rather than an automatic demand to convert all settings to immediate application. Persistence failures must not be reported as saved.
-- **Focused Windows distribution:** keep the existing Velopack installer/portable/update-feed integration. Additional package formats and asset renaming require a concrete distribution need and compatibility review; the generic format list is not a mandate to add every format.
-- **Iterative publication:** Joseph explicitly requires an updater-accessible release after each passing implementation build. Preserve that workflow while hardening it. Iteration authorization does not mean final human acceptance is complete; record tester/version/package/OS evidence for the maintenance candidate.
+From the standards' defaults, on purpose. Don't "fix" these.
+
+- **Native Windows type and chrome:** Segoe UI and Consolas, native window chrome, opaque surfaces. Quiet Precision allows the system UI font for native apps (B7); Geist isn't bundled.
+- **Permanent update action:** Joseph asked for Check for updates in the sidebar and the bottom-right update popup. Keep both rather than moving them into Settings.
+- **Fitted connected topology:** every selected host is visible on the map without scrolling, in the accepted connected branch style. Fix density, long values, keyboard access and non-color state; don't bring back the radial graphics or redesign the map.
+- **Display-only Wallboard:** no visible toolbar and no Show/Hide controls toggle. Full window, Escape/F11 exit, keyboard shortcuts and host context actions stay.
+- **Staged Settings:** Save changes, Ctrl+S and save/discard/cancel protection stay for the grouped settings form. Persistence failures are never reported as saved.
+- **Focused Windows distribution:** the Velopack installer, portable ZIP and update feed keep their current names (`PingWatchdog-win-Setup.exe`, `PingWatchdog-win-Portable.zip`, feed files), because the updater and existing installs depend on them. No MSI or extra formats without a concrete need.
+- **Push-to-main publication:** passing pushes to `main` publish a release (with a version-uniqueness guard) instead of tag-triggered releases, so Joseph can update from inside the app after every build.
+- **Proprietary license:** `LICENSE` is proprietary by Joseph's choice. Final confirmation is on his list; never relicense.
