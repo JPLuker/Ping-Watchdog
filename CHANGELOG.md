@@ -2,6 +2,10 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## 1.19.31
+
+- No visible changes. The code is split into smaller files by feature, with no change in behavior.
+
 ## 1.19.30
 
 - Checkboxes and their labels have a larger click target.

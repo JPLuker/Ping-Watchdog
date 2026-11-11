@@ -32,6 +32,9 @@ Standards pass, released as **1.19.29** (features and look) and **1.19.30** (cod
 
 - **1.19.30:** `Program.cs` is now `Program`, `Models`, `HostDialogs`, `MainForm` and `MainForm.*.cs` feature partials (Sites, Organization, Monitoring, History, WallboardBridge, SettingsBridge, Updates, PingLog, LegacyGridMenu, SelfTests, UiSmokeTest). `WallboardCanvas.cs` split from `WallboardForm.cs`. `DesignChecks.cs` runs in the UI smoke test. The smoke test also renders `page-map-*` / `page-list-*` (example network, monitoring) used for `docs/` and README screenshots. Landing page CSS uses the Quiet Precision tokens.
 
+- **1.19.31:** `MainForm.HostGrid.cs`, `WallboardForm.Operations.cs`, `WallboardCanvas.RadialTopology.cs`, `SettingsForm.Pages.cs`, `SettingsForm.Tests.cs` split out; no behavior change.
+- **Linux (branch `work/linux-qp`):** `Shared/Presentation.QuietPrecision(dark)`, `Theme.Use(dark)` in `linux/.../Ui.cs` (called from `App.OnFrameworkInitializationCompleted`, `WATCHDOG_THEME=dark|light` forces one), `Theme.SetPrimary`, all hex colors replaced by roles, 13px floor in `Theme.Label`. `validate-linux.yml` prints x11@1x captures to its log.
+
 **Claude:** see ROADMAP.md → Claude's list.
 
 **Joseph:** the checks in TESTING.md, and the questions in ROADMAP.md → Joseph's list.

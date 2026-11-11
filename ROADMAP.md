@@ -20,17 +20,18 @@ Ordered by who can do the work: Claude's list first, then Joseph's. Ideas go her
    - [x] Landing page in Quiet Precision with new screenshots (`docs/`)
    - [x] Release notes and README screenshots for the new look
    - [x] Measured design checks in the UI smoke test (one primary, 24px targets, 12px floor, label contrast)
-2. Split `WallboardCanvas.cs`, `WallboardForm.cs` and `MainForm.cs` below 800 lines as they're touched.
+   - [x] Every Windows source file under 800 lines (1.19.31)
+2. Linux beta in Quiet Precision (`work/linux-qp`): palette, light/dark, font floor and copy done; layout parity with Windows (connected map, Map/List workspace) next.
    - [x] Dark scrollbars on tables whose scrollbars are created after theming
 
 ## Joseph's list
 
 Each answerable in a word. Recommendation first.
 
-1. **Linux beta:** move it to Quiet Precision too? Recommended: yes, after Windows is accepted, so both look the same.
-2. **License:** keep the current proprietary license for 1.20.0? Recommended: yes (it's your existing choice).
-3. **Private vulnerability reporting:** turn it on in the repo's Security settings (only you can). Recommended: yes.
-4. **1.20.0:** call it when the acceptance checks below pass on your machines.
+1. **Private vulnerability reporting:** turn it on in the repo's Security settings (you said you will).
+2. **1.20.0:** call it when the acceptance checks below pass on your machines.
+
+Answered 2026-11-11: Linux moves to Quiet Precision; the proprietary license stays (DECISIONS.md).
 
 ## Acceptance before 1.20.0 (needs a person on real hardware)
 

@@ -4,6 +4,7 @@ Joseph's decisions for Ping Watchdog, in his words where they were recorded, new
 
 | Date | Decision | His words / source |
 |---|---|---|
+| 2026-11-11 | The Linux beta moves to Quiet Precision too. The proprietary license stays for 1.20.0. Joseph turns on private vulnerability reporting himself. | "Yes to what you can do. I will turn on the private things" (answering: Linux to Quiet Precision, keep the license, enable private reporting) |
 | 2026-11-11 | Ping Watchdog is the test project for the new standards (InternalDesignGuidelines v2.0). Use the Quiet Precision visual style and redo anything the standards recommend, keeping all current functionality. | "use ping watchdog as the test for the new standards, compare the current product, look at all standards and do a complete build to make it a finished product" · "use the new visual style, redo literally anything that the standards recommended as long as you maintain the functionality of the app" |
 | 2026-11-11 | Agents close fixed issues themselves, with a closing message carrying the version and an Eastern timestamp. | "once it's fixed it should be marked as complete - worst case scenario it will be reopened" (WORKFLOW.md 1.1) |
 | 2026-11-11 | The map always shows whole IP addresses. | #41: "Shortening ips doesn't help anything" |

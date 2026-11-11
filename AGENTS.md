@@ -42,4 +42,4 @@ From the standards' defaults, on purpose. Don't "fix" these.
 - **Staged Settings:** Save changes, Ctrl+S and save/discard/cancel protection stay for the grouped settings form. Persistence failures are never reported as saved.
 - **Focused Windows distribution:** the Velopack installer, portable ZIP and update feed keep their current names (`PingWatchdog-win-Setup.exe`, `PingWatchdog-win-Portable.zip`, feed files), because the updater and existing installs depend on them. No MSI or extra formats without a concrete need.
 - **Push-to-main publication:** passing pushes to `main` publish a release (with a version-uniqueness guard) instead of tag-triggered releases, so Joseph can update from inside the app after every build.
-- **Proprietary license:** `LICENSE` is proprietary by Joseph's choice. Final confirmation is on his list; never relicense.
+- **Proprietary license:** `LICENSE` is proprietary by Joseph's choice, confirmed for 1.20.0 on 2026-11-11. Never relicense.

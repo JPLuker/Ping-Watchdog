@@ -32,6 +32,10 @@ The core and X11 suites pass at all three scales. Native Wayland windows and ope
 
 Automated checks are release gates. Physical GNOME/KDE tray/notification rendering and mixed-DPI multi-monitor moves still need real desktop acceptance testing. Those checks continue with Phase 5; headless CI does not certify them. Native window chrome and system-font rendering can differ from Windows.
 
+## Quiet Precision (2026-11-11)
+
+Joseph: the Linux beta moves to Quiet Precision too. Done: shared palette with light and dark following the desktop, roles instead of hard-coded colors, 8px buttons and 12px cards, ink primary, 13px text floor, sentence case. Next: layout parity with Windows (connected map instead of the radial topology, Map/List workspace, Settings categories).
+
 ## Phase 5: packaging/runtime verification
 
 Launch the produced AppImage in clean environments, verify notifications and tray behavior on common desktops, test an updater round trip, and replace CI source rewriting with an explicit Linux update-channel setting.
