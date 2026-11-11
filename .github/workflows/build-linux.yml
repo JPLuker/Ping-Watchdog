@@ -23,10 +23,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
@@ -147,7 +147,7 @@ jobs:
           timeout 120s dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c 'openbox >/tmp/watchdog-packaged-openbox.log 2>&1 & ./squashfs-root/AppRun --ui-regression-test'
 
       - name: Upload Linux build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PingWatchdog-Linux-${{ env.WATCHDOG_VERSION }}
           path: Releases-linux/*
