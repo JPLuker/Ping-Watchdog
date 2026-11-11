@@ -426,6 +426,51 @@ public sealed partial class MainForm
                 Capture(form._settingsForm!, "settings");
                 form._settingsForm!.Close();
 
+                // Landing-page and README captures: an example network with replies, shown as monitoring.
+                // The token is already canceled so no real pings run; the states are set directly.
+                using (var page = new MainForm(false, true, false))
+                {
+                    page._minimizeToTray = false;
+                    string[] kinds = { "Laptop", "Desktop", "Tablet", "Mini PC", "Server" }, trees = { "Ash", "Birch", "Cedar", "Maple", "Pine" };
+                    page.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, ShowCommandView = true,
+                        Sites = Enumerable.Range(1, 5).Select(site => new SiteDefinition {
+                            Name = "Branch " + site,
+                            Hosts = Enumerable.Range(1, 5).Select(host => $"172.20.{site}.{20 + host}").ToList(),
+                            Labels = Enumerable.Range(1, 5).ToDictionary(host => $"172.20.{site}.{20 + host}", host => kinds[host - 1] + " " + trees[(site + host) % 5])
+                        }).ToList() });
+                    page.MaximumSize = new Size(1920, 1080);
+                    page.Show(form);
+                    page._cts = new CancellationTokenSource();
+                    page._cts.Cancel();
+                    var replyTime = DateTime.Now;
+                    foreach (var site in page._sites)
+                        foreach (var address in site.Hosts)
+                        {
+                            int ms = 2 + (address.GetHashCode() & 7);
+                            page._hosts[BuildHostKey(site.Name, address)] = new HostMonitor(site.Name, address, page.GetNickname(site.Name, address))
+                                { State = HostState.Online, LastRoundTripMs = ms, LastReply = replyTime, ConsecutiveSuccesses = 5 };
+                            page.AppendCommandLog(site.Name, address, true, $"Reply from {address}: time={ms}ms TTL=128");
+                        }
+                    page.UpdateActionState();
+                    foreach (var appearance in new[] { AppearanceMode.Dark, AppearanceMode.Light })
+                    {
+                        AppTheme.SetMode(appearance);
+                        page.ClientSize = new Size(1040, 700);
+                        page.ApplyResponsiveLayout();
+                        page.SetWorkspaceView(false);
+                        page.RefreshGrid();
+                        await Task.Delay(150);
+                        Capture(page, "page-map-" + appearance);
+                        page.SetWorkspaceView(true);
+                        page.RefreshGrid();
+                        await Task.Delay(150);
+                        Capture(page, "page-list-" + appearance);
+                    }
+                    page._cts.Dispose();
+                    page._cts = null;
+                    page.Close();
+                }
+
                 using (var review = new MainForm(false, true, false))
                 {
                     review._minimizeToTray = false;
