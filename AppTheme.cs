@@ -118,15 +118,30 @@ internal static class AppTheme
     [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
     private static extern int SetWindowTheme(IntPtr hwnd, string? subAppName, string? subIdList);
 
+    private static readonly HashSet<Control> PendingScrollbarTheme = new();
+
+    // Scrollbars follow the theme. Controls without a window yet (DataGridView creates its scrollbars late)
+    // are themed when their handle appears, so dark mode never shows a light scrollbar.
     private static void ThemeScrollbars(Control control)
     {
-        if (!control.IsHandleCreated) return;
+        if (!control.IsHandleCreated)
+        {
+            if (PendingScrollbarTheme.Add(control))
+            {
+                control.HandleCreated += (_, _) => { PendingScrollbarTheme.Remove(control); ThemeScrollbars(control); };
+                control.Disposed += (_, _) => PendingScrollbarTheme.Remove(control);
+            }
+            return;
+        }
         try
         {
             string? theme = SystemInformation.HighContrast ? null : Palette.Dark ? "DarkMode_Explorer" : "Explorer";
             SetWindowTheme(control.Handle, theme, null);
             foreach (var bar in control.Controls.OfType<ScrollBar>())
+            {
                 if (bar.IsHandleCreated) SetWindowTheme(bar.Handle, theme, null);
+                else ThemeScrollbars(bar);
+            }
         }
         catch (DllNotFoundException) { }
         catch (EntryPointNotFoundException) { }

@@ -21,7 +21,7 @@ Ordered by who can do the work: Claude's list first, then Joseph's. Ideas go her
    - [x] Release notes and README screenshots for the new look
    - [x] Measured design checks in the UI smoke test (one primary, 24px targets, 12px floor, label contrast)
 2. Split `WallboardCanvas.cs`, `WallboardForm.cs` and `MainForm.cs` below 800 lines as they're touched.
-3. Dark scrollbars on the Outage history table (native scrollbar stays light in dark mode).
+   - [x] Dark scrollbars on tables whose scrollbars are created after theming
 
 ## Joseph's list
 

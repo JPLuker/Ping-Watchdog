@@ -5,6 +5,7 @@ Selected changes in recent Windows releases. [Full release history](https://gith
 ## 1.19.30
 
 - Checkboxes and their labels have a larger click target.
+- Dark mode scrollbars on tables and Settings are dark too.
 - Landing page and README use the new look and fresh screenshots.
 - Internal cleanup: the code is split into smaller files by feature, with measured design checks in the automated tests. Nothing else changes.
 
