@@ -2,6 +2,11 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## [1.19.32] — 2026-11-12
+### Fixed
+- Fit full site names, host labels and addresses before scaling crowded maps (#42, #43).
+- Keep host selection and context-menu targets aligned when the map scales.
+
 ## 1.19.30
 
 - Checkboxes and their labels have a larger click target.

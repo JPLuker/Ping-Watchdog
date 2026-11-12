@@ -1,3 +1,4 @@
+// Fits complete topology captions, then scales the connected map and its hit regions together.
 namespace PingWatchdog;
 
 internal sealed partial class WallboardCanvas
@@ -29,14 +30,46 @@ internal sealed partial class WallboardCanvas
 
     private void DrawFittedTopology(Graphics g, WallboardSnapshot snapshot, Rectangle bounds)
     {
+        // Keep the normal layout when it fits. For crowded maps, enlarge the logical
+        // canvas until every caption fits, then scale the entire connected map to the viewport.
+        float zoom = 1;
+        Rectangle logical = bounds;
+        for (int attempt = 0; attempt < 64 && !DrawTopologyCaptions(g, snapshot, logical, measureOnly: true); attempt++)
+        {
+            zoom *= .9f;
+            logical = new Rectangle(0, 0, (int)Math.Ceiling(bounds.Width / zoom), (int)Math.Ceiling(bounds.Height / zoom));
+        }
+        TopologyCaptionScale = zoom;
+        var saved = g.Save();
+        try
+        {
+            g.ScaleTransform(zoom, zoom);
+            AllTopologyTextFits = DrawTopologyCaptions(g, snapshot, logical, measureOnly: false);
+        }
+        finally { g.Restore(saved); }
+        Rectangle ScaleBounds(Rectangle r) => Rectangle.FromLTRB(
+            (int)Math.Floor(r.Left * zoom), (int)Math.Floor(r.Top * zoom),
+            (int)Math.Floor(r.Right * zoom), (int)Math.Floor(r.Bottom * zoom));
+        for (int i = 0; i < _hostHitRegions.Count; i++)
+            _hostHitRegions[i] = (ScaleBounds(_hostHitRegions[i].Bounds), _hostHitRegions[i].Host);
+        for (int i = 0; i < _hostCaptionRegions.Count; i++)
+            _hostCaptionRegions[i] = (ScaleBounds(_hostCaptionRegions[i].Bounds), _hostCaptionRegions[i].Host);
+        for (int i = 0; i < _siteHeadingRegions.Count; i++)
+            _siteHeadingRegions[i] = (ScaleBounds(_siteHeadingRegions[i].Bounds), _siteHeadingRegions[i].Site);
+    }
+
+    private bool DrawTopologyCaptions(Graphics g, WallboardSnapshot snapshot, Rectangle bounds, bool measureOnly)
+    {
         // FOCAL: every selected host. Reflow the groups and nodes instead of creating a scrollable canvas.
         _drawnAddresses.Clear();
+        DrawnHostLabelCount = 0;
         var sites = snapshot.Sites.Where(site => site.Hosts.Count > 0).ToList();
         if (sites.Count == 0)
         {
+            if (measureOnly) return true;
             using var empty = new SolidBrush(WallboardStyle.Muted);
             g.DrawString("No hosts", _sectionFont, empty, 16, 16);
-            return;
+            return true;
         }
         float scale = DeviceDpi / 96f, gap = 16 * scale, padding = 12 * scale;
         float line = _hostIpFont.GetHeight(g);
@@ -50,12 +83,14 @@ internal sealed partial class WallboardCanvas
         int bestGroups = 1, relaxedGroups = 1, fullGroups = 1;
         double bestScore = -1, relaxedScore = -1, fullScore = -1;
         float bestGutter = rowGutter, relaxedGutter = rowGutter, fullGutter = rowGutter;
+        float[] bestHeights = Array.Empty<float>(), relaxedHeights = Array.Empty<float>(), fullHeights = Array.Empty<float>();
         int[] bestColumns = new int[sites.Count], relaxedColumns = new int[sites.Count], fullColumns = new int[sites.Count];
         // Site names count too, so the layout trades a little host room for readable names.
         var nameWidths = sites.Select(site => g.MeasureString(site.Name, _siteFont, int.MaxValue, StringFormat.GenericTypographic).Width + 4 * scale).ToArray();
         var addressWidths = sites.Select(site => site.Hosts.Select(host => g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max() + 40 * scale).ToArray();
         // What a cell really needs for a whole address: the text plus the marker lead-in (see tx/tw below).
-        var addressNeeds = addressWidths.Select(width => width - 40 * scale + 28 * scale).ToArray();
+        var addressNeeds = sites.Select((site, i) => Math.Max(addressWidths[i] - 40 * scale,
+            site.Hosts.Select(host => g.MeasureString(host.Label ?? "", _hostLabelFont, int.MaxValue, StringFormat.GenericTypographic).Width).Max()) + 30 * scale).ToArray();
         // Keep the accepted square-ish search; widen it only when captions no longer fit.
         for (int groupColumns = 1; groupColumns <= sites.Count; groupColumns++)
         {
@@ -63,14 +98,25 @@ internal sealed partial class WallboardCanvas
             int groupRows = (int)Math.Ceiling(sites.Count / (double)groupColumns);
             float gutter = TopologyRowGutter(content.Height, groupRows, scale);
             float groupWidth = (content.Width - gap * (groupColumns - 1)) / groupColumns;
-            float groupHeight = (content.Height - gutter * groupRows) / groupRows;
-            if (groupWidth <= 1 || groupHeight <= 1) continue;
-            bool readable = groupWidth >= 80 * scale && groupHeight >= minimumBlock;
+            if (groupWidth <= padding * 2) continue;
+            // Uneven sites need uneven row heights: one busy site must not make every
+            // other row reserve the same empty space and shrink all of the text.
+            var rowNeeds = new float[groupRows];
+            for (int i = 0; i < sites.Count; i++)
+            {
+                int maxColumns = Math.Clamp((int)((groupWidth - padding * 2) / addressNeeds[i]), 1, sites[i].Hosts.Count);
+                int hostRows = (int)Math.Ceiling(sites[i].Hosts.Count / (double)maxColumns);
+                rowNeeds[i / groupColumns] = Math.Max(rowNeeds[i / groupColumns], heading + padding + hostRows * (line * 2 + 8 * scale));
+            }
+            float sparePerRow = (content.Height - gutter * groupRows - rowNeeds.Sum()) / groupRows;
+            var rowHeights = rowNeeds.Select(height => height + sparePerRow).ToArray();
+            bool readable = groupWidth >= 80 * scale && rowHeights.All(height => height >= minimumBlock);
             double score = double.MaxValue;
             bool addressesFit = true;
             var columns = new int[sites.Count];
             for (int i = 0; i < sites.Count; i++)
             {
+                float groupHeight = rowHeights[i / groupColumns];
                 double nodeScore = -1;
                 bool nodeWidthFits = false;
                 float addressWidth = addressWidths[i];
@@ -80,38 +126,40 @@ internal sealed partial class WallboardCanvas
                     double widthFit = (groupWidth - padding * 2) / c / addressWidth;
                     double fit = Math.Min(widthFit, (groupHeight - heading - padding) / rows / (line * 2 + 8 * scale));
                     // A column count that shows whole addresses always beats one that would overflow them.
-                    bool widthFits = (groupWidth - padding * 2) / c >= addressNeeds[i];
+                    bool widthFits = (groupWidth - padding * 2) / c >= addressNeeds[i]
+                        && (groupHeight - heading - padding) / rows >= line * 2 + 8 * scale;
                     if ((widthFits && !nodeWidthFits) || (widthFits == nodeWidthFits && fit > nodeScore))
                     { nodeScore = fit; nodeWidthFits = widthFits; columns[i] = c; }
                 }
-                addressesFit &= nodeWidthFits;
+                addressesFit &= nodeWidthFits && groupWidth - padding * 3 >= nameWidths[i];
                 double nameFit = (groupWidth - padding * 3) / nameWidths[i];
                 score = Math.Min(score, Math.Min(nodeScore, nameFit));
             }
-            if (readable && addressesFit && score > fullScore) { fullScore = score; fullGroups = groupColumns; fullColumns = columns; fullGutter = gutter; }
-            if (readable && score > bestScore) { bestScore = score; bestGroups = groupColumns; bestColumns = columns; bestGutter = gutter; }
-            if (score > relaxedScore) { relaxedScore = score; relaxedGroups = groupColumns; relaxedColumns = columns; relaxedGutter = gutter; }
+            if (readable && addressesFit && score > fullScore) { fullScore = score; fullGroups = groupColumns; fullColumns = columns; fullGutter = gutter; fullHeights = rowHeights; }
+            if (readable && score > bestScore) { bestScore = score; bestGroups = groupColumns; bestColumns = columns; bestGutter = gutter; bestHeights = rowHeights; }
+            if (score > relaxedScore) { relaxedScore = score; relaxedGroups = groupColumns; relaxedColumns = columns; relaxedGutter = gutter; relaxedHeights = rowHeights; }
         }
+        if (measureOnly) return fullScore >= 0;
         if (fullScore >= 0)
         {
             // Whole addresses first: the most readable layout in which every address fits its cell.
-            bestGroups = fullGroups; bestColumns = fullColumns; bestGutter = fullGutter;
+            bestGroups = fullGroups; bestColumns = fullColumns; bestGutter = fullGutter; bestHeights = fullHeights;
         }
         else if (bestScore < 0)
         {
             // Too many sites for this window to label everything: keep every marker separate.
-            bestGroups = relaxedGroups; bestColumns = relaxedColumns; bestGutter = relaxedGutter;
+            bestGroups = relaxedGroups; bestColumns = relaxedColumns; bestGutter = relaxedGutter; bestHeights = relaxedHeights;
         }
         rowGutter = bestGutter;
         int rowsOfGroups = (int)Math.Ceiling(sites.Count / (double)bestGroups);
         float blockWidth = (content.Width - gap * (bestGroups - 1)) / bestGroups;
-        float blockHeight = (content.Height - rowGutter * rowsOfGroups) / rowsOfGroups;
-        // When a block cannot hold a heading and a readable row, give its hosts the whole block.
-        bool showHeadings = blockHeight >= minimumBlock;
-        float siteHeading = showHeadings ? heading : 6 * scale, blockPadding = showHeadings ? padding : 2 * scale;
+        var rowTops = new float[rowsOfGroups];
+        for (int row = 1; row < rowsOfGroups; row++)
+            rowTops[row] = rowTops[row - 1] + bestHeights[row - 1] + rowGutter;
+        float siteHeading = heading, blockPadding = padding;
         using var text = new SolidBrush(WallboardStyle.Text);
         using var muted = new SolidBrush(WallboardStyle.Muted);
-        using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        using var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.None };
         // Addresses are drawn whole, never trimmed or clipped.
         using var addressFormat = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip, Trimming = StringTrimming.None };
         using var trunk = new Pen(Color.FromArgb(110, WallboardStyle.Accent), Math.Max(1, scale));
@@ -119,13 +167,13 @@ internal sealed partial class WallboardCanvas
         using var hubBrush = new SolidBrush(WallboardStyle.Accent);
         g.FillEllipse(hubBrush, trunkX - 5 * scale, hubY - 5 * scale, 10 * scale, 10 * scale);
         g.DrawString("Monitor", _siteFont, text, trunkX + 14 * scale, hubY - line / 2);
-        float lastBusY = content.Y + (rowsOfGroups - 1) * (blockHeight + rowGutter) + 4 * scale;
+        float lastBusY = content.Y + rowTops[^1] + 4 * scale;
         g.DrawLine(trunk, trunkX, hubY + 5 * scale, trunkX, lastBusY);
         // Edges occupy gutters, never the heading or address rectangles.
         for (int row = 0; row < rowsOfGroups; row++)
         {
             int count = Math.Min(bestGroups, sites.Count - row * bestGroups);
-            float busY = content.Y + row * (blockHeight + rowGutter) + 4 * scale;
+            float busY = content.Y + rowTops[row] + 4 * scale;
             float lastRootX = content.X + (count - 1) * (blockWidth + gap) + padding + 4 * scale;
             g.DrawLine(trunk, trunkX, busY, lastRootX, busY);
             for (int column = 0; column < count; column++)
@@ -137,7 +185,8 @@ internal sealed partial class WallboardCanvas
         for (int i = 0; i < sites.Count; i++)
         {
             var site = sites[i];
-            float x = content.X + i % bestGroups * (blockWidth + gap), y = content.Y + rowGutter + i / bestGroups * (blockHeight + rowGutter);
+            float x = content.X + i % bestGroups * (blockWidth + gap), y = content.Y + rowGutter + rowTops[i / bestGroups];
+            float blockHeight = bestHeights[i / bestGroups];
             int columns = Math.Max(1, bestColumns[i]);
             int hostRows = (int)Math.Ceiling(site.Hosts.Count / (double)columns);
             float cellWidth = Math.Max(1, (blockWidth - padding * 2) / columns);
@@ -147,7 +196,7 @@ internal sealed partial class WallboardCanvas
             using var siteBrush = new SolidBrush(StateColor(AggregateSiteState(site), 255));
             g.FillEllipse(siteBrush, rootX - 4 * scale, rootY - 4 * scale, 8 * scale, 8 * scale);
             var headingRect = new RectangleF(rootX + 12 * scale, y + 2 * scale, Math.Max(1, blockWidth - padding * 3), siteHeading - 4 * scale);
-            if (showHeadings && headingRect.Width >= 24 * scale)
+            if (headingRect.Width >= 24 * scale)
             {
                 g.DrawString(site.Name, _siteFont, text, headingRect, format);
                 _siteHeadingRegions.Add((Rectangle.Round(headingRect), site.Name));
@@ -180,7 +229,10 @@ internal sealed partial class WallboardCanvas
                 float tx = left + 24 * scale, tw = Math.Max(1, cellWidth - 28 * scale);
                 bool twoLines = cellHeight >= line * 2 + 8 * scale && !string.IsNullOrWhiteSpace(host.Label);
                 if (twoLines)
+                {
                     g.DrawString(host.Label, _hostLabelFont, text, new RectangleF(tx, cy - line, tw, line + 2), format);
+                    DrawnHostLabelCount++;
+                }
                 if (cellHeight >= line)
                 {
                     float addressWidth = g.MeasureString(host.Address, _hostIpFont, int.MaxValue, StringFormat.GenericTypographic).Width + 2;
@@ -190,5 +242,6 @@ internal sealed partial class WallboardCanvas
                 }
             }
         }
+        return fullScore >= 0;
     }
 }
