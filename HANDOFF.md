@@ -15,7 +15,7 @@ Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site
 ## Testing and final release prep (2026-11-12)
 
 Joseph narrowed active work to reported issues and final-release blockers. Defer unrelated styling, refactors and features.
-Candidate **1.19.31** addresses #42/#43 in `AdaptiveTopology.cs`: measure complete site/host captions, reflow at native size, and scale the connected map only when necessary. Hit regions use the same transform. Tests exercise uneven groups, outage sidebars and repeated window resizing; smoke captures include long names in both themes. Windows validation and screenshot review are required before merging/publishing. Real-device acceptance remains in TESTING.md.
+Candidate **1.19.32** addresses #42/#43 in `AdaptiveTopology.cs`: measure complete site/host captions, reflow at native size, and scale the connected map only when necessary. Hit regions use the same transform. Tests exercise uneven groups, outage sidebars and repeated window resizing; smoke captures include long names in both themes. Windows validation and screenshot review are required before merging/publishing. Real-device acceptance remains in TESTING.md.
 
 ## Where we are (2026-11-11)
 

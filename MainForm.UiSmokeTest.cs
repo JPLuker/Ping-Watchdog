@@ -618,7 +618,8 @@ public sealed partial class MainForm
                     using var bitmap = new Bitmap(labels.Width, labels.Height);
                     labels.DrawToBitmap(bitmap, labels.ClientRectangle);
                     bitmap.Save(Path.Combine(output, "topology-full-labels-" + appearance + ".png"));
-                    Check(labels.DrawnAddresses.Count == 35 && labels.DrawnSiteHeadings.Count == 6,
+                    Check(labels.DrawnAddresses.Count == 35 && labels.DrawnSiteHeadings.Count == 6
+                        && labels.DrawnHostLabelCount == 35 && labels.AllTopologyTextFits,
                         "#42/#43: full topology captions disappeared.");
                 }
 

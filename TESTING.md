@@ -2,6 +2,13 @@
 
 Checks for this build only (at most 15). Each is something CI can't prove: it needs your machine.
 
+**Build:** candidate 1.19.32. Use **Check for updates** after publication.
+
+1. Map and Wallboard: full site names, labels and IPs stay visible while resizing, with multiple endpoints and during outages.
+2. Right-click/select a host after the map scales. Confirm the menu belongs to that host.
+
+## Earlier acceptance checks still pending
+
 **Build:** the next release after 1.19.28 (the standards pass). Use **Check for updates** in the sidebar; it installs over your current copy.
 
 1. The update installs with no separate window or OK button, and Ping Watchdog reopens on the new version.

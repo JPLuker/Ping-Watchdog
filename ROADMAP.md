@@ -9,7 +9,7 @@ Ordered by who can do the work: Claude's list first, then Joseph's. Ideas go her
 ## Active scope: testing and final release prep (2026-11-12)
 
 Reported GitHub issues and release blockers take priority. The remaining general standards/refactor work below is deferred unless it fixes a reported issue.
-- Candidate 1.19.31: complete topology captions and scaling for #42/#43. Validate on Windows before release.
+- Candidate 1.19.32: complete topology captions and scaling for #42/#43. Validate on Windows before release.
 
 ## Claude's list
 

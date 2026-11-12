@@ -5,6 +5,10 @@ namespace PingWatchdog;
 // Draws the Wallboard and the main window's Map: header, connected topology, events and ping log.
 internal sealed partial class WallboardCanvas : Control
 {
+    internal float TopologyCaptionScale { get; private set; } = 1;
+    internal int DrawnHostLabelCount { get; private set; }
+    internal bool AllTopologyTextFits { get; private set; }
+
     private readonly List<Rectangle> _captionObstacles = new();
     private int _hiddenCaptions;
     private readonly Bitmap _brandBitmap = BrandAssets.LoadLogo();
