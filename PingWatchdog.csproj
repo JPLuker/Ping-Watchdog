@@ -32,7 +32,7 @@
     <EmbeddedResource Include="Assets/WatchdogIcon.ico" LogicalName="PingWatchdog.Brand.Icon" />
     <Compile Remove="linux/**/*.cs" />
     <None Remove="linux/**" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 </Project>
