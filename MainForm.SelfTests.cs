@@ -335,6 +335,26 @@ public sealed partial class MainForm
             Expect(!nameLabel.UseMnemonic, "Themed labels still treat & as a shortcut marker.");
         }
 
+        // #43: repeated resizes and an outage sidebar must never drop host addresses.
+        foreach (bool embedded in new[] { true, false })
+        using (var crowded = new WallboardCanvas { ShowCli = false, Embedded = embedded,
+            Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                Enumerable.Range(1, 8).Select(site => new WallboardSiteSnapshot($"Regional office {site} - service desk",
+                    Enumerable.Range(1, site == 1 ? 40 : 4).Select(host => new WallboardHostSnapshot(
+                        $"Regional office {site} - service desk", $"172.20.{site}.{host}", $"Desktop workstation {host}",
+                        host == 1 ? HostState.Offline : HostState.Online, 1, null)).ToArray())).ToArray(),
+                Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) })
+        foreach (var viewport in new[] { new Size(740, 345), new Size(1280, 720), new Size(640, 300), new Size(740, 345) })
+        {
+            crowded.Size = viewport;
+            using var bitmap = new Bitmap(viewport.Width, viewport.Height);
+            crowded.DrawToBitmap(bitmap, new Rectangle(Point.Empty, viewport));
+            Expect(crowded.DrawnAddresses.Count == 68,
+                $"#43: {embedded}/{viewport} drew {crowded.DrawnAddresses.Count} of 68 addresses.");
+            Expect(crowded.DrawnSiteHeadings.Count == 8, "#42: a crowded map dropped site headings.");
+            Expect(crowded.AllHostNodesFit && !crowded.TopologyRegionsOverlap(), "#43: scaled hit regions overlap or leave the viewport.");
+        }
+
         // The accepted map look: five branches of five hosts sit in one row at the default window size, labels shown.
         using (var accepted = new WallboardCanvas { Size = new Size(740, 345), ShowCli = false, Embedded = true,
             Snapshot = new WallboardSnapshot(true, DateTime.Now, Enumerable.Range(1, 5).Select(site => new WallboardSiteSnapshot($"Branch {site}",

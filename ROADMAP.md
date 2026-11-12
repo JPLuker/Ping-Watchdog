@@ -6,6 +6,11 @@ Windows. Linux is a separate beta track ([linux/ROADMAP.md](linux/ROADMAP.md)).
 
 Ordered by who can do the work: Claude's list first, then Joseph's. Ideas go here; bugs get fixed right away. Things Joseph said no to are in [NO_LIST.md](NO_LIST.md).
 
+## Active scope: testing and final release prep (2026-11-12)
+
+Reported GitHub issues and release blockers take priority. The remaining general standards/refactor work below is deferred unless it fixes a reported issue.
+- Candidate 1.19.31: complete topology captions and scaling for #42/#43. Validate on Windows before release.
+
 ## Claude's list
 
 1. Standards pass (1.19.29 and 1.19.30):

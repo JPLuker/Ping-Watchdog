@@ -604,6 +604,24 @@ public sealed partial class MainForm
                     Check(!canvas.CaptionsOverlap(), "Dense Wallboard captions overlap.");
                 }
 
+                // #42/#43: capture uneven groups, full names and addresses in both themes.
+                foreach (var appearance in new[] { AppearanceMode.Light, AppearanceMode.Dark })
+                {
+                    AppTheme.SetMode(appearance);
+                    using var labels = new WallboardCanvas { Size = new Size(1000, 560), Embedded = true, ShowCli = false,
+                        Snapshot = new WallboardSnapshot(true, DateTime.Now,
+                            Enumerable.Range(1, 6).Select(site => new WallboardSiteSnapshot($"Regional office {site} - service desk",
+                                Enumerable.Range(1, site == 1 ? 20 : 3).Select(host => new WallboardHostSnapshot(
+                                    $"Regional office {site} - service desk", $"172.20.{site}.{host}", $"Desktop workstation {host}",
+                                    HostState.Online, 1, null)).ToArray())).ToArray(),
+                            Array.Empty<WallboardEventSnapshot>(), Array.Empty<WallboardCommandSnapshot>(), "24 hours", true) };
+                    using var bitmap = new Bitmap(labels.Width, labels.Height);
+                    labels.DrawToBitmap(bitmap, labels.ClientRectangle);
+                    bitmap.Save(Path.Combine(output, "topology-full-labels-" + appearance + ".png"));
+                    Check(labels.DrawnAddresses.Count == 35 && labels.DrawnSiteHeadings.Count == 6,
+                        "#42/#43: full topology captions disappeared.");
+                }
+
                 var configBeforeCloseTest = form.BuildConfig(captureEditor: false);
                 form.ApplyConfig(new WatchdogConfig { AutoCheckUpdates = false, Sites = new()
                 {
