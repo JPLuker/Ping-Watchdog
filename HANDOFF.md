@@ -12,10 +12,15 @@ Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site
 - Proof before claims: tests plus captures you've looked at. The validation workflow prints captures to its log (`REVIEW_IMAGE_BEGIN…`); artifacts aren't reachable from the agent sandbox.
 - Proprietary license stays. Windows and Linux stay separate.
 
-## Testing and final release prep (2026-11-12)
+## Maintenance baseline (2026-11-13)
 
-Joseph narrowed active work to reported issues and final-release blockers. Defer unrelated styling, refactors and features.
-Candidate **1.19.32** addresses #42/#43 in `AdaptiveTopology.cs`: measure complete site/host captions, reflow at native size, and scale the connected map only when necessary. Hit regions use the same transform. Tests exercise uneven groups, outage sidebars and repeated window resizing; smoke captures include long names in both themes. Windows validation and screenshot review are required before merging/publishing. Real-device acceptance remains in TESTING.md.
+**Windows v1.19.32 is accepted and in maintenance mode.** Joseph confirmed the crowded-map, resize/Wallboard and host-action checks, then said: "Honestly I used it all day yesterday on this build I think we are good." He authorized finalization with "Okay, let's do it". Keep the tested binaries and tag; no rebuild or version bump for this documentation-only transition. The existing proprietary license is retained.
+
+#42/#43 fixes are in `AdaptiveTopology.cs`: measure complete captions, give busy site rows more height, then scale the map and hit regions together. Validation run 43212934329 passed; the previous renderer failed with 0/68 addresses. Light/dark captures were reviewed. Release run 43213403550 succeeded, and all seven release assets were verified present. Source: `4c0cd57ad32976fe30775571877d5100e3d9dd0a`.
+
+Private vulnerability reporting is enabled: the public Security page exposes Report a vulnerability (verified 2026-11-13). No new monitoring features, styling passes or general refactors are planned. Handle new/reopened bugs and security reports. Linux remains separate.
+
+`TESTING.md` records acceptance and its limits. Do not claim fresh-install, every DPI, Narrator or backup/restore device coverage from the general full-day test. Third-party notices remain bundled; no license or third-party contractual terms were changed.
 
 ## Where we are (2026-11-11)
 
@@ -37,6 +42,6 @@ Standards pass, released as **1.19.29** (features and look) and **1.19.30** (cod
 
 - **1.19.30:** `Program.cs` is now `Program`, `Models`, `HostDialogs`, `MainForm` and `MainForm.*.cs` feature partials (Sites, Organization, Monitoring, History, WallboardBridge, SettingsBridge, Updates, PingLog, LegacyGridMenu, SelfTests, UiSmokeTest). `WallboardCanvas.cs` split from `WallboardForm.cs`. `DesignChecks.cs` runs in the UI smoke test. The smoke test also renders `page-map-*` / `page-list-*` (example network, monitoring) used for `docs/` and README screenshots. Landing page CSS uses the Quiet Precision tokens.
 
-**Claude:** see ROADMAP.md → Claude's list.
+**Next:** respond to new/reopened issues under SUPPORT.md.
 
-**Joseph:** the checks in TESTING.md, and the questions in ROADMAP.md → Joseph's list.
+**Acceptance record:** TESTING.md.

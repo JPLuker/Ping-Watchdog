@@ -4,6 +4,7 @@ Joseph's decisions for Ping Watchdog, in his words where they were recorded, new
 
 | Date | Decision | His words / source |
 |---|---|---|
+| 2026-11-13 | Accept v1.19.32 daily use and finish release housekeeping; retain the tested build as the Windows maintenance baseline. | "Honestly I used it all day yesterday on this build I think we are good." Then "Okay, let's do it". Version retention is the implementation choice to avoid rebuilding tested binaries. |
 | 2026-11-11 | Ping Watchdog is the test project for the new standards (InternalDesignGuidelines v2.0). Use the Quiet Precision visual style and redo anything the standards recommend, keeping all current functionality. | "use ping watchdog as the test for the new standards, compare the current product, look at all standards and do a complete build to make it a finished product" · "use the new visual style, redo literally anything that the standards recommended as long as you maintain the functionality of the app" |
 | 2026-11-11 | Agents close fixed issues themselves, with a closing message carrying the version and an Eastern timestamp. | "once it's fixed it should be marked as complete - worst case scenario it will be reopened" (WORKFLOW.md 1.1) |
 | 2026-11-11 | The map always shows whole IP addresses. | #41: "Shortening ips doesn't help anything" |

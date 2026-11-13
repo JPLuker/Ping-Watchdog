@@ -1,27 +1,26 @@
-# Testing
+# Testing and acceptance
 
-Checks for this build only (at most 15). Each is something CI can't prove: it needs your machine.
+## Accepted Windows baseline: v1.19.32
 
-**Build:** candidate 1.19.32. Use **Check for updates** after publication.
+Joseph reported on 2026-11-13:
 
-1. Map and Wallboard: full site names, labels and IPs stay visible while resizing, with multiple endpoints and during outages.
-2. Right-click/select a host after the map scales. Confirm the menu belongs to that host.
+- "Yeah looks like all of that is good" after the crowded-site captions, resize/Wallboard and host-action checks.
+- "Honestly I used it all day yesterday on this build I think we are good."
+- "Okay, let's do it" to final release housekeeping.
 
-## Earlier acceptance checks still pending
+This records successful daily use and the focused map checks. Exact Windows version, package type and DPI were not supplied. No additional routine test request is pending.
 
-**Build:** the next release after 1.19.28 (the standards pass). Use **Check for updates** in the sidebar; it installs over your current copy.
+## Automated evidence
 
-1. The update installs with no separate window or OK button, and Ping Watchdog reopens on the new version.
-2. The look: main window, List, Settings and Outage history in Light and Dark. Anything that reads worse than before?
-3. Map: every IP address shows in full, at your usual window size and on the Wallboard.
-4. Add hosts: paste a column of labels into the Label column with Ctrl+V.
-5. Right-click a host → **Edit host…**: change its address. Label, group and priority stay; its old address is gone.
-6. Settings → General → Startup: turn on all three, restart the laptop. Ping Watchdog opens, starts monitoring, and the Wallboard opens on the screen it was on.
-7. If the window ever freezes: a dimmed "Loading" cover appears instead of a frozen screen. Send `Logs\responsiveness.log` from Settings → About → Copy diagnostic info (the path is listed).
-8. Settings → Advanced → **Show version on all screens** puts the version in the bottom-left corner of every window, and it can't be clicked.
+- Windows validation run [43212934329](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43212934329): dependency checks, self-tests and UI smoke tests passed. The old renderer failed the crowded-map regression with 0 of 68 addresses; the fix passed repeated resizing and outage-sidebar checks.
+- Light/dark full-caption, populated map and Wallboard captures were inspected.
+- Release run [43213403550](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43213403550) passed and published v1.19.32.
 
-## Never run on real hardware yet
+## Not independently established by that acceptance
 
-- Start with Windows after a real sign-in, and the Wallboard on a second screen at startup.
-- The loading cover during a real freeze (CI checks the log, not the cover, because the runner has no foreground window).
-- Silent update install end to end (CI tests the version check, not Velopack's install).
+- Fresh installer and portable installations, upgrade from v1.14.81, and data retention in each package mode.
+- Every 100/125/150/200% DPI, mixed-DPI display, high-contrast and screen-reader combination.
+- Real backup/restore interruption, foreign-file deletion protection and physical power-loss recovery.
+- Startup on a second screen after sign-in, loading-cover composition during an actual freeze, and every silent-update failure path.
+
+CI coverage is not device coverage. WinForms DrawToBitmap does not capture every overlapping native window. Retain these limits when reporting support or investigating future issues; do not infer they failed or passed.

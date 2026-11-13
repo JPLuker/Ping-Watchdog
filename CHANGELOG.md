@@ -2,6 +2,11 @@
 
 Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## Maintenance designation — 2026-11-13
+- Accepted v1.19.32 after Joseph's focused map checks and full-day use.
+- Entered Windows maintenance mode; bugs, security and compatibility remain supported.
+- Documentation-only change. The tested binaries, version and license are unchanged.
+
 ## [1.19.32] — 2026-11-12
 ### Fixed
 - Fit full site names, host labels and addresses before scaling crowded maps (#42, #43).

@@ -2,6 +2,8 @@
 
 Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices by site, watch missed replies become outages, and see when a host recovers. A device that blocks ICMP can appear offline even while its services are running.
 
+**Windows is in maintenance mode.** v1.19.32 is the accepted baseline. Bugs, security issues and compatibility fixes remain supported; no new features are planned. Linux remains a separate beta.
+
 ## Download
 
 [Ping Watchdog website](https://jpluker.github.io/Ping-Watchdog/)
