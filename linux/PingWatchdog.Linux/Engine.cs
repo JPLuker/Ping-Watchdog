@@ -1,121 +1,28 @@
+// Monitoring engine: sites, hosts and their options, the ping loops, outage history and Undo.
+// Every edit goes through here so the main window, Wallboard and tray always agree.
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
-using System.Reflection;
 using System.Text.Json;
-using Velopack;
-using Velopack.Sources;
 
 namespace PingWatchdog.Linux;
 
-internal enum HostState
-{
-    Unknown,
-    Online,
-    Suspect,
-    Offline
-}
-
-internal sealed class SiteDefinition
-{
-    public string Name { get; set; } = string.Empty;
-    public string FolderPath { get; set; } = string.Empty;
-    public List<string> Hosts { get; set; } = new();
-    public Dictionary<string, string> Labels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    public Dictionary<string, string> Categories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-}
-
-internal sealed class WatchdogConfig
-{
-    public int FormatVersion { get; set; } = 1;
-    public List<SiteDefinition> Sites { get; set; } = new();
-    public List<string> SiteFolders { get; set; } = new();
-    public int PingIntervalSeconds { get; set; } = 2;
-    public int PingTimeoutMs { get; set; } = 1000;
-    public int FailureThreshold { get; set; } = 3;
-    public int RecoveryThreshold { get; set; } = 2;
-    public bool ShowCommandView { get; set; }
-    public string? SelectedSite { get; set; }
-    public int EventHistoryHours { get; set; } = 24;
-    public bool HideSuspectEvents { get; set; } = true;
-    public bool AutoCheckUpdates { get; set; } = true;
-    public bool MinimizeToTray { get; set; } = true;
-    public bool NotificationsEnabled { get; set; } = true;
-    public bool WallboardShowCli { get; set; } = true;
-    public bool ShowUpdateControlOnHome { get; set; }
-}
-
-internal sealed record StateEventRecord(
-    DateTime Timestamp,
-    string Site,
-    string Host,
-    string DisplayHost,
-    string Kind,
-    string Message);
-
-internal sealed record CommandLogEntry(
-    DateTime Timestamp,
-    string Site,
-    string Host,
-    string DisplayHost,
-    bool Success,
-    string Text);
-
-internal sealed record EventHistorySnapshot(
-    int StoredCount,
-    IReadOnlyList<StateEventRecord> Events);
-
-internal static class HistoryCsv
-{
-    public static async Task WriteAsync(TextWriter writer, IEnumerable<StateEventRecord> events)
-    {
-        static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
-        await writer.WriteLineAsync("Timestamp,Event,Site,Host,Details");
-        foreach (var e in events)
-            await writer.WriteLineAsync(string.Join(",", Csv(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")),
-                Csv(e.Kind), Csv(e.Site), Csv(e.DisplayHost), Csv(e.Message)));
-    }
-}
-
-internal sealed record HostSnapshot(
-    string Site,
-    string FolderPath,
-    string Address,
-    string Label,
-    HostState State,
-    long? LatencyMs,
-    int Failures,
-    DateTime? LastReply,
-    DateTime? OutageStarted);
-
-internal sealed record SiteSnapshot(
-    string Name,
-    string FolderPath,
-    IReadOnlyList<HostSnapshot> Hosts);
-
-internal sealed record WatchdogSnapshot(
-    bool Monitoring,
-    string? SelectedSite,
-    IReadOnlyList<SiteSnapshot> Sites,
-    IReadOnlyList<HostSnapshot> Hosts,
-    IReadOnlyList<StateEventRecord> Events,
-    IReadOnlyList<CommandLogEntry> Commands,
-    WatchdogConfig Settings);
-
 internal sealed class HostRuntime
 {
-    public HostRuntime(string site, string folderPath, string address, string label)
+    public HostRuntime(string site, string folderPath, string address, string label, HostOptions options)
     {
         Site = site;
         FolderPath = folderPath;
         Address = address;
         Label = label;
+        Options = options;
     }
 
     public string Site { get; }
     public string FolderPath { get; }
     public string Address { get; }
     public string Label { get; set; }
+    public HostOptions Options { get; set; }
     public HostState State { get; set; } = HostState.Unknown;
     public long? LastRoundTripMs { get; set; }
     public int ConsecutiveFailures { get; set; }
@@ -124,22 +31,26 @@ internal sealed class HostRuntime
     public DateTime? OutageStarted { get; set; }
 }
 
-internal sealed record ProbeResult(bool Success, long? LatencyMs, string Text);
-
 internal sealed class WatchdogEngine : IDisposable
 {
+    internal const string QuickMonitorSite = "Quick Monitor";
     private const int MaxCommandEntries = 2500;
+    private const int MaxUndo = 30;
     private readonly object _gate = new();
     private readonly List<SiteDefinition> _sites = new();
     private readonly List<string> _folders = new();
     private readonly List<StateEventRecord> _events = new();
     private readonly List<CommandLogEntry> _commands = new();
+    private readonly List<(string Description, List<SiteDefinition> Sites)> _undo = new();
     private readonly ConcurrentDictionary<string, HostRuntime> _hosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _hostTokens = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _configDirectory;
+    private readonly string _stateDirectory;
     private readonly string _configPath;
     private readonly string _historyPath;
+    private readonly string _preferencesPath;
     private CancellationTokenSource? _sessionToken;
+    private Timer? _snoozeTimer;
     private bool _disposed;
     private readonly Func<string, int, CancellationToken, Task<ProbeResult>> _probe;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
@@ -149,15 +60,29 @@ internal sealed class WatchdogEngine : IDisposable
         _probe = probe ?? NativeProbeAsync;
         _delay = delay ?? Task.Delay;
         _configDirectory = storageRoot ?? ResolveConfigDirectory();
+        _stateDirectory = ResolveStateDirectory(storageRoot);
         _configPath = Path.Combine(_configDirectory, "autosave.pingwatch.json");
-        _historyPath = Path.Combine(ResolveStateDirectory(storageRoot), "event-history.json");
+        _historyPath = Path.Combine(_stateDirectory, "event-history.json");
+        _preferencesPath = Path.Combine(_configDirectory, "preferences.json");
         Config = new WatchdogConfig();
+        Preferences = LinuxPreferences.Load(_preferencesPath);
         Load();
     }
 
     public event EventHandler? Changed;
+    public event Action<PriorityStateChange>? PriorityStateChanged;
+    // Desktop notifications go through this so tests and headless runs can replace notify-send.
+    public Action<string, string, bool> Notify { get; set; } = NotifyLinux;
     public WatchdogConfig Config { get; private set; }
+    public LinuxPreferences Preferences { get; private set; }
     public bool Monitoring => _sessionToken is not null && !_sessionToken.IsCancellationRequested;
+    public string ConfigPath => _configPath;
+    public string HistoryPath => _historyPath;
+    public string PreferencesPath => _preferencesPath;
+    public string ConfigDirectory => _configDirectory;
+    public string StateDirectory => _stateDirectory;
+    public string? UndoDescription { get { lock (_gate) return _undo.Count == 0 ? null : _undo[^1].Description; } }
+
     public string? SelectedSite
     {
         get => Config.SelectedSite;
@@ -165,14 +90,12 @@ internal sealed class WatchdogEngine : IDisposable
         {
             lock (_gate)
             {
-                Config.SelectedSite = value is not null && FindSiteUnsafe(value) is null ? null : value;
+                Config.SelectedSite = value is not null && FindSiteUnsafe(value) is null ? null : FindSiteUnsafe(value ?? "")?.Name;
                 SaveUnsafe();
             }
             RaiseChanged();
         }
     }
-
-    public string ConfigPath => _configPath;
 
     private static string ResolveConfigDirectory()
     {
@@ -195,19 +118,31 @@ internal sealed class WatchdogEngine : IDisposable
         return Path.Combine(root, "PingWatchdog");
     }
 
+    public void SavePreferences(LinuxPreferences preferences)
+    {
+        lock (_gate)
+        {
+            preferences.Save(_preferencesPath);
+            Preferences = preferences.Copy();
+        }
+        RaiseChanged();
+    }
+
     private void Load()
     {
         lock (_gate)
         {
             WatchdogConfig? loaded = null;
-
             try
             {
                 if (File.Exists(_configPath))
                     loaded = JsonSerializer.Deserialize<WatchdogConfig>(File.ReadAllText(_configPath));
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
+                // Keep the unreadable file for recovery instead of overwriting it with defaults.
+                try { File.Copy(_configPath, _configPath + ".unreadable-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"), false); }
+                catch (Exception copy) when (copy is IOException or UnauthorizedAccessException) { }
                 loaded = null;
             }
 
@@ -219,7 +154,7 @@ internal sealed class WatchdogEngine : IDisposable
                     if (File.Exists(bundled))
                         loaded = JsonSerializer.Deserialize<WatchdogConfig>(File.ReadAllText(bundled));
                 }
-                catch
+                catch (Exception ex) when (ex is IOException or JsonException)
                 {
                     loaded = null;
                 }
@@ -239,8 +174,11 @@ internal sealed class WatchdogEngine : IDisposable
 
             Config.Sites = _sites;
             Config.SiteFolders = _folders;
+            DisplayTime.Use12HourTime = Config.Use12HourTime;
 
             if (Config.SelectedSite is not null && FindSiteUnsafe(Config.SelectedSite) is null)
+                Config.SelectedSite = null;
+            if (!Preferences.RestoreLastSiteOnStartup)
                 Config.SelectedSite = null;
 
             LoadHistoryUnsafe();
@@ -261,16 +199,19 @@ internal sealed class WatchdogEngine : IDisposable
             SelectedSite = source.SelectedSite,
             EventHistoryHours = NormalizeHistoryHours(source.EventHistoryHours),
             HideSuspectEvents = source.HideSuspectEvents,
+            Use12HourTime = source.Use12HourTime,
             AutoCheckUpdates = source.AutoCheckUpdates,
             MinimizeToTray = source.MinimizeToTray,
             NotificationsEnabled = source.NotificationsEnabled,
             WallboardShowCli = source.WallboardShowCli,
-            ShowUpdateControlOnHome = source.ShowUpdateControlOnHome
+            ShowUpdateControlOnHome = source.ShowUpdateControlOnHome,
+            PriorityAlarmSound = source.PriorityAlarmSound ?? ""
         };
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var raw in source.Sites ?? new List<SiteDefinition>())
         {
+            if (raw is null) continue;
             string name = raw.Name?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(name) || !names.Add(name))
                 continue;
@@ -278,12 +219,18 @@ internal sealed class WatchdogEngine : IDisposable
             var hosts = NormalizeHosts(raw.Hosts ?? new List<string>());
             var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var details = new Dictionary<string, HostOptions>(StringComparer.OrdinalIgnoreCase);
+            var rawLabels = raw.Labels is null ? null : new Dictionary<string, string>(raw.Labels, StringComparer.OrdinalIgnoreCase);
+            var rawCategories = raw.Categories is null ? null : new Dictionary<string, string>(raw.Categories, StringComparer.OrdinalIgnoreCase);
+            var rawDetails = raw.HostDetails is null ? null : new Dictionary<string, HostOptions>(raw.HostDetails, StringComparer.OrdinalIgnoreCase);
             foreach (var host in hosts)
             {
-                if (raw.Labels is not null && raw.Labels.TryGetValue(host, out var label) && !string.IsNullOrWhiteSpace(label))
+                if (rawLabels is not null && rawLabels.TryGetValue(host, out var label) && !string.IsNullOrWhiteSpace(label))
                     labels[host] = label.Trim();
-                if (raw.Categories is not null && raw.Categories.TryGetValue(host, out var category) && !string.IsNullOrWhiteSpace(category))
+                if (rawCategories is not null && rawCategories.TryGetValue(host, out var category) && !string.IsNullOrWhiteSpace(category))
                     categories[host] = category.Trim();
+                if (rawDetails is not null && rawDetails.TryGetValue(host, out var options) && options is not null)
+                    details[host] = SanitizeOptions(options);
             }
 
             config.Sites.Add(new SiteDefinition
@@ -292,11 +239,13 @@ internal sealed class WatchdogEngine : IDisposable
                 FolderPath = NormalizeFolderPath(raw.FolderPath),
                 Hosts = hosts,
                 Labels = labels,
-                Categories = categories
+                Categories = categories,
+                HostDetails = details
             });
         }
 
         config.SiteFolders = (source.SiteFolders ?? new List<string>())
+            .Where(path => path is not null)
             .Select(NormalizeFolderPath)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -306,9 +255,21 @@ internal sealed class WatchdogEngine : IDisposable
         return config;
     }
 
+    private static HostOptions SanitizeOptions(HostOptions source)
+    {
+        var options = source.Copy();
+        if (string.IsNullOrWhiteSpace(options.Id)) options.Id = Guid.NewGuid().ToString("N");
+        options.Tags ??= "";
+        options.IntervalSeconds = options.IntervalSeconds <= 0 ? 0 : Math.Clamp(options.IntervalSeconds, 1, 300);
+        options.TimeoutMs = options.TimeoutMs <= 0 ? 0 : Math.Clamp(options.TimeoutMs, 250, 10000);
+        options.FailureThreshold = options.FailureThreshold <= 0 ? 0 : Math.Clamp(options.FailureThreshold, 2, 20);
+        return options;
+    }
+
     public static List<string> NormalizeHosts(IEnumerable<string> hosts)
     {
         return hosts
+            .Where(host => host is not null)
             .SelectMany(host => host.Split(new[] { '\r', '\n', ',', ';', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
             .Select(host => host.Trim())
             .Where(host => !string.IsNullOrWhiteSpace(host))
@@ -344,9 +305,7 @@ internal sealed class WatchdogEngine : IDisposable
     public IReadOnlyList<SiteDefinition> SiteDefinitions()
     {
         lock (_gate)
-        {
             return _sites.Select(CloneSite).ToList();
-        }
     }
 
     // History/export must query the stored events, not the bounded live dashboard snapshot.
@@ -372,7 +331,7 @@ internal sealed class WatchdogEngine : IDisposable
     public IReadOnlyList<string> HistorySites()
     {
         lock (_gate)
-            return _sites.Select(s => s.Name).Concat(_events.Select(e => e.Site))
+            return _sites.Where(s => !s.Temporary).Select(s => s.Name).Concat(_events.Select(e => e.Site))
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
@@ -380,22 +339,15 @@ internal sealed class WatchdogEngine : IDisposable
     {
         lock (_gate)
         {
+            bool monitoring = Monitoring;
             var runtime = new Dictionary<string, HostSnapshot>(StringComparer.OrdinalIgnoreCase);
             foreach (var pair in _hosts)
             {
                 lock (pair.Value)
                 {
                     var host = pair.Value;
-                    runtime[pair.Key] = new HostSnapshot(
-                        host.Site,
-                        host.FolderPath,
-                        host.Address,
-                        host.Label,
-                        host.State,
-                        host.LastRoundTripMs,
-                        host.ConsecutiveFailures,
-                        host.LastReply,
-                        host.OutageStarted);
+                    runtime[pair.Key] = new HostSnapshot(host.Site, host.FolderPath, host.Address, host.Label, host.State,
+                        host.LastRoundTripMs, host.ConsecutiveFailures, host.LastReply, host.OutageStarted);
                 }
             }
 
@@ -405,27 +357,22 @@ internal sealed class WatchdogEngine : IDisposable
                 var hosts = new List<HostSnapshot>();
                 foreach (var address in site.Hosts)
                 {
-                    string key = BuildHostKey(site.Name, address);
-                    if (runtime.TryGetValue(key, out var active))
+                    site.Labels.TryGetValue(address, out var label);
+                    site.Categories.TryGetValue(address, out var group);
+                    var options = OptionsUnsafe(site, address).Copy();
+                    var live = runtime.TryGetValue(BuildHostKey(site.Name, address), out var active)
+                        ? active
+                        : new HostSnapshot(site.Name, site.FolderPath, address, label ?? "", HostState.Unknown, null, 0, null, null);
+                    hosts.Add(live with
                     {
-                        hosts.Add(active);
-                    }
-                    else
-                    {
-                        site.Labels.TryGetValue(address, out var label);
-                        hosts.Add(new HostSnapshot(
-                            site.Name,
-                            site.FolderPath,
-                            address,
-                            label ?? string.Empty,
-                            HostState.Unknown,
-                            null,
-                            0,
-                            null,
-                            null));
-                    }
+                        Label = label ?? "",
+                        Group = group ?? "",
+                        Options = options,
+                        Temporary = site.Temporary,
+                        Monitoring = monitoring
+                    });
                 }
-                sites.Add(new SiteSnapshot(site.Name, site.FolderPath, hosts));
+                sites.Add(new SiteSnapshot(site.Name, site.FolderPath, hosts, site.Temporary));
             }
 
             IEnumerable<StateEventRecord> filteredEvents = _events;
@@ -444,7 +391,7 @@ internal sealed class WatchdogEngine : IDisposable
                     .ToList();
 
             return new WatchdogSnapshot(
-                Monitoring,
+                monitoring,
                 Config.SelectedSite,
                 sites,
                 selectedHosts,
@@ -452,6 +399,14 @@ internal sealed class WatchdogEngine : IDisposable
                 _commands.TakeLast(400).ToList(),
                 CloneConfigUnsafe());
         }
+    }
+
+    // ---- Monitoring ----
+
+    public bool HasProbeTargets()
+    {
+        lock (_gate)
+            return _sites.Any(site => site.Hosts.Any(address => ProbeAllowedUnsafe(site, address)));
     }
 
     public void StartMonitoring()
@@ -472,6 +427,8 @@ internal sealed class WatchdogEngine : IDisposable
             }
             _hostTokens.Clear();
             ReconcileUnsafe();
+            // Snoozes end on their own; pick hosts back up when they do.
+            _snoozeTimer = new Timer(_ => ReconcileSnoozes(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         }
         RaiseChanged();
     }
@@ -483,6 +440,8 @@ internal sealed class WatchdogEngine : IDisposable
         {
             session = _sessionToken;
             _sessionToken = null;
+            _snoozeTimer?.Dispose();
+            _snoozeTimer = null;
             session?.Cancel();
             foreach (var token in _hostTokens.Values)
             {
@@ -495,13 +454,35 @@ internal sealed class WatchdogEngine : IDisposable
         RaiseChanged();
     }
 
+    private void ReconcileSnoozes()
+    {
+        bool changed;
+        lock (_gate)
+        {
+            if (!Monitoring) return;
+            int before = _hosts.Count;
+            var keys = _hosts.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            ReconcileUnsafe();
+            changed = before != _hosts.Count || !keys.SetEquals(_hosts.Keys);
+        }
+        if (changed) RaiseChanged();
+    }
+
+    internal void ReconcileForTest() => ReconcileSnoozes();
+
+    private bool ProbeAllowedUnsafe(SiteDefinition site, string address)
+    {
+        var options = OptionsUnsafe(site, address);
+        return options.Enabled && !options.IsSnoozed(DateTimeOffset.UtcNow);
+    }
+
     private void ReconcileUnsafe()
     {
         if (!Monitoring || _sessionToken is null)
             return;
 
         var desired = _sites
-            .SelectMany(site => site.Hosts.Select(address => new
+            .SelectMany(site => site.Hosts.Where(address => ProbeAllowedUnsafe(site, address)).Select(address => new
             {
                 Site = site,
                 Address = address,
@@ -511,7 +492,9 @@ internal sealed class WatchdogEngine : IDisposable
 
         foreach (string key in _hosts.Keys.ToArray())
         {
-            if (desired.ContainsKey(key))
+            if (desired.TryGetValue(key, out var wanted) &&
+                _hosts.TryGetValue(key, out var running) &&
+                running.FolderPath.Equals(wanted.Site.FolderPath, StringComparison.Ordinal))
                 continue;
             if (_hostTokens.TryRemove(key, out var token))
             {
@@ -523,22 +506,19 @@ internal sealed class WatchdogEngine : IDisposable
 
         foreach (var item in desired.Values)
         {
+            item.Site.Labels.TryGetValue(item.Address, out var nickname);
+            var options = OptionsUnsafe(item.Site, item.Address).Copy();
             if (_hosts.TryGetValue(item.Key, out var existing))
             {
                 lock (existing)
                 {
-                    item.Site.Labels.TryGetValue(item.Address, out var label);
-                    existing.Label = label ?? string.Empty;
+                    existing.Label = nickname ?? string.Empty;
+                    existing.Options = options;
                 }
                 continue;
             }
 
-            item.Site.Labels.TryGetValue(item.Address, out var nickname);
-            var runtime = new HostRuntime(
-                item.Site.Name,
-                item.Site.FolderPath,
-                item.Address,
-                nickname ?? string.Empty);
+            var runtime = new HostRuntime(item.Site.Name, item.Site.FolderPath, item.Address, nickname ?? string.Empty, options);
             _hosts[item.Key] = runtime;
 
             var token = CancellationTokenSource.CreateLinkedTokenSource(_sessionToken.Token);
@@ -563,6 +543,10 @@ internal sealed class WatchdogEngine : IDisposable
         }
     }
 
+    private int TimeoutFor(HostRuntime host) => host.Options.TimeoutMs > 0 ? host.Options.TimeoutMs : Config.PingTimeoutMs;
+    private int IntervalFor(HostRuntime host) => host.Options.IntervalSeconds > 0 ? host.Options.IntervalSeconds : Config.PingIntervalSeconds;
+    private int FailureThresholdFor(HostRuntime host) => host.Options.FailureThreshold > 0 ? host.Options.FailureThreshold : Config.FailureThreshold;
+
     private async Task MonitorHostAsync(string key, HostRuntime host, CancellationTokenSource source)
     {
         // Keep a token value: the owner may dispose its source while a probe is pending.
@@ -571,16 +555,20 @@ internal sealed class WatchdogEngine : IDisposable
         {
             while (!token.IsCancellationRequested)
             {
-                ProbeResult result = await _probe(host.Address, Config.PingTimeoutMs, token);
+                int timeout;
+                lock (host) timeout = TimeoutFor(host);
+                ProbeResult result = await _probe(host.Address, timeout, token);
                 lock (_gate)
                 {
                     // A stopped, removed, or superseded host must never publish a late reply.
                     if (token.IsCancellationRequested || !Monitoring || !_hosts.TryGetValue(key, out var current) || !ReferenceEquals(current, host)) break;
                     ProcessProbe(host, result.Success, result.LatencyMs);
-                    AppendCommand(host, result.Success, result.Text);
+                    AppendCommand(host, result.Success, result.Text, timeout);
                 }
                 RaiseChanged();
-                await _delay(TimeSpan.FromSeconds(Config.PingIntervalSeconds), token);
+                int interval;
+                lock (host) interval = IntervalFor(host);
+                await _delay(TimeSpan.FromSeconds(interval), token);
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -596,11 +584,13 @@ internal sealed class WatchdogEngine : IDisposable
         string? eventKind = null;
         string? eventMessage = null;
         bool notify = false;
+        PriorityStateChange? priority = null;
 
         lock (_gate)
         {
             lock (host)
             {
+                int threshold = FailureThresholdFor(host);
                 if (success)
                 {
                     host.LastRoundTripMs = latency;
@@ -612,9 +602,7 @@ internal sealed class WatchdogEngine : IDisposable
                         host.ConsecutiveSuccesses++;
                         if (host.ConsecutiveSuccesses >= Config.RecoveryThreshold)
                         {
-                            TimeSpan? outage = host.OutageStarted is null
-                                ? null
-                                : DateTime.Now - host.OutageStarted.Value;
+                            TimeSpan? outage = host.OutageStarted is null ? null : DateTime.Now - host.OutageStarted.Value;
                             host.State = HostState.Online;
                             host.OutageStarted = null;
                             host.ConsecutiveSuccesses = 0;
@@ -637,7 +625,7 @@ internal sealed class WatchdogEngine : IDisposable
                     host.ConsecutiveSuccesses = 0;
                     host.ConsecutiveFailures++;
 
-                    if (host.State != HostState.Offline && host.ConsecutiveFailures >= Config.FailureThreshold)
+                    if (host.State != HostState.Offline && host.ConsecutiveFailures >= threshold)
                     {
                         host.State = HostState.Offline;
                         host.OutageStarted ??= DateTime.Now;
@@ -649,61 +637,67 @@ internal sealed class WatchdogEngine : IDisposable
                     {
                         host.State = HostState.Suspect;
                         eventKind = "SUSPECT";
-                        eventMessage = $"{host.Address} missed a ping ({host.ConsecutiveFailures}/{Config.FailureThreshold}).";
+                        eventMessage = $"{host.Address} missed a ping ({host.ConsecutiveFailures}/{threshold}).";
                     }
                 }
 
                 if (eventKind is not null)
                 {
-                    string display = string.IsNullOrWhiteSpace(host.Label)
-                        ? host.Address
-                        : $"{host.Label} ({host.Address})";
-                    _events.Add(new StateEventRecord(
-                        DateTime.Now,
-                        host.Site,
-                        host.Address,
-                        display,
-                        eventKind,
-                        eventMessage ?? eventKind));
+                    string display = string.IsNullOrWhiteSpace(host.Label) ? host.Address : $"{host.Label} ({host.Address})";
+                    var now = DateTime.Now;
+                    _events.Add(new StateEventRecord(now, host.Site, host.Address, display, eventKind, eventMessage ?? eventKind));
                     PersistHistoryUnsafe();
 
-                    if (notify && Config.NotificationsEnabled)
-                        NotifyLinux($"Ping Watchdog • {eventKind}", $"{host.Site}: {display}");
+                    if (notify && host.Options.Priority)
+                    {
+                        // Priority hosts ring until acknowledged and replace the ordinary notification.
+                        priority = new PriorityStateChange(
+                            new HostSnapshot(host.Site, host.FolderPath, host.Address, host.Label, host.State, host.LastRoundTripMs,
+                                host.ConsecutiveFailures, host.LastReply, host.OutageStarted) { Options = host.Options.Copy(), Monitoring = true },
+                            eventKind == "DOWN", now);
+                    }
+                    else if (notify && Config.NotificationsEnabled)
+                    {
+                        Notify(eventKind == "DOWN" ? $"{display} is offline" : $"{display} is back online", host.Site, false);
+                    }
                 }
             }
         }
+        if (priority is not null) PriorityStateChanged?.Invoke(priority);
     }
 
-    private void AppendCommand(HostRuntime host, bool success, string result)
+    private void AppendCommand(HostRuntime host, bool success, string result, int timeoutMs)
     {
         lock (_gate)
         {
             string display = string.IsNullOrWhiteSpace(host.Label) ? string.Empty : $" [{host.Label}]";
-            int timeoutSeconds = Math.Max(1, (int)Math.Ceiling(Config.PingTimeoutMs / 1000d));
-            string text = $"{host.Address}: [{host.Site}]{display} [{DateTime.Now:HH:mm:ss}] ping -c 1 -W {timeoutSeconds} {host.Address} -> {result}";
+            int timeoutSeconds = Math.Max(1, (int)Math.Ceiling(timeoutMs / 1000d));
+            string clock = DisplayTime.Clock(DateTime.Now);
+            string text = $"{host.Address}: [{host.Site}]{display} [{clock}] ping -c 1 -W {timeoutSeconds} {host.Address}  ->  {result}";
             _commands.Add(new CommandLogEntry(DateTime.Now, host.Site, host.Address, host.Label, success, text));
             if (_commands.Count > MaxCommandEntries)
                 _commands.RemoveRange(0, _commands.Count - MaxCommandEntries);
         }
     }
 
-    private static void NotifyLinux(string title, string message)
+    private static void NotifyLinux(string title, string message, bool critical)
     {
         try
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "notify-send",
-                ArgumentList = { title, message },
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
+            var start = new ProcessStartInfo { FileName = "notify-send", UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add("--app-name=Ping Watchdog");
+            if (critical) start.ArgumentList.Add("--urgency=critical");
+            start.ArgumentList.Add(title);
+            start.ArgumentList.Add(message);
+            using var process = Process.Start(start);
         }
-        catch
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             // Desktop notifications are optional; monitoring must never depend on notify-send.
         }
     }
+
+    // ---- Sites and folders ----
 
     public string? AddSite(string name, string folderPath = "")
     {
@@ -739,6 +733,7 @@ internal sealed class WatchdogEngine : IDisposable
                 return "A site with that name already exists.";
 
             site.Name = newName;
+            site.Temporary = false;
             if (Config.SelectedSite?.Equals(oldName, StringComparison.OrdinalIgnoreCase) == true)
                 Config.SelectedSite = newName;
             SaveUnsafe();
@@ -754,77 +749,14 @@ internal sealed class WatchdogEngine : IDisposable
         {
             var site = FindSiteUnsafe(name);
             if (site is null) return "That site no longer exists.";
+            PushUndoUnsafe($"Deleted {site.Name}");
             _sites.Remove(site);
-            if (_sites.Count == 0)
+            if (_sites.Count(s => !s.Temporary) == 0)
                 _sites.Add(new SiteDefinition { Name = "Default Site" });
             if (Config.SelectedSite?.Equals(name, StringComparison.OrdinalIgnoreCase) == true)
-                Config.SelectedSite = _sites[0].Name;
+                Config.SelectedSite = null;
             SaveUnsafe();
             ReconcileUnsafe();
-        }
-        RaiseChanged();
-        return null;
-    }
-
-    public string? SaveHosts(string siteName, string text)
-    {
-        lock (_gate)
-        {
-            var site = FindSiteUnsafe(siteName);
-            if (site is null) return "That site no longer exists.";
-            site.Hosts = NormalizeHosts(new[] { text });
-            site.Labels = site.Labels
-                .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
-                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-            site.Categories = site.Categories
-                .Where(pair => site.Hosts.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
-                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-            SaveUnsafe();
-            ReconcileUnsafe();
-        }
-        RaiseChanged();
-        return null;
-    }
-
-    public string? SetLabel(string siteName, string host, string label)
-    {
-        lock (_gate)
-        {
-            var site = FindSiteUnsafe(siteName);
-            if (site is null) return "That site no longer exists.";
-            if (!site.Hosts.Contains(host, StringComparer.OrdinalIgnoreCase)) return "That host no longer exists.";
-
-            if (string.IsNullOrWhiteSpace(label))
-                site.Labels.Remove(host);
-            else
-                site.Labels[host] = label.Trim();
-
-            string key = BuildHostKey(siteName, host);
-            if (_hosts.TryGetValue(key, out var runtime))
-            {
-                lock (runtime)
-                    runtime.Label = label.Trim();
-            }
-            SaveUnsafe();
-        }
-        RaiseChanged();
-        return null;
-    }
-
-    public string? SetCategory(string siteName, string host, string category)
-    {
-        lock (_gate)
-        {
-            var site = FindSiteUnsafe(siteName);
-            if (site is null) return "That site no longer exists.";
-            if (!site.Hosts.Contains(host, StringComparer.OrdinalIgnoreCase)) return "That host no longer exists.";
-
-            if (string.IsNullOrWhiteSpace(category))
-                site.Categories.Remove(host);
-            else
-                site.Categories[host] = category.Trim();
-
-            SaveUnsafe();
         }
         RaiseChanged();
         return null;
@@ -834,7 +766,7 @@ internal sealed class WatchdogEngine : IDisposable
     {
         name = name.Trim();
         if (string.IsNullOrWhiteSpace(name)) return "Enter a folder name.";
-        if (name.Contains('/') || name.Contains('\\')) return "Folder names cannot contain / or \\.";
+        if (name.Contains('/') || name.Contains('\\')) return "Folder names can't contain / or \\.";
 
         lock (_gate)
         {
@@ -858,6 +790,7 @@ internal sealed class WatchdogEngine : IDisposable
             EnsureFolderUnsafe(folderPath);
             site.FolderPath = folderPath;
             SaveUnsafe();
+            ReconcileUnsafe();
         }
         RaiseChanged();
         return null;
@@ -868,7 +801,7 @@ internal sealed class WatchdogEngine : IDisposable
         path = NormalizeFolderPath(path);
         newName = newName.Trim();
         if (string.IsNullOrWhiteSpace(newName)) return "Enter a folder name.";
-        if (newName.Contains('/') || newName.Contains('\\')) return "Folder names cannot contain / or \\.";
+        if (newName.Contains('/') || newName.Contains('\\')) return "Folder names can't contain / or \\.";
 
         lock (_gate)
         {
@@ -879,6 +812,7 @@ internal sealed class WatchdogEngine : IDisposable
                 return "A folder with that name already exists here.";
             RewriteFolderUnsafe(path, replacement);
             SaveUnsafe();
+            ReconcileUnsafe();
         }
         RaiseChanged();
         return null;
@@ -893,13 +827,14 @@ internal sealed class WatchdogEngine : IDisposable
         {
             if (!_folders.Contains(path, StringComparer.OrdinalIgnoreCase)) return "That folder no longer exists.";
             if (!string.IsNullOrWhiteSpace(newParent) && !_folders.Contains(newParent, StringComparer.OrdinalIgnoreCase)) return "Destination folder not found.";
-            if (newParent.Equals(path, StringComparison.OrdinalIgnoreCase) || newParent.StartsWith(path + "/", StringComparison.OrdinalIgnoreCase)) return "A folder cannot be moved inside itself.";
+            if (newParent.Equals(path, StringComparison.OrdinalIgnoreCase) || newParent.StartsWith(path + "/", StringComparison.OrdinalIgnoreCase)) return "A folder can't be moved inside itself.";
 
             string replacement = CombineFolder(newParent, LeafFolder(path));
             if (!replacement.Equals(path, StringComparison.OrdinalIgnoreCase) && _folders.Contains(replacement, StringComparer.OrdinalIgnoreCase))
                 return "A folder with that name already exists in the destination.";
             RewriteFolderUnsafe(path, replacement);
             SaveUnsafe();
+            ReconcileUnsafe();
         }
         RaiseChanged();
         return null;
@@ -913,6 +848,7 @@ internal sealed class WatchdogEngine : IDisposable
             if (!_folders.Contains(path, StringComparer.OrdinalIgnoreCase)) return "That folder no longer exists.";
             RewriteFolderUnsafe(path, ParentFolder(path));
             SaveUnsafe();
+            ReconcileUnsafe();
         }
         RaiseChanged();
         return null;
@@ -977,6 +913,310 @@ internal sealed class WatchdogEngine : IDisposable
         }
     }
 
+    // ---- Hosts ----
+
+    public string? SaveHosts(string siteName, string text)
+    {
+        lock (_gate)
+        {
+            var site = FindSiteUnsafe(siteName);
+            if (site is null) return "That site no longer exists.";
+            PushUndoUnsafe($"Edited {site.Name}");
+            site.Hosts = NormalizeHosts(new[] { text });
+            PruneUnsafe(site);
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    // Adds imported rows to a site. Rows already in the site keep their options; a new label or group replaces the old one.
+    public (int Added, string? Error) AddHosts(string siteName, IEnumerable<ImportedHost> rows, bool createSite = false)
+    {
+        int added = 0;
+        lock (_gate)
+        {
+            var site = FindSiteUnsafe(siteName);
+            if (site is null && createSite)
+            {
+                if (string.IsNullOrWhiteSpace(siteName)) return (0, "Enter a site name.");
+                site = new SiteDefinition { Name = siteName.Trim() };
+                _sites.Add(site);
+            }
+            if (site is null) return (0, "That site no longer exists.");
+            var valid = rows.Where(r => string.IsNullOrEmpty(r.Error) && !string.IsNullOrWhiteSpace(r.Address)).ToList();
+            if (valid.Count == 0) return (0, "There are no valid hosts to add.");
+            PushUndoUnsafe($"Added {Hosts(valid.Count)} to {site.Name}");
+            foreach (var row in valid)
+            {
+                string address = HostImport.Normalize(row.Address);
+                string? existing = site.Hosts.FirstOrDefault(h => h.Equals(address, StringComparison.OrdinalIgnoreCase));
+                if (existing is null) { site.Hosts.Add(address); existing = address; added++; }
+                if (!string.IsNullOrWhiteSpace(row.Label)) site.Labels[existing] = row.Label.Trim();
+                if (!string.IsNullOrWhiteSpace(row.Group)) site.Categories[existing] = row.Group.Trim();
+            }
+            if (!site.Temporary) Config.SelectedSite = site.Name;
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return (added, null);
+    }
+
+    // Quick Monitor: hosts watched for this session only, then kept or forgotten.
+    public (int Added, string? Error) StartQuickMonitor(IEnumerable<ImportedHost> rows)
+    {
+        lock (_gate)
+        {
+            if (FindSiteUnsafe(QuickMonitorSite) is { Temporary: false })
+                return (0, $"Rename the saved site called {QuickMonitorSite} first.");
+            if (FindSiteUnsafe(QuickMonitorSite) is null)
+                _sites.Add(new SiteDefinition { Name = QuickMonitorSite, Temporary = true });
+        }
+        var result = AddHosts(QuickMonitorSite, rows);
+        if (result.Error is null)
+        {
+            lock (_gate) Config.SelectedSite = QuickMonitorSite;
+            if (!Monitoring) StartMonitoring();
+            RaiseChanged();
+        }
+        return result;
+    }
+
+    // Moves temporary hosts into a saved site, keeping labels and options.
+    public string? KeepTemporaryHosts(IReadOnlyCollection<HostKey> keys, string destination, bool createSite)
+    {
+        return MoveHosts(keys, destination, createSite, keep: true);
+    }
+
+    public string? EditHost(HostKey key, string newAddress, string label)
+    {
+        newAddress = newAddress.Trim();
+        if (!HostImport.Valid(newAddress)) return "Enter a valid IP address or hostname.";
+        newAddress = HostImport.Normalize(newAddress);
+        lock (_gate)
+        {
+            var site = FindSiteUnsafe(key.Site);
+            string? address = site?.Hosts.FirstOrDefault(h => h.Equals(key.Address, StringComparison.OrdinalIgnoreCase));
+            if (site is null || address is null) return "That host no longer exists.";
+            bool moved = !newAddress.Equals(address, StringComparison.OrdinalIgnoreCase);
+            if (moved && site.Hosts.Any(h => h.Equals(newAddress, StringComparison.OrdinalIgnoreCase)))
+                return $"{newAddress} is already in {site.Name}.";
+            site.Labels.TryGetValue(address, out var oldLabel);
+            if (!moved && (oldLabel ?? "") == label.Trim()) return null;
+            PushUndoUnsafe(moved ? $"Changed {address} to {newAddress}" : $"Named {address}");
+            if (moved)
+            {
+                int index = site.Hosts.IndexOf(address);
+                site.Hosts[index] = newAddress;
+                if (site.Categories.Remove(address, out var group)) site.Categories[newAddress] = group;
+                if (site.HostDetails.Remove(address, out var options)) site.HostDetails[newAddress] = options;
+                site.Labels.Remove(address);
+            }
+            if (string.IsNullOrWhiteSpace(label)) site.Labels.Remove(newAddress);
+            else site.Labels[newAddress] = label.Trim();
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? SetLabel(string siteName, string host, string label)
+    {
+        lock (_gate)
+        {
+            var site = FindSiteUnsafe(siteName);
+            if (site is null) return "That site no longer exists.";
+            if (!site.Hosts.Contains(host, StringComparer.OrdinalIgnoreCase)) return "That host no longer exists.";
+            PushUndoUnsafe(string.IsNullOrWhiteSpace(label) ? $"Cleared the name for {host}" : $"Named {host}");
+            if (string.IsNullOrWhiteSpace(label))
+                site.Labels.Remove(host);
+            else
+                site.Labels[host] = label.Trim();
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? SetCategory(string siteName, string host, string category) =>
+        UpdateHosts(new[] { new HostKey(siteName, host) }, string.IsNullOrWhiteSpace(category) ? "Cleared group" : "Set group",
+            (site, address) =>
+            {
+                if (string.IsNullOrWhiteSpace(category)) site.Categories.Remove(address);
+                else site.Categories[address] = category.Trim();
+            });
+
+    public string? SetGroup(IReadOnlyCollection<HostKey> keys, string group) =>
+        UpdateHosts(keys, group.Trim().Length == 0 ? $"Cleared group on {Hosts(keys.Count)}" : $"Set group on {Hosts(keys.Count)}",
+            (site, address) =>
+            {
+                if (string.IsNullOrWhiteSpace(group)) site.Categories.Remove(address);
+                else site.Categories[address] = group.Trim();
+            });
+
+    public string? SetEnabled(IReadOnlyCollection<HostKey> keys, bool enabled) =>
+        UpdateOptions(keys, (enabled ? "Enabled " : "Disabled ") + Hosts(keys.Count), o => o.Enabled = enabled);
+
+    public string? SetPriority(IReadOnlyCollection<HostKey> keys, bool priority) =>
+        UpdateOptions(keys, (priority ? "Marked priority on " : "Removed priority from ") + Hosts(keys.Count), o => o.Priority = priority);
+
+    public string? SetSnooze(IReadOnlyCollection<HostKey> keys, DateTimeOffset? until) =>
+        UpdateOptions(keys, until is null ? "Resumed " + Hosts(keys.Count) : "Snoozed " + Hosts(keys.Count), o => o.SnoozedUntilUtc = until);
+
+    // Zero means "use the default" for each value, as on Windows.
+    public string? SetMonitoring(IReadOnlyCollection<HostKey> keys, int intervalSeconds, int timeoutMs, int failureThreshold) =>
+        UpdateOptions(keys, "Changed monitoring for " + Hosts(keys.Count), o =>
+        {
+            o.IntervalSeconds = intervalSeconds <= 0 ? 0 : Math.Clamp(intervalSeconds, 1, 300);
+            o.TimeoutMs = timeoutMs <= 0 ? 0 : Math.Clamp(timeoutMs, 250, 10000);
+            o.FailureThreshold = failureThreshold <= 0 ? 0 : Math.Clamp(failureThreshold, 2, 20);
+        });
+
+    private string? UpdateOptions(IReadOnlyCollection<HostKey> keys, string description, Action<HostOptions> edit) =>
+        UpdateHosts(keys, description, (site, address) =>
+        {
+            var options = OptionsUnsafe(site, address).Copy();
+            edit(options);
+            site.HostDetails[address] = options;
+        });
+
+    private string? UpdateHosts(IReadOnlyCollection<HostKey> keys, string description, Action<SiteDefinition, string> edit)
+    {
+        if (keys.Count == 0) return "Select a host first.";
+        lock (_gate)
+        {
+            var targets = ResolveUnsafe(keys);
+            if (targets.Count == 0) return "Those hosts no longer exist.";
+            PushUndoUnsafe(description);
+            foreach (var (site, address) in targets) edit(site, address);
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? RemoveHosts(IReadOnlyCollection<HostKey> keys)
+    {
+        if (keys.Count == 0) return "Select a host first.";
+        lock (_gate)
+        {
+            var targets = ResolveUnsafe(keys);
+            if (targets.Count == 0) return "Those hosts no longer exist.";
+            PushUndoUnsafe("Removed " + Hosts(targets.Count));
+            foreach (var (site, address) in targets)
+            {
+                site.Hosts.Remove(address);
+                PruneUnsafe(site);
+            }
+            _sites.RemoveAll(s => s.Temporary && s.Hosts.Count == 0);
+            if (Config.SelectedSite is not null && FindSiteUnsafe(Config.SelectedSite) is null) Config.SelectedSite = null;
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? MoveHosts(IReadOnlyCollection<HostKey> keys, string destination, bool createSite = false, bool keep = false)
+    {
+        if (keys.Count == 0) return "Select a host first.";
+        destination = destination.Trim();
+        if (destination.Length == 0) return "Choose a site.";
+        lock (_gate)
+        {
+            var target = FindSiteUnsafe(destination);
+            if (target is null && !createSite) return "Select an existing destination site.";
+            if (target is { Temporary: true }) return "Choose a saved site.";
+            var sources = ResolveUnsafe(keys);
+            if (sources.Count == 0) return "Those hosts no longer exist.";
+            if (target is not null && sources.All(s => ReferenceEquals(s.Site, target))) return null;
+            PushUndoUnsafe((keep ? "Kept " : "Moved ") + Hosts(sources.Count) + " in " + destination);
+            if (target is null)
+            {
+                target = new SiteDefinition { Name = destination };
+                _sites.Add(target);
+            }
+            foreach (var (site, address) in sources)
+            {
+                if (ReferenceEquals(site, target)) continue;
+                if (!target.Hosts.Contains(address, StringComparer.OrdinalIgnoreCase)) target.Hosts.Add(address);
+                if (site.Labels.TryGetValue(address, out var label)) target.Labels[address] = label;
+                if (site.Categories.TryGetValue(address, out var group)) target.Categories[address] = group;
+                if (site.HostDetails.TryGetValue(address, out var options)) target.HostDetails[address] = options.Copy();
+                site.Hosts.Remove(address);
+                PruneUnsafe(site);
+            }
+            _sites.RemoveAll(s => s.Temporary && s.Hosts.Count == 0);
+            if (keep || (Config.SelectedSite is not null && FindSiteUnsafe(Config.SelectedSite) is null))
+                Config.SelectedSite = target.Name;
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return null;
+    }
+
+    public string? Undo()
+    {
+        string description;
+        lock (_gate)
+        {
+            if (_undo.Count == 0) return null;
+            (description, var previous) = _undo[^1];
+            _undo.RemoveAt(_undo.Count - 1);
+            var temporary = _sites.Where(s => s.Temporary && !previous.Any(p => p.Name.Equals(s.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+            _sites.Clear();
+            _sites.AddRange(previous);
+            _sites.AddRange(temporary);
+            foreach (var site in _sites) EnsureFolderUnsafe(site.FolderPath);
+            if (Config.SelectedSite is not null && FindSiteUnsafe(Config.SelectedSite) is null) Config.SelectedSite = null;
+            SaveUnsafe();
+            ReconcileUnsafe();
+        }
+        RaiseChanged();
+        return "Undid: " + description;
+    }
+
+    private void PushUndoUnsafe(string description)
+    {
+        _undo.Add((description, _sites.Select(CloneSite).ToList()));
+        if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
+    }
+
+    private List<(SiteDefinition Site, string Address)> ResolveUnsafe(IEnumerable<HostKey> keys)
+    {
+        var result = new List<(SiteDefinition, string)>();
+        foreach (var key in keys.Distinct())
+        {
+            var site = FindSiteUnsafe(key.Site);
+            string? address = site?.Hosts.FirstOrDefault(h => h.Equals(key.Address, StringComparison.OrdinalIgnoreCase));
+            if (site is not null && address is not null) result.Add((site, address));
+        }
+        return result;
+    }
+
+    private static void PruneUnsafe(SiteDefinition site)
+    {
+        bool Keep(string host) => site.Hosts.Contains(host, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in site.Labels.Keys.Where(k => !Keep(k)).ToList()) site.Labels.Remove(key);
+        foreach (var key in site.Categories.Keys.Where(k => !Keep(k)).ToList()) site.Categories.Remove(key);
+        foreach (var key in site.HostDetails.Keys.Where(k => !Keep(k)).ToList()) site.HostDetails.Remove(key);
+    }
+
+    private static HostOptions OptionsUnsafe(SiteDefinition? site, string address) =>
+        site is not null && site.HostDetails.TryGetValue(address, out var options) ? options : DefaultOptions;
+
+    private static readonly HostOptions DefaultOptions = new() { Id = "" };
+
+    internal static string Hosts(int count) => count == 1 ? "1 host" : $"{count} hosts";
+
+    // ---- Settings, import and export ----
+
     public string? ApplySettings(WatchdogConfig settings)
     {
         lock (_gate)
@@ -997,11 +1237,14 @@ internal sealed class WatchdogEngine : IDisposable
             Config.ShowCommandView = settings.ShowCommandView;
             Config.EventHistoryHours = NormalizeHistoryHours(settings.EventHistoryHours);
             Config.HideSuspectEvents = settings.HideSuspectEvents;
+            Config.Use12HourTime = settings.Use12HourTime;
             Config.AutoCheckUpdates = settings.AutoCheckUpdates;
             Config.MinimizeToTray = settings.MinimizeToTray;
             Config.NotificationsEnabled = settings.NotificationsEnabled;
             Config.WallboardShowCli = settings.WallboardShowCli;
             Config.ShowUpdateControlOnHome = settings.ShowUpdateControlOnHome;
+            Config.PriorityAlarmSound = settings.PriorityAlarmSound ?? "";
+            DisplayTime.Use12HourTime = Config.Use12HourTime;
             SaveUnsafe();
         }
         RaiseChanged();
@@ -1018,9 +1261,7 @@ internal sealed class WatchdogEngine : IDisposable
     public string ExportConfigJson()
     {
         lock (_gate)
-        {
             return JsonSerializer.Serialize(CloneConfigUnsafe(), new JsonSerializerOptions { WriteIndented = true });
-        }
     }
 
     public string? ImportConfigJson(string json)
@@ -1031,22 +1272,21 @@ internal sealed class WatchdogEngine : IDisposable
             var loaded = JsonSerializer.Deserialize<WatchdogConfig>(json);
             if (loaded is null) return "The configuration file was empty.";
             candidate = SanitizeConfig(loaded);
-            if (candidate.Sites.Count == 0) return "The configuration contains no valid sites.";
+            if (candidate.Sites.Count == 0) return "The configuration has no valid sites.";
             if (candidate.SelectedSite is not null && !candidate.Sites.Any(s => s.Name.Equals(candidate.SelectedSite, StringComparison.OrdinalIgnoreCase)))
                 candidate.SelectedSite = null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException)
         {
-            return $"Could not read configuration: {ex.Message}";
+            return $"Couldn't read the configuration: {ex.Message}";
         }
 
-        bool restart;
+        bool restart = Monitoring;
+        if (restart)
+            StopMonitoring();
         lock (_gate)
         {
-            restart = Monitoring;
-            if (restart)
-                StopMonitoring();
-
+            PushUndoUnsafe("Imported a configuration");
             Config = candidate;
             _hosts.Clear();
             _sites.Clear();
@@ -1058,6 +1298,7 @@ internal sealed class WatchdogEngine : IDisposable
                 EnsureFolderUnsafe(site.FolderPath);
             Config.Sites = _sites;
             Config.SiteFolders = _folders;
+            DisplayTime.Use12HourTime = Config.Use12HourTime;
             SaveUnsafe();
         }
 
@@ -1083,42 +1324,45 @@ internal sealed class WatchdogEngine : IDisposable
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
-
-        string temp = _configPath + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(CloneConfigUnsafe(), new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temp, _configPath, true);
+        SafeFile.WriteAtomic(_configPath, JsonSerializer.Serialize(CloneConfigUnsafe(), new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private WatchdogConfig CloneConfigUnsafe()
     {
+        string? selected = Config.SelectedSite is not null && FindSiteUnsafe(Config.SelectedSite) is { Temporary: true } ? null : Config.SelectedSite;
         return new WatchdogConfig
         {
             FormatVersion = Config.FormatVersion,
-            Sites = _sites.Select(CloneSite).ToList(),
+            // Quick Monitor sites are never written to disk.
+            Sites = _sites.Where(site => !site.Temporary).Select(CloneSite).ToList(),
             SiteFolders = _folders.ToList(),
             PingIntervalSeconds = Config.PingIntervalSeconds,
             PingTimeoutMs = Config.PingTimeoutMs,
             FailureThreshold = Config.FailureThreshold,
             RecoveryThreshold = Config.RecoveryThreshold,
             ShowCommandView = Config.ShowCommandView,
-            SelectedSite = Config.SelectedSite,
+            SelectedSite = selected,
             EventHistoryHours = Config.EventHistoryHours,
             HideSuspectEvents = Config.HideSuspectEvents,
+            Use12HourTime = Config.Use12HourTime,
             AutoCheckUpdates = Config.AutoCheckUpdates,
             MinimizeToTray = Config.MinimizeToTray,
             NotificationsEnabled = Config.NotificationsEnabled,
             WallboardShowCli = Config.WallboardShowCli,
-            ShowUpdateControlOnHome = Config.ShowUpdateControlOnHome
+            ShowUpdateControlOnHome = Config.ShowUpdateControlOnHome,
+            PriorityAlarmSound = Config.PriorityAlarmSound
         };
     }
 
     private static SiteDefinition CloneSite(SiteDefinition site) => new()
     {
+        Temporary = site.Temporary,
         Name = site.Name,
         FolderPath = site.FolderPath,
         Hosts = site.Hosts.ToList(),
         Labels = new Dictionary<string, string>(site.Labels, StringComparer.OrdinalIgnoreCase),
-        Categories = new Dictionary<string, string>(site.Categories, StringComparer.OrdinalIgnoreCase)
+        Categories = new Dictionary<string, string>(site.Categories, StringComparer.OrdinalIgnoreCase),
+        HostDetails = site.HostDetails.ToDictionary(pair => pair.Key, pair => pair.Value.Copy(), StringComparer.OrdinalIgnoreCase)
     };
 
     private SiteDefinition? FindSiteUnsafe(string name) =>
@@ -1134,7 +1378,7 @@ internal sealed class WatchdogEngine : IDisposable
             if (loaded is not null)
                 _events.AddRange(loaded.OrderBy(e => e.Timestamp));
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             // A bad history file must never stop monitoring.
         }
@@ -1144,21 +1388,18 @@ internal sealed class WatchdogEngine : IDisposable
     {
         try
         {
-            string? directory = Path.GetDirectoryName(_historyPath);
-            if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
-            string temp = _historyPath + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(_events));
-            File.Move(temp, _historyPath, true);
+            Directory.CreateDirectory(_stateDirectory);
+            SafeFile.WriteAtomic(_historyPath, JsonSerializer.Serialize(_events));
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Best effort only.
+            // History is best effort; the live state and notifications still work.
         }
     }
 
     private static string BuildHostKey(string site, string address) => $"{site}\u001f{address}";
 
-    private static string FormatDuration(TimeSpan span)
+    internal static string FormatDuration(TimeSpan span)
     {
         if (span.TotalHours >= 1) return $"{(int)span.TotalHours}h {span.Minutes}m";
         if (span.TotalMinutes >= 1) return $"{(int)span.TotalMinutes}m {span.Seconds}s";
@@ -1172,175 +1413,5 @@ internal sealed class WatchdogEngine : IDisposable
         if (_disposed) return;
         _disposed = true;
         StopMonitoring();
-    }
-}
-
-internal sealed class LinuxUpdateService : IDisposable
-{
-    private const string RepositoryUrl = "https://github.com/JPLuker/Ping-Watchdog";
-    private readonly CancellationTokenSource _lifetime = new();
-    private UpdateManager? _pendingManager;
-    private UpdateInfo? _pendingUpdate;
-    private bool _checking;
-
-    public event EventHandler? Changed;
-    public event EventHandler<string>? UpdateReady;
-    public string Status { get; private set; } = "Ready";
-    public string ActionText => _pendingUpdate is null ? "Check for Updates" : "Restart to Update";
-    public bool HasPendingUpdate => _pendingUpdate is not null;
-    public string Version => Assembly.GetExecutingAssembly().GetName().Version is { } v
-        ? $"v{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}"
-        : "Linux";
-
-    public async Task CheckAsync(bool userInitiated)
-    {
-        if (_checking || _pendingUpdate is not null)
-            return;
-
-        _checking = true;
-        Status = "Checking GitHub Releases...";
-        Changed?.Invoke(this, EventArgs.Empty);
-
-        try
-        {
-            var source = new GithubSource(RepositoryUrl, accessToken: null, prerelease: true);
-            var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = "linux" });
-            if (!manager.IsInstalled)
-            {
-                Status = "Unmanaged AppImage / development build";
-                return;
-            }
-
-            var update = await manager.CheckForUpdatesAsync();
-            if (update is null)
-            {
-                Status = "Up to date";
-                return;
-            }
-
-            string version = update.TargetFullRelease.Version.ToString();
-            Status = $"Downloading {version}...";
-            Changed?.Invoke(this, EventArgs.Empty);
-
-            await manager.DownloadUpdatesAsync(update, progress =>
-            {
-                Status = $"Downloading {progress}%";
-                Changed?.Invoke(this, EventArgs.Empty);
-            });
-
-            _pendingManager = manager;
-            _pendingUpdate = update;
-            Status = $"{version} downloaded • restart ready";
-            Changed?.Invoke(this, EventArgs.Empty);
-            UpdateReady?.Invoke(this, version);
-        }
-        catch (Exception ex)
-        {
-            Status = userInitiated ? $"Update check failed: {ex.Message}" : "Background update check failed";
-        }
-        finally
-        {
-            _checking = false;
-            Changed?.Invoke(this, EventArgs.Empty);
-        }
-    }
-
-    public async Task RunBackgroundAsync(Func<bool> enabled)
-    {
-        try
-        {
-            if (enabled())
-                await CheckAsync(false);
-
-            while (await Task.Delay(TimeSpan.FromHours(6), _lifetime.Token).ContinueWith(
-                task => !task.IsCanceled,
-                CancellationToken.None))
-            {
-                if (enabled())
-                    await CheckAsync(false);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
-
-    public void ApplyAndRestart(WatchdogEngine engine)
-    {
-        if (_pendingManager is null || _pendingUpdate is null)
-            return;
-        LinuxUpdateRestart.Apply(engine, () => _pendingManager.ApplyUpdatesAndRestart(_pendingUpdate));
-    }
-
-    public void Dispose()
-    {
-        _lifetime.Cancel();
-        _lifetime.Dispose();
-    }
-}
-
-internal static class LinuxUpdateRestart
-{
-    public static void Apply(WatchdogEngine engine, Action applyUpdate)
-    {
-        engine.Save();
-        bool wasMonitoring = engine.Monitoring;
-        engine.StopMonitoring();
-        try
-        {
-            applyUpdate();
-        }
-        catch
-        {
-            if (wasMonitoring) engine.StartMonitoring();
-            throw;
-        }
-    }
-}
-
-internal static class LinuxSelfTest
-{
-    public static void Run()
-    {
-        string root = Path.Combine(Path.GetTempPath(), "ping-watchdog-linux-test-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            using (var engine = new WatchdogEngine(root))
-            {
-                Check(WatchdogEngine.NormalizeFolderPath(@" Indiana\\North / Branch ") == "Indiana/North/Branch");
-                Check(WatchdogEngine.NormalizeHosts(new[] { "10.0.0.1, 10.0.0.1\n8.8.8.8" }).Count == 2);
-                Check(engine.AddFolder("", "Indiana") is null);
-                Check(engine.AddFolder("Indiana", "North") is null);
-                Check(engine.AddSite("Test Site", "Indiana/North") is null);
-                Check(engine.SaveHosts("Test Site", "127.0.0.1\n8.8.8.8") is null);
-                Check(engine.SetLabel("Test Site", "127.0.0.1", "Loopback") is null);
-                var snapshot = engine.Snapshot();
-                Check(snapshot.Sites.Any(site => site.Name == "Test Site" && site.FolderPath == "Indiana/North"));
-                Check(snapshot.Hosts.Any(host => host.Address == "127.0.0.1" && host.Label == "Loopback"));
-                Check(engine.ExportConfigJson().Contains("Indiana/North", StringComparison.Ordinal));
-                Check(File.Exists(engine.ConfigPath));
-            }
-
-            using (var reloaded = new WatchdogEngine(root))
-            {
-                var snapshot = reloaded.Snapshot();
-                Check(snapshot.Sites.Any(site => site.Name == "Test Site"));
-                Check(snapshot.Sites.SelectMany(site => site.Hosts).Any(host => host.Label == "Loopback"));
-                Check(reloaded.MoveSite("Test Site", "") is null);
-                Check(reloaded.RenameFolder("Indiana/North", "Northwest") is null);
-                Check(reloaded.DeleteFolder("Indiana/Northwest") is null);
-            }
-        }
-        finally
-        {
-            try { Directory.Delete(root, true); } catch { }
-        }
-    }
-
-    private static void Check(bool condition)
-    {
-        if (!condition)
-            throw new InvalidOperationException("Linux self-test assertion failed.");
     }
 }

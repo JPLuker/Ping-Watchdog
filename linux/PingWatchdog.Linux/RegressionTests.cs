@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Collections.ObjectModel;
 
 namespace PingWatchdog.Linux;
 
@@ -7,7 +6,9 @@ internal static class LinuxRegressionTests
 {
     public static void Run()
     {
+        LinuxSelfTest.Run();
         MonitoringRegressionTests.RunAsync().GetAwaiter().GetResult();
+        FeatureRegressionTests.Run();
         string root = Path.Combine(Path.GetTempPath(), "ping-watchdog-regression-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
@@ -106,19 +107,6 @@ internal static class LinuxRegressionTests
             engine.StopMonitoring();
             Check(engine.HistorySnapshot(0, false).StoredCount >= storedEvents, "Import retains outage history");
 
-            var firstHost = new HostSnapshot("Alpha", "", "127.0.0.1", "", HostState.Online, 1, 0, null, null);
-            var secondHost = firstHost with { Address = "127.0.0.2" };
-            var rows = new ObservableCollection<HostRow>();
-            LiveRows.Hosts(rows, new[] { firstHost, secondHost });
-            var retained = rows[1];
-            int resets = 0;
-            rows.CollectionChanged += (_, _) => resets++;
-            LiveRows.Hosts(rows, new[] { firstHost, secondHost with { State = HostState.Offline, Failures = 3 } });
-            Check(resets == 0 && ReferenceEquals(retained, rows[1]), "Ping-state updates preserve collection and row identity");
-            LiveRows.Hosts(rows, new[] { secondHost, firstHost });
-            Check(ReferenceEquals(retained, rows[0]), "Host reorder retains keyed row identity");
-            LiveRows.Hosts(rows, new[] { firstHost });
-            Check(rows.Count == 1 && rows[0].Host.Address == "127.0.0.1", "Removed host cannot leave a stale selected row");
         }
         finally
         {

@@ -1,36 +1,54 @@
-using System.Reflection;
+// Drives the real Avalonia windows under Xvfb or headless Weston, with isolated storage, a scripted
+// probe and no update checks. Saves captures to ui-regression-images/ for review in the CI log.
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Avalonia.Styling;
 using Avalonia.Threading;
-using Avalonia;
 using Avalonia.VisualTree;
 
 namespace PingWatchdog.Linux;
 
-// Runs real Avalonia desktop windows under Xvfb, with isolated storage and no update checks.
 internal static class LinuxUiRegressionTests
 {
     public static bool Enabled { get; set; }
+    private static readonly string[] Devices = { "Laptop", "Desktop", "Tablet", "Mini PC", "Server" };
+    private static readonly string[] Trees = { "Cedar", "Maple", "Pine", "Ash", "Birch" };
+    // Scripted replies: .22 hosts never answer, so every capture shows a real outage.
+    private static readonly HashSet<string> Down = new(StringComparer.OrdinalIgnoreCase) { "172.20.2.22", "172.20.4.22" };
 
     public static void Start(IClassicDesktopStyleApplicationLifetime desktop)
     {
         string root = Path.Combine(Path.GetTempPath(), "ping-watchdog-ui-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "state"));
-        var records = Enumerable.Range(0, 300).Select(i => new StateEventRecord(
-            DateTime.Now.AddMinutes(-i), "Archived site", "127.0.0.1", "Archived host", "DOWN", $"Event {i}")).ToList();
-        records.Add(new StateEventRecord(DateTime.Now, "Beta", "127.0.0.2", "Beta host", "SUSPECT", "Suspect"));
+        var now = DateTime.Now;
+        var records = Enumerable.Range(0, 60).Select(i => new StateEventRecord(now.AddMinutes(-i), "Office & Warehouse", "192.0.2.40",
+            "Controller with a long name (192.0.2.40)", (i % 3) switch { 0 => "DOWN", 1 => "RECOVERED", _ => "SUSPECT" }, "Availability changed")).ToList();
         File.WriteAllText(Path.Combine(root, "state", "event-history.json"), JsonSerializer.Serialize(records));
-        var engine = new WatchdogEngine(root);
+        Autostart.DirectoryOverride = Path.Combine(root, "autostart-config");
+        DesktopLauncher.Launcher = _ => true;
+
+        Task<ProbeResult> Probe(string address, int timeout, CancellationToken token) =>
+            Task.FromResult(Down.Contains(address)
+                ? new ProbeResult(false, null, "FAILED (TimedOut)")
+                : new ProbeResult(true, 2 + Math.Abs(address.GetHashCode()) % 8, $"Reply from {address}: time=3ms"));
+        var engine = new WatchdogEngine(root, Probe, (_, token) => Task.Delay(150, token));
+        engine.Notify = (_, _, _) => { };
         var config = engine.Snapshot().Settings;
         config.AutoCheckUpdates = false;
+        config.ShowCommandView = true;
         engine.ApplySettings(config);
-        engine.AddSite("Alpha");
-        engine.SaveHosts("Alpha", "127.0.0.1");
-        engine.AddSite("Beta");
-        engine.SaveHosts("Beta", "127.0.0.2");
-        engine.SelectedSite = "Alpha";
+        engine.DeleteSite("Default Site");
+        for (int b = 1; b <= 5; b++)
+        {
+            var rows = Enumerable.Range(0, 5).Select(i => new ImportedHost($"172.20.{b}.{21 + i}", $"{Devices[i]} {Trees[(i + b) % 5]}", "", "")).ToList();
+            engine.AddHosts("Branch " + b, rows, createSite: true);
+        }
+        engine.RemoveHosts(engine.Snapshot().Sites.Where(s => s.Name == "Default Site").SelectMany(s => s.Hosts).Select(h => h.Key).ToList());
+        if (engine.SiteDefinitions().Any(s => s.Name == "Default Site" && s.Hosts.Count == 0)) engine.DeleteSite("Default Site");
+        engine.SelectedSite = null;
         var updates = new LinuxUpdateService();
         var main = new MainWindow(engine, updates);
         desktop.MainWindow = main;
@@ -41,169 +59,297 @@ internal static class LinuxUiRegressionTests
             started = true;
             Dispatcher.UIThread.Post(async () =>
             {
-            int exitCode = 0;
-            try
-            {
-                await RunAsync(engine, updates, main);
-                Console.WriteLine("Ping Watchdog Linux UI regressions passed.");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine(ex);
-                exitCode = 1;
-            }
-            finally
-            {
-                desktop.Shutdown(exitCode);
-                updates.Dispose();
-                engine.Dispose();
-                try { Directory.Delete(root, true); } catch { }
-            }
+                int exitCode = 0;
+                try
+                {
+                    await RunAsync(root, engine, updates, main);
+                    Console.WriteLine("Ping Watchdog Linux UI regressions passed.");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(ex);
+                    exitCode = 1;
+                }
+                finally
+                {
+                    desktop.Shutdown(exitCode);
+                    updates.Dispose();
+                    engine.Dispose();
+                    try { Directory.Delete(root, true); } catch (IOException) { }
+                }
             });
         };
     }
 
-    private static async Task RunAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
+    private static void Check(bool condition, string name) => LinuxRegressionTests.Check(condition, name);
+
+    private static async Task Until(Func<bool> condition, string name, int ms = 4000)
     {
-        await Task.Delay(100);
+        var deadline = DateTime.UtcNow.AddMilliseconds(ms);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) Check(false, name + " (timed out)");
+            await Task.Delay(25);
+        }
+        Check(true, name);
+    }
+
+    private static async Task Settle(int ms = 120) { await Task.Delay(ms); Dispatcher.UIThread.RunJobs(); }
+
+    private static string Mode => Application.Current!.ActualThemeVariant == ThemeVariant.Dark ? "Dark" : "Light";
+
+    private static async Task SetModeAsync(AppearanceMode mode)
+    {
+        Tokens.SetMode(mode);
+        await Settle(150);
+    }
+
+    private static void Capture(Window window, string name)
+    {
+        Directory.CreateDirectory("ui-regression-images");
+        double scale = window.RenderScaling;
+        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(
+            new PixelSize((int)Math.Ceiling(window.Bounds.Width * scale), (int)Math.Ceiling(window.Bounds.Height * scale)), new Vector(96 * scale, 96 * scale));
+        bitmap.Render(window);
+        using var stream = File.Create(Path.Combine("ui-regression-images", name + ".png"));
+        bitmap.Save(stream);
+    }
+
+    private static async Task CaptureBoth(Window window, string name)
+    {
+        foreach (var mode in new[] { AppearanceMode.Light, AppearanceMode.Dark })
+        {
+            await SetModeAsync(mode);
+            Capture(window, name + "-" + mode);
+        }
+        await SetModeAsync(AppearanceMode.Light);
+    }
+
+    private static async Task RunAsync(string root, WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
+    {
+        await Settle(200);
         if (double.TryParse(Environment.GetEnvironmentVariable("WATCHDOG_EXPECTED_SCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double expectedScale))
             Check(Math.Abs(main.RenderScaling - expectedScale) < .01, $"Desktop render scale is {expectedScale}");
-        await CheckDesktopPresentationAsync(engine, updates, main);
-        var editor = Field<TextBox>(main, "_hostEditor");
-        await CheckHostPanelLayoutAsync(main, editor);
-        editor.Text = "127.0.0.1\n127.0.0.3";
-        engine.Save();
-        await Task.Delay(850);
-        Check(editor.Text!.Contains("127.0.0.3"), "Main draft survives timer refresh while unfocused");
-        engine.SelectedSite = "Beta";
-        await Task.Delay(150);
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.3"), "Main selection change saves original site's draft");
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Beta").Hosts.SequenceEqual(new[] { "127.0.0.2" }), "Main draft never leaks to new site");
-        Check(editor.Focus(), "Main editor receives focus");
-        editor.Text = "127.0.0.2\n127.0.0.4";
-        Field<Button>(main, "_startStop").Focus();
-        await Task.Delay(100);
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Beta").Hosts.Contains("127.0.0.4"), "Main focus loss persists edits");
+        main.Width = 1240; main.Height = 780;
+        await Settle(200);
 
-        var wallboard = new WallboardWindow(engine, updates, main);
-        wallboard.Show();
-        await Task.Delay(150);
-        var hosts = Field<TextBox>(wallboard, "_hosts");
-        hosts.Text = "127.0.0.2\n127.0.0.5";
-        await Task.Delay(850);
-        Check(hosts.Text!.Contains("127.0.0.5"), "Wallboard draft survives timer refresh while unfocused");
-        engine.SelectedSite = "Alpha";
-        await Task.Delay(850);
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Beta").Hosts.Contains("127.0.0.5"), "Wallboard selection change saves original site's draft");
-        Field<StackPanel>(wallboard, "_ops").IsVisible = true;
-        await Task.Delay(100);
-        Check(hosts.Focus(), "Wallboard editor receives focus");
-        bool cli = Field<bool>(wallboard, "_showCli");
-        hosts.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C });
-        Check(Field<bool>(wallboard, "_showCli") == cli, "Typing C in Wallboard editor does not toggle CLI");
-        hosts.Text = "127.0.0.1\n127.0.0.6";
-        wallboard.Close();
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "Closing Wallboard persists edits");
-        await RunWallboardParityAsync(engine, updates, main);
+        // Main window, idle
+        Check(main.HeaderText == "All hosts" && main.AllSitesText == "All sites · 25 hosts", "All sites scope and host count");
+        Check(main.SiteButtonNames.SequenceEqual(new[] { "Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5" }), "Sidebar lists every site, no Sites heading");
+        Check(main.StartStopText == "Start monitoring" && !main.ListVisible, "Map is the default view; one primary action");
+        Check(main.GetVisualDescendants().OfType<TextBlock>().All(t => t.Text is not ("IDLE" or "MONITORING" or "PING WATCHDOG")), "No duplicate header chrome (badge, wordmark)");
+        await Until(() => main.Map.DrawnAddresses.Count == 25, "Map draws all 25 hosts");
+        Check(main.Map.AllHostsFit && !main.Map.RegionsOverlap(), "Every host fits the map and nothing overlaps");
+        Check(main.Map.DrawnAddresses.ToHashSet().SetEquals(engine.Snapshot().Hosts.Select(h => h.Address)), "Every address is drawn whole (#41)");
+        Check(main.Ping.IsVisible, "Ping activity sits under the Map");
 
-        var history = new HistoryWindow(engine);
-        history.Show(main);
-        await Task.Delay(100);
-        Check(engine.Config.HideSuspectEvents, "Opening History preserves the saved suspect filter");
-        Field<ComboBox>(history, "_range").SelectedIndex = 3;
-        Field<CheckBox>(history, "_hideSuspects").IsChecked = false;
-        var site = Field<ComboBox>(history, "_site");
-        site.SelectedIndex = Field<List<string?>>(history, "_siteKeys").IndexOf("Archived site");
-        await Task.Delay(100);
-        Check(Field<IReadOnlyList<StateEventRecord>>(history, "_visibleEvents").Count == 300, "History UI includes all 300 filtered records from a removed site");
-        Check(Field<TextBlock>(history, "_summary").Text!.Contains("301"), "History UI reports total stored count");
+        // Monitoring
+        main.ToggleMonitoring();
+        await Until(() => engine.Snapshot().Hosts.Count(h => h.State == HostState.Offline) == 2, "Scripted outages are declared offline");
+        await Until(() => { main.RefreshAll(); return main.SummaryText == "23 online · 0 suspect · 2 offline"; }, "Map summary counts online, suspect and offline");
+        Check(main.StartStopText == "Stop monitoring", "Primary action becomes Stop monitoring");
+        await Until(() => main.Ping.LineCount > 0, "Ping activity shows live replies");
+        await CaptureBoth(main, "main-map");
+
+        // List
+        main.SetListView(true);
+        await Settle();
+        Check(main.ListVisible && main.HostList.RowCount == 25, "List shows every host");
+        Check(main.HostList.VisibleColumns.SequenceEqual(new[] { "Address", "Name", "Site", "Status", "Latency" }), "Default columns match Windows (Address, Name, Site, Status, Latency)");
+        Check(main.HostList.Rows.Count(r => r.Status == "Offline") == 2 && main.HostList.Rows.Count(r => r.Status == "Online") == 23, "Status words with dots");
+        main.SetFilter(HostFilter.Offline);
+        await Settle();
+        Check(main.HostList.RowCount == 2 && (main.ChipFor(HostFilter.Offline).Content as string) == "Offline 2", "Offline filter chip");
+        main.SetFilter(HostFilter.Priority);
+        await Settle();
+        Check(main.HostList.RowCount == 0 && main.HostList.EmptyText == "No priority hosts", "Empty filter says why");
+        main.SetFilter(HostFilter.All);
+        main.SelectSite("Branch 3");
+        await Settle();
+        Check(main.HeaderText == "Branch 3" && main.HostList.RowCount == 5 && !main.HostList.VisibleColumns.Contains("Site"), "Selecting a site scopes the List; Site column follows the scope");
+        main.SearchBox.Text = "server";
+        await Settle();
+        Check(main.HostList.RowCount == 1 && main.HostList.Rows[0].Address == "172.20.3.25", "Search filters hosts");
+        main.SearchBox.Text = "";
+        await Settle();
+        await CaptureBoth(main, "main-list");
+
+        // Host actions
+        var tablet = engine.Snapshot().Hosts.Single(h => h.Address == "172.20.3.23");
+        main.HostList.Select(tablet.Key);
+        main.Actions.ShowMenu(main.HostList, new Point(40, 40), main.HostList.SelectedHosts, fromList: true);
+        await Settle();
+        var single = main.Actions.LastMenuItems.OfType<MenuItem>().Select(m => m.Header as string).ToList();
+        Check(single.SequenceEqual(new string?[] { tablet.Label + " • 172.20.3.23", "Copy address", "Edit host…", "Clear label", "Set group…", "Ping in terminal",
+            "Snooze host for 1 hour", "Mark as priority", "Disable monitoring", "Move to site…", "Monitoring…", "Remove host…" }), "Host actions match Windows: " + string.Join(", ", single));
+        main.Actions.LastMenu?.Close();
+        main.HostList.SelectAll();
+        await Settle();
+        main.Actions.ShowMenu(main.HostList, new Point(40, 40), main.HostList.SelectedHosts, fromList: true);
+        await Settle();
+        var bulk = main.Actions.LastMenuItems.OfType<MenuItem>().Select(m => m.Header as string).ToList();
+        Check(bulk.Contains("5 hosts selected") && bulk.Contains("Move to site…") && !bulk.Contains("Copy address"), "Several hosts get bulk actions");
+        main.Actions.LastMenu?.Close();
+
+        // Edits save at once, with Undo
+        Check(engine.SetPriority(new[] { tablet.Key }, true) is null, "Mark as priority");
+        main.ShowStatus("Marked " + tablet.Label + " as priority", true);
+        main.RefreshAll();
+        await Settle();
+        Check((main.ChipFor(HostFilter.Priority).Content as string) == "Priority 1" && main.HostList.Rows.Single(r => r.Address == tablet.Address).Status == "Online · Priority", "Priority shows in chip and status");
+        Check(main.Toast.Message.Contains("priority", StringComparison.Ordinal), "Edits confirm in one line with Undo");
+        main.Undo();
+        main.RefreshAll();
+        await Settle();
+        Check(!engine.Snapshot().Hosts.Single(h => h.Key == tablet.Key).Options.Priority && main.Toast.Message.StartsWith("Undid", StringComparison.Ordinal), "Ctrl+Z undoes the last host edit");
+        engine.SetEnabled(new[] { tablet.Key }, false);
+        main.RefreshAll();
+        await Settle();
+        Check(main.HostList.Rows.Single(r => r.Address == tablet.Address).Status == "Disabled" && (main.ChipFor(HostFilter.Disabled).Content as string) == "Disabled 1", "Disabled hosts say so and are counted");
+        engine.SetEnabled(new[] { tablet.Key }, true);
+
+        // Dialogs
+        var add = new AddHostsDialog(engine, false, "Branch 3");
+        add.Show(main);
+        add.SetInput("192.0.2.10\tExisting router\n192.0.2.20\tPrinter & scanner\n192.0.2.20\tDuplicate\n192.0.2.999\tInvalid\n172.20.3.21\tAgain");
+        await Settle(200);
+        Check(add.PreviewRows.Count == 5 && add.SummaryText == "2 new · 2 duplicates/conflicts · 1 invalid", "Quick Add previews new, duplicate and invalid rows: " + add.SummaryText);
+        Check(add.PreviewRows.Single(r => r.Address == "172.20.3.21").Status == "Label conflict • Branch 3", "Existing hosts with a different label are flagged as conflicts");
+        await CaptureBoth(add, "dialog-quick-add");
+        add.AcceptForTest();
+        await Settle();
+        Check(engine.SiteDefinitions().Single(s => s.Name == "Branch 3").Labels["192.0.2.20"] == "Printer & scanner", "Quick Add saves labels with & intact");
+        var edit = new EditHostDialog(engine.Snapshot().Hosts.Single(h => h.Address == "192.0.2.20"), (_, _) => null);
+        edit.Show(main);
+        await Settle();
+        await CaptureBoth(edit, "dialog-edit-host");
+        edit.Close();
+        var confirm = new MessageDialog("Remove host", "Remove 192.0.2.20 from Branch 3?", "Remove", "Cancel", true);
+        confirm.Show(main);
+        await Settle();
+        await CaptureBoth(confirm, "dialog-confirm");
+        confirm.Close();
+        var quick = new AddHostsDialog(engine, true, null);
+        quick.Show(main);
+        quick.SetInput("198.51.100.7\tCamera");
+        await Settle();
+        quick.AcceptForTest();
+        await Settle();
+        Check(engine.Snapshot().Sites.Any(s => s.Temporary && s.Hosts.Any(h => h.Address == "198.51.100.7")), "Quick Monitor watches hosts for this session");
+        main.RefreshAll();
+        await Settle();
+        Check(main.SiteButtonNames.Contains(WatchdogEngine.QuickMonitorSite), "Quick Monitor appears as a temporary site");
+
+        // Smallest window
+        main.SetListView(false);
+        main.SelectSite(null);
+        main.Width = 900; main.Height = 600;
+        await Settle(300);
+        Check(main.Map.AllHostsFit && !main.Map.RegionsOverlap() && main.Map.DrawnAddresses.Count == engine.Snapshot().Hosts.Count, $"Map still fits every host at the minimum window size ({main.Map.DrawnAddresses.Count}/{engine.Snapshot().Hosts.Count}, fit={main.Map.AllHostsFit}, overlap={main.Map.RegionsOverlap()})");
+        Capture(main, "main-map-900");
+        main.Width = 1240; main.Height = 780;
+
+        // A crowded site with long names (#42, #43)
+        var crowded = Enumerable.Range(1, 30).Select(i => new ImportedHost($"10.255.{i}.{200 + i}", $"Workstation in the north annex {i}", "", "")).ToList();
+        engine.AddHosts("Office & Warehouse with a long name", crowded, createSite: true);
+        main.SelectSite(null);
+        await Settle(400);
+        Check(main.Map.DrawnAddresses.Count == engine.Snapshot().Hosts.Count && main.Map.AllHostsFit && !main.Map.RegionsOverlap(), $"Crowded maps keep every address and site name visible ({main.Map.DrawnAddresses.Count}/{engine.Snapshot().Hosts.Count}, fit={main.Map.AllHostsFit}, overlap={main.Map.RegionsOverlap()})");
+        Check(main.Map.DrawnSiteHeadings.Contains("Office & Warehouse with a long name"), "Long site names are drawn");
+        await CaptureBoth(main, "main-map-crowded");
+
+        // Settings: staged
+        main.OpenSettings();
+        await Settle(200);
+        var settings = main.Settings!;
+        foreach (var page in SettingsWindow.Pages)
+        {
+            settings.SelectPage(page);
+            await Settle(60);
+            await CaptureBoth(settings, "settings-" + page.Replace(' ', '-'));
+        }
+        settings.SelectPage("General");
+        Check(!settings.Dirty && settings.SaveStateText == "Saved", "Settings open saved");
+        settings.MinimizeToTrayBox.IsChecked = false;
+        settings.Use12HourBox.IsChecked = true;
+        Check(settings.Dirty && settings.SaveStateText == "Unsaved changes", "Changes are staged");
+        Check(engine.Config.MinimizeToTray && !engine.Config.Use12HourTime, "Staged changes aren't applied before saving");
+        Check(settings.MonitoringLocked, "Monitoring timing is locked while monitoring");
+        Check(settings.Save() && !engine.Config.MinimizeToTray && engine.Config.Use12HourTime && DisplayTime.Use12HourTime, "Save changes applies them");
+        settings.AppearanceBox.SelectedIndex = 2;
+        settings.VersionOverlayBox.IsChecked = true;
+        Check(settings.Save(), "Save appearance and version overlay");
+        await Settle(150);
+        Check(Application.Current!.ActualThemeVariant == ThemeVariant.Dark && main.VersionOverlayVisible, "Dark appearance and version overlay apply at once");
+        Capture(main, "main-map-overlay-Dark");
+        settings.AppearanceBox.SelectedIndex = 0;
+        settings.VersionOverlayBox.IsChecked = false;
+        settings.Use12HourBox.IsChecked = false;
+        Check(settings.Save() && !main.VersionOverlayVisible, "Back to the system appearance");
+        settings.Close();
+        await Settle();
+        Check(main.Settings is null, "Settings closes when nothing is unsaved");
+
+        // History and organization
+        main.OpenHistory();
+        await Settle(250);
+        var history = main.History!;
+        await Until(() => history.RowCount > 0, "Outage history lists stored events");
+        Check(history.CountText.EndsWith("stored", StringComparison.Ordinal), "History shows shown and stored counts");
+        history.Width = 1040; history.Height = 650;
+        await Settle();
+        await CaptureBoth(history, "history");
+        history.SiteBox.SelectedItem = "Branch 2";
+        await Settle();
         history.Close();
+        main.OpenOrganization();
+        await Settle(200);
+        Check(main.Organization!.ItemCount == 6, "Organize sites lists every saved site, not temporary ones");
+        await CaptureBoth(main.Organization!, "organization");
+        main.Organization!.Close();
 
-        int updateSubscribers = SubscriberCount(updates, "Changed");
-        var settings = new SettingsWindow(engine, updates, main);
-        settings.Show(main);
-        Check(SubscriberCount(updates, "Changed") == updateSubscribers + 1, "Settings subscribes while open");
-        settings.Close();
-        Check(SubscriberCount(updates, "Changed") == updateSubscribers, "Settings detaches updater subscription on close");
-        int engineSubscribers = SubscriberCount(engine, "Changed");
-        var organization = new OrganizationWindow(engine);
-        organization.Show(main);
-        Check(SubscriberCount(engine, "Changed") == engineSubscribers + 1, "Organization subscribes while open");
-        engine.SaveHosts("Alpha", "127.0.0.1\n127.0.0.6");
-        organization.Close();
-        Check(SubscriberCount(engine, "Changed") == engineSubscribers, "Organization detaches engine subscription on close");
-        await Task.Delay(100);
-        engine.SelectedSite = null;
-        await Task.Delay(100);
-        Check(editor.IsReadOnly, "All Sites editor is read only");
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "Programmatic main refresh cannot overwrite a newer Wallboard edit");
+        // Wallboard: display-only
+        engine.RemoveHosts(engine.Snapshot().Hosts.Where(h => h.Site.StartsWith("Office", StringComparison.Ordinal)).Select(h => h.Key).ToList());
+        main.OpenWallboard();
+        await Settle(400);
+        var wall = main.Wallboard!;
+        await Until(() => { wall.Refresh(engine.Snapshot()); return wall.OutageCount == 2; }, "Wallboard lists active outages");
+        Check(wall.CountsText.EndsWith("2 offline", StringComparison.Ordinal) && wall.StateText == "Monitoring", "Wallboard counts and status");
+        Check(!wall.GetVisualDescendants().OfType<Button>().Any(b => b.IsVisible && b.Content as string is "Operations" or "Show controls"), "Wallboard has no visible toolbar");
+        Check(wall.Map.AllHostsFit && !wall.Map.RegionsOverlap(), "Wallboard map fits every host");
+        await CaptureBoth(wall, "wallboard");
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, Source = wall });
+        await Settle();
+        Check(!wall.PingVisible && !engine.Config.WallboardShowCli, "C hides the Wallboard ping log");
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, Source = wall });
+        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape, Source = wall });
+        await Settle(200);
+        Check(main.Wallboard is null, "Escape returns from the Wallboard");
 
-        engine.SelectedSite = "Alpha";
-        await Task.Delay(100);
-        var hostList = Field<ListBox>(main, "_hostList");
-        hostList.SelectedIndex = 0;
-        var selectedRow = hostList.SelectedItem;
-        var itemSource = hostList.ItemsSource;
-        var sites = Field<ListBox>(main, "_siteList").ItemsSource;
-        Field<NumericUpDown>(main, "_interval").Value = 30;
-        await Task.Delay(850);
-        Check(ReferenceEquals(hostList.ItemsSource, itemSource) && ReferenceEquals(hostList.SelectedItem, selectedRow), "Timer refresh preserves host collection and selection");
-        Check(ReferenceEquals(Field<ListBox>(main, "_siteList").ItemsSource, sites), "Timer refresh preserves site collection");
-        Check(Field<NumericUpDown>(main, "_interval").Value == 30, "Timer refresh preserves unsaved timing controls");
-        string originalHosts = string.Join(Environment.NewLine, engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts);
-        engine.SaveHosts("Alpha", originalHosts + Environment.NewLine + string.Join(Environment.NewLine, Enumerable.Range(10, 150).Select(i => $"127.0.0.{i}")));
-        await Task.Delay(150);
-        hostList.ScrollIntoView(Field<System.Collections.ObjectModel.ObservableCollection<HostRow>>(main, "_hostRows")[80]);
-        await Task.Delay(150);
-        var hostScroll = hostList.GetVisualDescendants().OfType<ScrollViewer>().First();
-        double scrollY = hostScroll.Offset.Y;
-        Check(scrollY > 0, "Large host list scroll fixture is realized");
-        engine.SetLabel("Alpha", "127.0.0.6", "Scroll test");
-        await Task.Delay(850);
-        Check(Math.Abs(hostScroll.Offset.Y - scrollY) < 1 && ReferenceEquals(hostList.SelectedItem, selectedRow), "Live row updates preserve scroll position and keyed selection");
-        engine.SetLabel("Alpha", "127.0.0.6", "");
-        engine.SaveHosts("Alpha", originalHosts);
-        await Task.Delay(150);
-        Check(hostList.ContextMenu is not null && Field<Button>(main, "_editLabel").IsEnabled, "Host label actions are available from selection and context menu");
-        var editTask = (Task)Invoke(main, "EditLabelAsync")!;
-        await Task.Delay(100);
-        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
-        var labelDialog = lifetime.Windows.Single(w => w.Title == "Edit Host Label");
-        labelDialog.GetVisualDescendants().OfType<TextBox>().Single().Text = "Edge router";
-        labelDialog.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "OK")
-            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        await editTask;
-        await Task.Delay(100);
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels["127.0.0.1"] == "Edge router", "Host label dialog saves the selected address");
-        Check(ReferenceEquals(hostList.SelectedItem, selectedRow) && ((HostRow)selectedRow!).Text.Contains("Edge router"), "Label refresh updates the selected row in place");
-        Field<Button>(main, "_clearLabel").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        await Task.Delay(100);
-        Check(!engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels.ContainsKey("127.0.0.1"), "Clear Label UI removes the label");
+        // Priority alarm bar
+        var pine = engine.Snapshot().Hosts.Single(h => h.Address == "172.20.2.22");
+        engine.SetPriority(new[] { pine.Key }, true);
+        main.Alarm.Raise("Branch 2", "172.20.2.22", pine.Label + " (172.20.2.22)", true, DateTime.Now);
+        await Settle();
+        Check(main.Banner.IsVisible && main.Banner.MessageText.StartsWith("Priority · " + pine.Label, StringComparison.Ordinal) && main.Banner.MessageText.Contains("went offline", StringComparison.Ordinal),
+            "Priority alerts show a bar with words, not just color");
+        await CaptureBoth(main, "main-priority");
+        main.Alarm.AcknowledgeAll();
+        await Settle();
+        Check(!main.Banner.IsVisible, "Acknowledge clears the bar");
+        main.Alarm.Raise("Branch 2", "172.20.2.22", pine.Label, true, DateTime.Now);
+        engine.SetPriority(new[] { pine.Key }, false);
+        main.RefreshAll();
+        await Settle();
+        Check(main.Alarm.Active.Count == 0 && !main.Banner.IsVisible, "Removing priority stops the alarm");
 
-        var trace = Field<CliTraceView>(main, "_commandBox");
-        var success = new CommandLogEntry(DateTime.Now, "Alpha", "127.0.0.1", "", true, "127.0.0.1: ping -c 1 -W 1 127.0.0.1 -> Reply");
-        var failure = success with { Timestamp = DateTime.Now.AddTicks(1), Success = false, Text = "127.0.0.1: ping -c 1 -W 1 127.0.0.1 -> FAILED" };
-        trace.IsVisible = true;
-        trace.Refresh(new[] { success, failure });
-        var traceList = Field<ListBox>(trace, "_list");
-        var successLabel = (TextBlock)traceList.ItemTemplate!.Build(success)!;
-        var failureLabel = (TextBlock)traceList.ItemTemplate.Build(failure)!;
-        Check(Equals(successLabel.Foreground, Theme.Green) && Equals(failureLabel.Foreground, Theme.Red), "CLI renders success green and failure red per command");
-        Check(((TextBlock)traceList.ItemTemplate.Build(null)!).Text == string.Empty, "CLI recycled null content renders safely");
-        var traceRows = traceList.ItemsSource;
-        trace.Refresh(new[] { success, failure });
-        Check(ReferenceEquals(traceRows, traceList.ItemsSource), "CLI refresh preserves its list collection");
-        trace.Refresh(Array.Empty<CommandLogEntry>());
-        Check(traceList.ItemCount == 0, "CLI clear removes visible rows");
+        // Update popup
+        main.UpdatePopupControl.Show("Up to date");
+        await Settle();
+        await CaptureBoth(main, "main-update-popup");
+        main.UpdatePopupControl.IsVisible = false;
 
-        settings = new SettingsWindow(engine, updates, main);
-        settings.Show(main);
-        Field<CheckBox>(settings, "_minimizeToTray").IsChecked = false;
-        Invoke(settings, "SaveValues");
-        Check(!engine.Config.MinimizeToTray, "Settings UI saves minimize-to-tray preference");
-        Check(settings.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Import Config...")
-            && settings.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Export Config..."), "Settings exposes native config import/export actions");
-        settings.Close();
+        // Tray
         Check(!await LinuxTrayHost.AvailableAsync(), "Real session-bus check detects the missing tray host in CI");
         bool hostAvailable = true;
         using (var tray = new LinuxTrayService(Application.Current!, main, engine, updates, () => Task.FromResult(hostAvailable)))
@@ -211,284 +357,30 @@ internal static class LinuxUiRegressionTests
             main.AttachTray(tray);
             await tray.RefreshAsync();
             Check(tray.Available, "Native tray exporter is initialized on the Linux session bus");
-            var menu = Field<TrayIcon>(tray, "_icon").Menu!;
-            Check(menu.Items.OfType<NativeMenuItem>().Any(i => i.Header == "Open Wallboard")
-                && menu.Items.OfType<NativeMenuItem>().Any(i => i.Header == "Exit"), "Tray menu exposes restore, Wallboard, and exit operations");
             var prefs = engine.Snapshot().Settings;
             prefs.MinimizeToTray = true;
             engine.ApplySettings(prefs);
-            engine.StartMonitoring();
             main.WindowState = WindowState.Minimized;
-            // Headless Weston does not implement desktop minimization or report Minimized.
-            // Exercise the same explicit request consumed by the tray service; X11 also
-            // verifies the actual WindowState notification path.
             bool headlessWayland = Environment.GetEnvironmentVariable("WATCHDOG_BACKEND") == "wayland";
             await tray.MinimizeAsync(requested: headlessWayland);
-            await Task.Delay(150);
-            Console.WriteLine($"Tray minimize state: available={tray.Available}, preference={engine.Config.MinimizeToTray}, visible={main.IsVisible}, state={main.WindowState}, monitoring={engine.Monitoring}");
-            Check(!main.IsVisible && engine.Monitoring, "Tray minimize request hides the window while monitoring continues");
+            await Settle(150);
+            Check(!main.IsVisible && engine.Monitoring, "Minimize to tray hides the window while monitoring continues");
             hostAvailable = false;
             await tray.RefreshAsync();
-            Check(main.IsVisible && main.WindowState == WindowState.Normal && engine.Monitoring, "Loss of tray host restores a reachable monitoring window");
+            Check(main.IsVisible && main.WindowState == WindowState.Normal && engine.Monitoring, "Losing the tray host brings the window back");
             main.WindowState = WindowState.Minimized;
             await tray.MinimizeAsync();
-            Check(main.IsVisible, "Missing tray host uses normal taskbar minimize");
+            Check(main.IsVisible, "Without a tray host, minimize uses the taskbar");
             tray.Restore();
             Check(main.IsVisible && main.WindowState == WindowState.Normal, "Tray restore opens the main window");
-            engine.StopMonitoring();
         }
-        using var reloaded = new WatchdogEngine(Path.GetDirectoryName(engine.ConfigPath)!);
-        Check(reloaded.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts.Contains("127.0.0.6"), "UI host edits survive restart");
+        engine.StopMonitoring();
+
+        // Everything above was saved as it happened.
+        using var reloaded = new WatchdogEngine(root);
+        Check(reloaded.SiteDefinitions().Single(s => s.Name == "Branch 3").Labels["192.0.2.20"] == "Printer & scanner", "Host edits survive restart");
+        Check(!reloaded.SiteDefinitions().Any(s => s.Name == WatchdogEngine.QuickMonitorSite), "Quick Monitor hosts are gone after restart");
+        Check(!reloaded.Config.MinimizeToTray == false, "Settings survive restart");
     }
 
-    private static async Task CheckHostPanelLayoutAsync(MainWindow main, TextBox editor)
-    {
-        double width = main.Width, height = main.Height;
-        var heading = Field<TextBlock>(main, "_siteHeader");
-        foreach (var size in new[] { new Size(width, height), new Size(1060, 740), new Size(main.MinWidth, main.MinHeight) })
-        {
-            main.Width = size.Width;
-            main.Height = size.Height;
-            await Task.Delay(150);
-            var titlePoint = heading.TranslatePoint(new Point(), main)!.Value;
-            var editorPoint = editor.TranslatePoint(new Point(), main)!.Value;
-            var card = editor.GetVisualAncestors().OfType<Border>().First();
-            var cardPoint = card.TranslatePoint(new Point(), main)!.Value;
-            Check(heading.Bounds.Height >= heading.DesiredSize.Height - 1 && editorPoint.Y >= titlePoint.Y + heading.Bounds.Height,
-                $"Host panel reserves the full heading and gap at {size.Width}x{size.Height}");
-            Check(editorPoint.Y + editor.Bounds.Height <= cardPoint.Y + card.Bounds.Height - card.Padding.Bottom + 1,
-                $"Host editor stays inside its card at {size.Width}x{size.Height}");
-            Check(editor.Bounds.Height >= 60, "Host editor retains its usable height");
-            SavePreview(main, $"main-{(int)size.Width}x{(int)size.Height}");
-        }
-        main.Width = width;
-        main.Height = height;
-        await Task.Delay(150);
-    }
-
-    private static async Task RunWallboardParityAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
-    {
-        var originalSettings = engine.Snapshot().Settings;
-        string originalHosts = string.Join(Environment.NewLine, engine.SiteDefinitions().Single(s => s.Name == "Alpha").Hosts);
-        engine.SelectedSite = "Alpha";
-        var wall = new WallboardWindow(engine, updates, main);
-        wall.Show();
-        await Task.Delay(150);
-        Invoke(wall, "ToggleOperations");
-        await Task.Delay(100);
-        Check(Field<Border>(wall, "_opsCard").IsVisible && Field<Border>(wall, "_reportsCard").IsVisible,
-            "Wallboard operations drawer occupies its own grid cell and retains the reports");
-        Check(wall.GetVisualDescendants().OfType<Image>().Any(i => ReferenceEquals(i.Source, BrandAssets.Logo)), "Wallboard displays the embedded Watchdog dog");
-        Check(wall.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Import Config...")
-            && wall.GetVisualDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "Export Config..."), "Wallboard offers shared native config actions");
-        engine.SaveHosts("Alpha", originalHosts + "\n" + string.Join("\n", Enumerable.Range(10, 15).Select(i => $"127.0.0.{i}")));
-        Invoke(wall, "Refresh");
-        var list = Field<ListBox>(wall, "_hostList");
-        list.SelectedIndex = 0;
-        var row = list.SelectedItem;
-        var source = list.ItemsSource;
-        Check(list.ItemCount == 17, "Wallboard live list includes hosts beyond the twelve topology nodes");
-        var compactHost = (Border)list.ItemTemplate!.Build(row)!;
-        Check(compactHost.Child is Grid,
-            "Wallboard host rows render as a column table");
-        var topology = Field<Canvas>(wall, "_topology");
-        Check(topology.Children.OfType<TextBlock>().Any(t => t.Text!.StartsWith("+5 more hosts")), "Wallboard topology reports hidden host count");
-        Check(topology.Children.OfType<TextBlock>().Any(t => t.Text == "Alpha") && !topology.Children.OfType<TextBlock>().Any(t => t.Text == "Beta"), "Topology respects selected site scope");
-        await Task.Delay(100);
-        Check(topology.Children.OfType<TextBlock>().All(t => Canvas.GetLeft(t) >= 0 && Canvas.GetLeft(t) + t.Width <= topology.Width), "Topology labels stay within their scrollable canvas");
-        EmitWallboardPreview(wall, "operations");
-        Field<NumericUpDown>(wall, "_interval").Value = 23;
-        await Task.Delay(850);
-        Check(ReferenceEquals(source, list.ItemsSource) && ReferenceEquals(row, list.SelectedItem), "Wallboard live refresh preserves rows and keyed selection");
-        Check(Field<NumericUpDown>(wall, "_interval").Value == 23, "Wallboard refresh preserves pending timing edits");
-        await CompleteTextDialogAsync(wall, "EditLabelAsync", "Edit Host Label", "Wallboard router");
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels["127.0.0.1"] == "Wallboard router", "Wallboard labels save the selected host");
-        Check(ReferenceEquals(row, list.SelectedItem) && ((HostRow)row!).Text.Contains("Wallboard router"), "Wallboard label edits update selected row in place");
-        await (Task)Invoke(wall, "ClearLabelAsync")!;
-        Check(!engine.SiteDefinitions().Single(s => s.Name == "Alpha").Labels.ContainsKey("127.0.0.1"), "Wallboard clear label removes the label");
-        Check((bool)Invoke(wall, "ApplyTiming")! && engine.Config.PingIntervalSeconds == 23, "Wallboard applies timing settings");
-        Invoke(wall, "ToggleMonitoring");
-        Check(engine.Monitoring && !Field<NumericUpDown>(wall, "_timeout").IsEnabled, "Wallboard locks timing while monitoring");
-        Invoke(wall, "ToggleMonitoring");
-        Check(!engine.Monitoring && Field<NumericUpDown>(wall, "_timeout").IsEnabled, "Wallboard stop restores timing controls");
-        await CompleteTextDialogAsync(wall, "AddSiteAsync", "Add Site", "Wallboard fixture");
-        Check(engine.SelectedSite == "Wallboard fixture", "Wallboard Add Site selects the new site");
-        Field<TextBox>(wall, "_hosts").Text = "127.0.0.90";
-        await CompleteTextDialogAsync(wall, "RenameSiteAsync", "Rename Site", "Wallboard renamed");
-        Check(engine.SelectedSite == "Wallboard renamed" && engine.SiteDefinitions().Single(s => s.Name == "Wallboard renamed").Hosts.Contains("127.0.0.90"), "Wallboard rename commits pending hosts and retains site identity");
-        var deleteTask = (Task)Invoke(wall, "DeleteSiteAsync")!;
-        await Task.Delay(100);
-        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
-        var confirm = lifetime.Windows.Single(w => w.Title == "Delete Site");
-        confirm.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Yes")
-            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        await deleteTask;
-        Check(!engine.SiteDefinitions().Any(s => s.Name == "Wallboard renamed"), "Wallboard delete removes the confirmed site");
-        engine.SelectedSite = null;
-        Invoke(wall, "Refresh");
-        Check(!Field<Button>(wall, "_rename").IsEnabled && !Field<Button>(wall, "_delete").IsEnabled && Field<TextBox>(wall, "_hosts").IsReadOnly,
-            "Wallboard All Sites disables site-specific destructive actions and host editor");
-        Field<ComboBox>(wall, "_range").SelectedIndex = 3;
-        Field<CheckBox>(wall, "_hideSuspects").IsChecked = false;
-        Check(Field<TextBlock>(wall, "_historySummary").Text!.Contains("301 matching / 301 stored"), "Wallboard recent-history counts use all stored events");
-        Field<CheckBox>(wall, "_hideSuspects").IsChecked = true;
-        Check(Field<TextBlock>(wall, "_historySummary").Text!.Contains("300 matching"), "Wallboard suspect filter applies consistently");
-        var snapshot = engine.Snapshot();
-        var fixture = snapshot with { Hosts = new[] {
-            snapshot.Hosts[0] with { State = HostState.Offline, OutageStarted = DateTime.Now.AddMinutes(-3), Label = "Offline fixture" },
-            snapshot.Hosts[1] with { State = HostState.Suspect, Failures = 2, Label = "Suspect fixture" }
-        } };
-        wall.GetType().GetMethod("RefreshReports", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(wall, new object[] { fixture });
-        Check(Field<TextBlock>(wall, "_outageSummary").Text == "1 offline · 1 suspect"
-            && Field<TextBlock>(wall, "_activeOutages").Text!.Contains("Down for 3m"), "Wallboard active outages include live duration and suspect state");
-        Invoke(wall, "ToggleOperations");
-        await Task.Delay(100);
-        EmitWallboardPreview(wall, "reports");
-        Invoke(wall, "ToggleOperations");
-        Check(WallboardWindow.NextScreenIndex(2, 3) == 0 && WallboardWindow.NextScreenIndex(0, 1) == 0, "Monitor cycling wraps and supports a single display");
-        await (Task)Invoke(wall, "MoveToNextScreenAsync")!;
-        Check(wall.WindowState == WindowState.FullScreen, "Single-display monitor action preserves fullscreen");
-        // Global shortcuts must leave typed input and modifiers alone.
-        var input = Field<TextBox>(wall, "_hosts");
-        input.BringIntoView();
-        await Task.Delay(80);
-        Check(input.Focus(), "Wallboard editor receives focus for shortcut tests");
-        bool cli = Field<bool>(wall, "_showCli");
-        foreach (var key in new[] { Key.C, Key.P, Key.H, Key.S, Key.O, Key.M, Key.Escape })
-            input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
-        Check(wall.IsVisible && !engine.Monitoring && Field<bool>(wall, "_showCli") == cli, "Wallboard input owns all shortcut keystrokes including Escape");
-        Field<Button>(wall, "_startStop").Focus();
-        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, KeyModifiers = KeyModifiers.Control });
-        Check(Field<bool>(wall, "_showCli") == cli, "Wallboard Ctrl+C does not trigger CLI shortcut");
-        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.H, KeyModifiers = KeyModifiers.Control });
-        await Task.Delay(100);
-        var shortcutHistory = lifetime.Windows.Single(w => w is HistoryWindow);
-        Check(shortcutHistory.IsVisible, "Wallboard Ctrl+H opens full History");
-        shortcutHistory.Close();
-        wall.Activate(); Field<Button>(wall, "_startStop").Focus();
-        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.OemComma, KeyModifiers = KeyModifiers.Control });
-        await Task.Delay(100);
-        var shortcutSettings = lifetime.Windows.Single(w => w is SettingsWindow);
-        Check(shortcutSettings.IsVisible, "Wallboard Ctrl+comma opens Settings");
-        shortcutSettings.Close();
-        wall.Activate(); Field<Button>(wall, "_startStop").Focus();
-        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C });
-        Check(engine.Config.WallboardShowCli != cli, "Wallboard CLI shortcut persists preference");
-        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.H });
-        Check(engine.Config.EventHistoryHours == 24, "Wallboard history-range shortcut cycles filters");
-        wall.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.S });
-        Check(!engine.Config.HideSuspectEvents, "Wallboard suspect shortcut changes history filter");
-        wall.Close();
-        engine.SaveHosts("Alpha", originalHosts);
-        engine.ApplySettings(originalSettings);
-        engine.SelectedSite = "Alpha";
-    }
-
-    private static async Task CompleteTextDialogAsync(WallboardWindow wall, string method, string title, string text)
-    {
-        var task = (Task)Invoke(wall, method)!;
-        await Task.Delay(100);
-        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
-        var dialog = lifetime.Windows.Single(w => w.Title == title);
-        dialog.GetVisualDescendants().OfType<TextBox>().Single().Text = text;
-        dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "OK")
-            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        await task;
-    }
-
-    private static void EmitWallboardPreview(WallboardWindow wall, string name) => SavePreview(wall, "wallboard-" + name);
-
-    private static void SavePreview(Window window, string name)
-    {
-        if (Environment.GetEnvironmentVariable("WATCHDOG_UI_PREVIEW") != "1") return;
-        Directory.CreateDirectory("ui-regression-images");
-        double scale = window.RenderScaling;
-        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)Math.Ceiling(window.Bounds.Width * scale), (int)Math.Ceiling(window.Bounds.Height * scale)), new Vector(96 * scale, 96 * scale));
-        bitmap.Render(window);
-        using var stream = File.Create(Path.Combine("ui-regression-images", name + ".png"));
-        bitmap.Save(stream);
-    }
-
-    private static async Task CheckDesktopPresentationAsync(WatchdogEngine engine, LinuxUpdateService updates, MainWindow main)
-    {
-        Check(main.GetVisualDescendants().OfType<Image>().Any(i => ReferenceEquals(i.Source, BrandAssets.Logo) && i.Bounds.Width == 42), "Main uses the shared dog branding at the Windows size");
-        var timeout = Field<NumericUpDown>(main, "_timeout");
-        decimal? original = timeout.Value;
-        timeout.Value = 10000;
-        await Task.Delay(50);
-        var text = timeout.GetVisualDescendants().OfType<TextBox>().Single();
-        Check(text.Text == "10000" && text.Bounds.Width >= 55, "Numeric field shows its full maximum value");
-        timeout.GetVisualDescendants().OfType<Avalonia.Controls.RepeatButton>().Single(b => b.Name == "PART_DecreaseButton")
-            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Check(timeout.Value == 9750, "Numeric down button changes the value");
-        text.Text = "2000";
-        timeout.GetVisualDescendants().OfType<Avalonia.Controls.RepeatButton>().Single(b => b.Name == "PART_IncreaseButton")
-            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Check(timeout.Value == 2250, "Numeric field accepts a typed value before spinning");
-        timeout.Value = original;
-
-        var settings = new SettingsWindow(engine, updates, main);
-        settings.Show(main);
-        await Task.Delay(100);
-        var navigation = settings.GetVisualDescendants().OfType<ListBox>().Single();
-        Check(navigation.ItemCount == 4 && navigation.Items.Cast<string>().SequenceEqual(PingWatchdog.Shared.Presentation.SettingsPages), "Settings uses Windows page navigation");
-        foreach (var size in new[] { new Size(900, 650), new Size(760, 540) })
-        {
-            settings.Width = size.Width; settings.Height = size.Height;
-            foreach (int page in Enumerable.Range(0, 4))
-            {
-                navigation.SelectedIndex = page;
-                await Task.Delay(70);
-                var save = settings.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Save Settings");
-                var position = save.TranslatePoint(new Point(), settings)!.Value;
-                Check(position.Y >= 0 && position.Y + save.Bounds.Height <= settings.Bounds.Height, $"Settings footer is reachable on page {page} at {size}");
-                SavePreview(settings, $"settings-{page}-{size.Width}x{size.Height}");
-            }
-        }
-        settings.Close();
-
-        var history = new HistoryWindow(engine); history.Show(main);
-        await Task.Delay(100);
-        foreach (var size in new[] { new Size(1080, 650), new Size(820, 480) })
-        {
-            history.Width = size.Width; history.Height = size.Height;
-            await Task.Delay(80);
-            Check(Field<ListBox>(history, "_events").Bounds.Height > 100, $"History retains usable rows at {size}");
-            SavePreview(history, $"history-{size.Width}x{size.Height}");
-        }
-        history.Close();
-        engine.AddFolder("", "Organization fixture"); engine.AddFolder("Organization fixture", "Nested");
-        engine.MoveSite("Beta", "Organization fixture/Nested");
-        var organization = new OrganizationWindow(engine); organization.Show(main);
-        await Task.Delay(100);
-        var tree = Field<TreeView>(organization, "_items");
-        var nested = tree.Items.OfType<TreeViewItem>().Single(i => i.Header?.ToString() == "Organization fixture").Items.OfType<TreeViewItem>().Single();
-        Check(nested.Items.OfType<TreeViewItem>().Single().Header!.ToString()!.StartsWith("Beta"), "Organization uses a true folder/site hierarchy");
-        tree.SelectedItem = nested.Items[0];
-        engine.SetLabel("Beta", "127.0.0.2", "Organization label");
-        await Task.Delay(100);
-        Check((tree.SelectedItem as TreeViewItem)?.Header?.ToString()?.StartsWith("Beta") == true, "Organization refresh preserves selected site");
-        foreach (var size in new[] { new Size(760, 620), new Size(620, 460) })
-        {
-            organization.Width = size.Width; organization.Height = size.Height;
-            await Task.Delay(80); Check(tree.Bounds.Height > 150, $"Organization tree remains usable at {size}");
-            SavePreview(organization, $"organization-{size.Width}x{size.Height}");
-        }
-        organization.Close();
-        engine.MoveSite("Beta", ""); engine.DeleteFolder("Organization fixture/Nested"); engine.DeleteFolder("Organization fixture"); engine.SetLabel("Beta", "127.0.0.2", "");
-        engine.SelectedSite = "Alpha";
-    }
-
-    private static object? Invoke(object target, string name) => target.GetType()
-        .GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(target, null);
-
-    private static T Field<T>(object target, string name) => (T)(target.GetType()
-        .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(target)
-        ?? throw new InvalidOperationException("Missing regression field: " + name));
-
-    private static int SubscriberCount(object target, string name) =>
-        (target.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(target) as Delegate)
-            ?.GetInvocationList().Length ?? 0;
-
-    private static void Check(bool condition, string name) => LinuxRegressionTests.Check(condition, name);
 }

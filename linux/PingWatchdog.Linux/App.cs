@@ -1,9 +1,7 @@
+// Application start: theme, engine, update service, main window and tray.
 using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls;
-using Avalonia.Styling;
-using Avalonia.Themes.Fluent;
-using Avalonia.Media;
+using Avalonia.Controls.ApplicationLifetimes;
 
 namespace PingWatchdog.Linux;
 
@@ -11,12 +9,7 @@ internal sealed class App : Application
 {
     public override void Initialize()
     {
-        Styles.Add(new FluentTheme());
-        RequestedThemeVariant = ThemeVariant.Dark;
-        Styles.Add(new Style(s => s.OfType<Avalonia.Controls.Window>()) { Setters = {
-            new Setter(Avalonia.Controls.Window.FontFamilyProperty, new FontFamily("Segoe UI, Noto Sans, DejaVu Sans")),
-            new Setter(Avalonia.Controls.Window.FontSizeProperty, 12.7)
-        } });
+        Tokens.Install(this);
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -30,6 +23,7 @@ internal sealed class App : Application
                 return;
             }
             var engine = new WatchdogEngine();
+            Tokens.SetMode(engine.Preferences.Appearance);
             var updates = new LinuxUpdateService();
             var window = new MainWindow(engine, updates);
             var tray = new LinuxTrayService(this, window, engine, updates);

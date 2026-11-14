@@ -1,71 +1,79 @@
-name: Validate Linux Correctness
+name: Validate Linux
 
 on:
   pull_request:
     paths:
       - "linux/**"
-      - "Shared/**"
+      - "HostImport.cs"
+      - "DisplayTime.cs"
+      - "tools/package_linux.sh"
+      - "tools/collect_linux_notices.py"
       - ".github/workflows/validate-linux.yml"
   push:
     branches: [ "linux/**" ]
-    paths:
-      - "linux/**"
-      - "Shared/**"
-      - ".github/workflows/validate-linux.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  windows-shared-contract:
-    runs-on: windows-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: "8.0.x"
-      - name: Validate Windows consumers of shared presentation code
-        run: dotnet run --project PingWatchdog.csproj -c Release -- --self-test
-      - name: Exercise Windows UI
-        run: dotnet run --no-build --project PingWatchdog.csproj -c Release -- --ui-smoke-test
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: windows-reference-ui
-          path: ui-smoke-test/*
   correctness:
     name: Linux ${{ matrix.backend }} at ${{ matrix.scale }}x
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { backend: x11, scale: "1" }
-          - { backend: x11, scale: "1.5" }
-          - { backend: x11, scale: "2" }
-          - { backend: wayland, scale: "1" }
+          - { backend: x11, scale: "1", captures: true }
+          - { backend: x11, scale: "1.5", captures: false }
+          - { backend: x11, scale: "2", captures: false }
+          - { backend: wayland, scale: "1", captures: false }
     env:
       WATCHDOG_BACKEND: ${{ matrix.backend }}
       AVALONIA_SCREEN_SCALE_FACTORS: ${{ matrix.scale }}
       WATCHDOG_EXPECTED_SCALE: ${{ matrix.scale }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "8.0.x"
       - name: Install desktop test prerequisites
         run: sudo apt-get update && sudo apt-get install -y xvfb openbox dbus-x11 libx11-6 libice6 libsm6 libfontconfig1 weston libegl1 libgl1-mesa-dri libwayland-client0
-      - name: Run core regressions
+      - name: Check for vulnerable packages
+        run: |
+          dotnet restore linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj
+          report=$(dotnet list linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj package --vulnerable --include-transitive 2>&1)
+          echo "$report"
+          if grep -q "has the following vulnerable packages" <<<"$report"; then echo "::error::Vulnerable NuGet packages found."; exit 1; fi
+      - name: Engine and desktop-service regressions
         run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --self-test
-      - name: Run desktop regressions
-        env:
-          WATCHDOG_UI_PREVIEW: "1"
-        run: timeout 120s dbus-run-session -- bash linux/test-desktop.sh
-      - uses: actions/upload-artifact@v7
+      - name: Desktop regressions
+        run: timeout 300s dbus-run-session -- bash linux/test-desktop.sh
+      # Artifacts aren't reachable from every review environment, so the captures are also printed to the log.
+      - name: Print UI captures for review
+        if: always() && matrix.captures
+        run: |
+          for file in $(ls ui-regression-images/*.png 2>/dev/null | sort); do
+            echo "REVIEW_IMAGE_NAME $(basename "$file")"
+            echo "REVIEW_IMAGE_BEGIN$(base64 -w0 "$file")REVIEW_IMAGE_END"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
+        continue-on-error: true
         with:
           name: linux-ui-${{ matrix.backend }}-${{ matrix.scale }}
           path: ui-regression-images/*
+          if-no-files-found: warn
+
+  packages:
+    name: Linux packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build and check every package
+        run: bash linux/build-packages.sh validate

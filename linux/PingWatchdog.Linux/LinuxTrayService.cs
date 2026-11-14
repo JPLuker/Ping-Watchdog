@@ -52,7 +52,7 @@ internal sealed class LinuxTrayService : IDisposable
     private bool _refreshing;
     private int _restoreGeneration;
     public bool Available { get; private set; }
-    public string Status => Available ? "System tray available" : "No tray host detected • normal taskbar minimization";
+    public string Status => Available ? "System tray available" : "No system tray found; minimizing uses the taskbar";
 
     public LinuxTrayService(Application app, MainWindow main, WatchdogEngine engine, LinuxUpdateService updates, Func<Task<bool>>? hostAvailable = null)
     {
@@ -61,9 +61,9 @@ internal sealed class LinuxTrayService : IDisposable
         var menu = new NativeMenu();
         menu.Items.Add(Item("Open Ping Watchdog", Restore));
         menu.Items.Add(Item("Open Wallboard", () => { Restore(); _main.OpenWallboard(); }));
-        _update = Item("Check for Updates", async () => { Restore(); await _main.RunUpdateActionAsync(); });
+        _update = Item("Check for updates", async () => { Restore(); await _main.RunUpdateActionAsync(); });
         menu.Items.Add(_update);
-        _monitor = Item("Start Monitoring", () => _main.ToggleMonitoring());
+        _monitor = Item("Start monitoring", () => _main.ToggleMonitoring());
         menu.Items.Add(_monitor);
         menu.Items.Add(new NativeMenuItemSeparator());
         menu.Items.Add(Item("Exit", () => _main.ExitApplication()));
@@ -94,8 +94,8 @@ internal sealed class LinuxTrayService : IDisposable
     private void UpdateMenu()
     {
         _update.Header = _updates.ActionText;
-        _monitor.Header = _engine.Monitoring ? "Stop Monitoring" : "Start Monitoring";
-        _icon.ToolTipText = _engine.Monitoring ? "Ping Watchdog • Monitoring" : "Ping Watchdog • Idle";
+        _monitor.Header = _engine.Monitoring ? "Stop monitoring" : "Start monitoring";
+        _icon.ToolTipText = _engine.Monitoring ? "Ping Watchdog · Monitoring" : "Ping Watchdog · Idle";
     }
 
     public async Task RefreshAsync()

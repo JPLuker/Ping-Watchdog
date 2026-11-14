@@ -1,170 +1,151 @@
-name: Build Linux AppImage Release
+name: Build Linux Release
 
+# Every passing push to main that changes the Linux app publishes a separate, clearly labeled
+# UNTESTED Linux release (RELEASES.md Part 2) until Joseph confirms the build on his own machine.
 on:
   workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
       - "linux/**"
-      - "Shared/**"
+      - "HostImport.cs"
+      - "DisplayTime.cs"
       - "Assets/**"
       - "default.pingwatch.json"
       - "LICENSE"
+      - "tools/package_linux.sh"
+      - "tools/collect_linux_notices.py"
       - ".github/workflows/build-linux.yml"
 
 permissions:
   contents: write
 
+concurrency:
+  group: build-linux
+  cancel-in-progress: false
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-    env:
-      WATCHDOG_VERSION: 1.15.${{ github.run_number }}
-
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "8.0.x"
 
-      - name: Install Linux packaging prerequisites
-        shell: bash
+      # Never reuse a published version. App changes without a new version fail here; a push that only
+      # changes this workflow still builds and tests, then skips publishing.
+      - name: Check version is unpublished
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libfuse2 imagemagick xvfb openbox dbus-x11 libx11-6 libice6 libsm6 libfontconfig1
+          version=$(python3 -c "import xml.etree.ElementTree as E; print(E.parse('linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj').getroot().find('./PropertyGroup/Version').text.strip())")
+          published=0
+          for tag in "v$version-untested-linux" "v$version-linux"; do
+            if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then published=1; fi
+          done
+          if [[ $published == 0 ]]; then exit 0; fi
+          app=$(git diff --name-only HEAD~1 HEAD | grep -Ev '^\.github/' | grep -E '^(linux/|HostImport\.cs$|DisplayTime\.cs$|Assets/|default\.pingwatch\.json$|LICENSE$|tools/)' || true)
+          if [[ -n "$app" ]]; then
+            echo "::error::v$version is already published for Linux but app files changed: $app. Increment Version in linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj."
+            exit 1
+          fi
+          echo "::notice title=Not published::v$version already exists for Linux and only build files changed; building and testing without publishing."
+          echo "SKIP_PUBLISH=1" >> "$GITHUB_ENV"
 
-      - name: Install matching Velopack CLI
-        shell: bash
-        run: dotnet tool install --tool-path ./.tools vpk --version 1.2.161
-
-      - name: Validate starter config
-        shell: bash
+      - name: Check for vulnerable packages
         run: |
-          python3 - <<'PY'
-          import json
-          with open('default.pingwatch.json', 'r', encoding='utf-8') as f:
-              cfg = json.load(f)
-          if not cfg.get('Sites'):
-              raise SystemExit('Starter config must contain a site.')
-          PY
+          dotnet restore linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj
+          report=$(dotnet list linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj package --vulnerable --include-transitive 2>&1)
+          echo "$report"
+          if grep -q "has the following vulnerable packages" <<<"$report"; then echo "::error::Vulnerable NuGet packages found; update them before publishing."; exit 1; fi
 
-      - name: Run Linux self-tests
-        shell: bash
-        run: dotnet run --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -p:Version=$WATCHDOG_VERSION -- --self-test
-
-      - name: Run Linux desktop regressions
-        shell: bash
-        run: timeout 90s dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c 'openbox >/tmp/watchdog-openbox.log 2>&1 & dotnet run --no-build --project linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj -c Release -- --ui-regression-test'
-
-      - name: Publish self-contained Linux x64 app
-        shell: bash
-        run: |
-          dotnet publish linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj \
-            -c Release \
-            -r linux-x64 \
-            --self-contained true \
-            -p:Version=$WATCHDOG_VERSION \
-            -p:PublishSingleFile=true \
-            -p:PublishTrimmed=false \
-            -o publish-linux
-          cp default.pingwatch.json publish-linux/default.pingwatch.json
-          cp LICENSE publish-linux/LICENSE
-          cat > publish-linux/README-LINUX.txt <<'EOF'
-          PING WATCHDOG FOR LINUX
-
-          Run the AppImage directly. If your file manager does not mark it executable:
-            chmod +x PingWatchdog*.AppImage
-
-          Settings:
-            ~/.config/PingWatchdog/autosave.pingwatch.json
-
-          Persistent event history:
-            ~/.local/state/PingWatchdog/event-history.json
-
-          Desktop outage/recovery notifications use notify-send when available.
-          EOF
-
-      - name: Convert application icon for AppImage
-        shell: bash
-        run: convert Assets/WatchdogLogo.png -resize 256x256 PingWatchdog.png
-
-      - name: Write Linux release notes
-        shell: bash
-        run: |
-          cat > release-notes-linux.md <<EOF
-          # Ping Watchdog $WATCHDOG_VERSION for Linux
-
-          - Edit or clear a selected host's label directly in the main list.
-          - Wallboard uses the full window. Press O or right-click for Operations; Esc or F11 returns to Main.
-          - The site sidebar opens with All Sites.
-          - The updater uses the Linux beta feed and offers Restart now or Later.
-          EOF
-
-      - name: Download previous Linux Velopack release
-        continue-on-error: true
-        shell: bash
+      - name: Build, test and package
         env:
           VPK_TOKEN: ${{ github.token }}
-        run: |
-          ./.tools/vpk download github \
-            --repoUrl https://github.com/JPLuker/Ping-Watchdog \
-            --token "$VPK_TOKEN" \
-            --channel linux \
-            --pre true \
-            --outputDir Releases-linux
+        run: bash linux/build-packages.sh release
 
-      - name: Build Linux AppImage and update feed
-        shell: bash
+      - name: Write release notes
+        if: env.SKIP_PUBLISH != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ./.tools/vpk pack \
-            --packId PingWatchdog \
-            --packVersion "$WATCHDOG_VERSION" \
-            --packDir publish-linux \
-            --mainExe PingWatchdog \
-            --packTitle "Ping Watchdog" \
-            --packAuthors "Joseph Luker" \
-            --runtime linux-x64 \
-            --icon PingWatchdog.png \
-            --releaseNotes release-notes-linux.md \
-            --channel linux \
-            --outputDir Releases-linux
+          tested=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name)
+          v="$WATCHDOG_VERSION"; base="PingWatchdog-$v-Linux-x64"
+          url="https://github.com/${{ github.repository }}/releases/download/v$v-untested-linux"
+          {
+            echo "> ⚠️ **UNTESTED BUILD.** These Linux builds were produced automatically and have not been run by a person. They may not install, launch, or work correctly. For tested builds, use [$tested](https://github.com/${{ github.repository }}/releases/tag/$tested)."
+            echo
+            echo "# Ping Watchdog $v for Linux"
+            echo
+            tail -n +3 linux/RELEASE-NOTES.md | sed "s/{version}/$v/g"
+            echo
+            echo "The builds are unsigned. Compare the SHA-256 of your download with SHA256SUMS.txt."
+            echo
+            echo "## Downloads"
+            echo "**Linux:** [AppImage]($url/$base.AppImage) (updates itself) · [.deb]($url/$base.deb) · [.rpm]($url/$base.rpm) · [Flatpak]($url/$base.flatpak) · [.tar.gz]($url/$base.tar.gz) · [Checksums]($url/SHA256SUMS.txt)"
+          } > release-body.md
+          cat release-body.md
 
-      - name: Exercise the packaged AppImage
-        shell: bash
-        run: |
-          image="$PWD/Releases-linux/PingWatchdog.AppImage"
-          chmod +x "$image"
-          test -s "Releases-linux/releases.linux.json"
-          scratch=$(mktemp -d)
-          trap 'rm -rf "$scratch"' EXIT
-          cd "$scratch"
-          "$image" --appimage-extract >/dev/null
-          export XDG_CONFIG_HOME="$scratch/config" XDG_STATE_HOME="$scratch/state"
-          timeout 60s ./squashfs-root/AppRun --self-test
-          timeout 120s dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c 'openbox >/tmp/watchdog-packaged-openbox.log 2>&1 & ./squashfs-root/AppRun --ui-regression-test'
-
-      - name: Upload Linux build artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload build artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: PingWatchdog-Linux-${{ env.WATCHDOG_VERSION }}
-          path: Releases-linux/*
+          path: dist/*
           if-no-files-found: error
 
-      - name: Publish Linux release to GitHub
-        shell: bash
+      # Velopack creates the release (draft) with its update files, then the other packages are added
+      # and the release is published as a pre-release that is never Latest.
+      - name: Publish untested Linux release
+        if: env.SKIP_PUBLISH != '1'
         env:
           VPK_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ./.tools/vpk upload github \
-            --repoUrl https://github.com/JPLuker/Ping-Watchdog \
-            --token "$VPK_TOKEN" \
-            --channel linux \
-            --outputDir Releases-linux \
-            --publish true \
-            --pre true \
-            --tag "v$WATCHDOG_VERSION-linux" \
-            --releaseName "Ping Watchdog v$WATCHDOG_VERSION (Linux Beta)" \
-            --targetCommitish "${{ github.sha }}"
+          v="$WATCHDOG_VERSION"; tag="v$v-untested-linux"; repo="${{ github.repository }}"
+          ./.tools/vpk upload github --repoUrl "https://github.com/$repo" --token "$VPK_TOKEN" --channel linux \
+            --outputDir Releases-linux --publish false --pre true --tag "$tag" \
+            --releaseName "UNTESTED — Linux builds for v$v" --targetCommitish "${{ github.sha }}"
+          gh release upload "$tag" dist/* --repo "$repo" --clobber
+          # The AppImage is published under the standard name (RELEASES.md Part 5); the updater doesn't use this file.
+          if gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' | grep -qx 'PingWatchdog.AppImage'; then
+            gh release delete-asset "$tag" PingWatchdog.AppImage --repo "$repo" --yes
+          fi
+          gh release edit "$tag" --repo "$repo" --notes-file release-body.md --draft=false --prerelease --latest=false
+
+      - name: Verify the published release
+        if: env.SKIP_PUBLISH != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="$WATCHDOG_VERSION"; tag="v$v-untested-linux"; repo="${{ github.repository }}"
+          gh api "repos/$repo/releases/tags/$tag" > release.json
+          python3 - "$v" <<'PY'
+          import json, sys
+          v = sys.argv[1]
+          release = json.load(open("release.json", encoding="utf-8"))
+          assets = {a["name"]: a["size"] for a in release["assets"]}
+          base = f"PingWatchdog-{v}-Linux-x64"
+          required = [f"{base}.AppImage", f"{base}.deb", f"{base}.flatpak", f"{base}.rpm", f"{base}.tar.gz",
+                      f"PingWatchdog-{v}-linux-full.nupkg", "releases.linux.json", "SHA256SUMS.txt"]
+          missing = [n for n in required if assets.get(n, 0) <= 0]
+          if missing: raise SystemExit(f"Missing or empty assets: {missing}")
+          if "PingWatchdog.AppImage" in assets: raise SystemExit("The unnamed AppImage copy is still attached.")
+          if not release["prerelease"] or release["draft"]: raise SystemExit("The untested release must be a published pre-release.")
+          if not release["name"].startswith("UNTESTED"): raise SystemExit("The release title must start with UNTESTED.")
+          if not release["body"].startswith("> ⚠️ **UNTESTED BUILD.**"): raise SystemExit("The notes must open with the untested warning.")
+          print("Release assets:", ", ".join(sorted(assets)))
+          PY
+          latest=$(gh api "repos/$repo/releases/latest" --jq .tag_name)
+          [[ "$latest" != "$tag" ]] || { echo "::error::The untested release must never be Latest."; exit 1; }
+          mkdir -p verify && cd verify
+          gh release download "$tag" --repo "$repo" -p SHA256SUMS.txt -p releases.linux.json -p "PingWatchdog-$v-Linux-x64.deb"
+          grep -E "  (releases\.linux\.json|PingWatchdog-$v-Linux-x64\.deb)$" SHA256SUMS.txt | sha256sum -c -
+          echo "Published $tag: assets present, checksums match, pre-release, not Latest."

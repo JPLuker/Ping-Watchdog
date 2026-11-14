@@ -14,7 +14,6 @@ internal static class Program
         {
             try
             {
-                LinuxSelfTest.Run();
                 LinuxRegressionTests.Run();
                 Console.WriteLine("Ping Watchdog Linux self-test passed.");
                 Environment.ExitCode = 0;
