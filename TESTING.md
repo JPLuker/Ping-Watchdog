@@ -2,9 +2,9 @@
 
 ## Linux 1.16.0: automated only, not yet run by a person
 
-Linux releases are published as separate UNTESTED pre-releases until Joseph installs and runs one (RELEASES.md Part 2). No person has run 1.16.0 yet.
+Linux releases are published as separate UNTESTED pre-releases until Joseph installs and runs one (RELEASES.md Part 2). No person has run 1.16.0 yet. The device checks are in issue #46.
 
-What CI proved (validation run [43539284943](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43539284943)):
+What CI proved (validation run [43540639276](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43540639276), release run [43541098084](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43541098084), published as [v1.16.0-untested-linux](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.16.0-untested-linux)):
 
 - Engine and desktop-service regressions (145 checks): monitoring transitions, stale probes, history and CSV, Windows-configuration compatibility, host editing and Undo, Quick Monitor, snooze/disable/priority probe rules, backups and restore, Delete saved data keeping foreign files and link targets, autostart, clipboard parsing, theme contrast, map aggregation, the priority alarm.
 - The real windows under Xvfb at 100%, 150% and 200% render scale and under headless Weston (native Wayland): map fit and whole addresses (including a crowded 30-host site), List filters, search and columns, host menus, Undo, dialogs, staged Settings, appearance switching, History, Organize sites, the Wallboard, the priority bar, the update popup and tray fallback. Light and dark captures were reviewed.

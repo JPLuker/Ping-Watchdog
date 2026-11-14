@@ -22,7 +22,9 @@ Joseph: "Ping Watchdog just needs its linux build in line then it's going into m
 - **Packaging:** `linux/build-packages.sh validate|release` builds, tests and exercises the AppImage (Velopack), .deb, .rpm, .tar.gz and Flatpak, stages `dist/`, writes `SHA256SUMS.txt` and checks the required assets. `tools/package_linux.sh` makes the non-AppImage packages; `tools/collect_linux_notices.py` the notices. `build-linux.yml` publishes `vX-untested-linux` (pre-release, never Latest, warning block), then re-verifies assets, flags and checksums.
 - **Tests:** `--self-test` (engine, Windows-config compatibility, host editing, Quick Monitor, probe rules, backups, desktop services, contrast, topology, alarm) and `--ui-regression-test` (real windows, light/dark captures).
 
-**Next:** Joseph installs the .deb (or AppImage) on Lappy and runs the five checks in `linux/ROADMAP.md`. If it holds, the next Linux version ships as a tested release and the landing page can offer Linux.
+**Released:** `v1.16.0-untested-linux` (release run 43541098084): all seven Linux assets plus feed, delta from 1.15.15 and checksums verified after publishing; pre-release, not Latest.
+
+**Next:** Joseph installs the .deb (or AppImage) on Lappy and runs the five checks in issue #46. If it holds, the next Linux version ships as a tested release and the landing page can offer Linux.
 
 ## Maintenance baseline (2026-11-13)
 
