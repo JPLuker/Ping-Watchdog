@@ -13,19 +13,29 @@ using Avalonia.Threading;
 
 namespace PingWatchdog.Linux;
 
+// One preview row. Address, label and group can be edited in place, as in the Windows preview grid.
 internal sealed class PreviewRow : INotifyPropertyChanged
 {
     private bool _use;
-    private string _group = "";
+    private string _address = "", _label = "", _group = "", _site = "", _status = "", _statusKey = "";
+    private bool _valid;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public required string Address { get; init; }
-    public required string Label { get; init; }
-    public required string Site { get; init; }
-    public required string Status { get; init; }
-    public required string StatusKey { get; init; }
-    public required bool Valid { get; init; }
-    public string Group { get => _group; set { _group = value; PropertyChanged?.Invoke(this, new(nameof(Group))); } }
-    public bool Use { get => _use; set { _use = value && Valid; PropertyChanged?.Invoke(this, new(nameof(Use))); } }
+    private void Set<T>(ref T field, T value, string name)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new(name));
+    }
+    public string Address { get => _address; set => Set(ref _address, value ?? "", nameof(Address)); }
+    public string Label { get => _label; set => Set(ref _label, value ?? "", nameof(Label)); }
+    public string Group { get => _group; set => Set(ref _group, value ?? "", nameof(Group)); }
+    public string Site { get => _site; set => Set(ref _site, value, nameof(Site)); }
+    public string Status { get => _status; set => Set(ref _status, value, nameof(Status)); }
+    public string StatusKey { get => _statusKey; set => Set(ref _statusKey, value, nameof(StatusKey)); }
+    public bool Valid { get => _valid; set => Set(ref _valid, value, nameof(Valid)); }
+    public bool Use { get => _use; set => Set(ref _use, value && Valid, nameof(Use)); }
+    // Status colors come from the palette; a light/dark switch repaints them.
+    public void Repaint() => PropertyChanged?.Invoke(this, new(nameof(StatusKey)));
 }
 
 internal sealed class AddHostsDialog : DialogWindow
@@ -111,10 +121,12 @@ internal sealed class AddHostsDialog : DialogWindow
         _accept.IsEnabled = false;
         _parse.Tick += (_, _) => { _parse.Stop(); Parse(); };
         _input.TextChanged += (_, _) => { _parse.Stop(); _parse.Start(); };
-        _site.SelectionChanged += (_, _) => Parse();
-        _site.PropertyChanged += (_, e) => { if (e.Property == ComboBox.TextProperty) Parse(); };
+        _site.SelectionChanged += (_, _) => Validate();
+        _site.PropertyChanged += (_, e) => { if (e.Property == ComboBox.TextProperty) Validate(); };
         Opened += (_, _) => _input.Focus();
-        Closed += (_, _) => _parse.Stop();
+        Action repaint = () => { foreach (var row in _rows) row.Repaint(); };
+        Tokens.Changed += repaint;
+        Closed += (_, _) => { _parse.Stop(); Tokens.Changed -= repaint; };
     }
 
     internal IReadOnlyList<PreviewRow> PreviewRows => _rows;
@@ -124,7 +136,7 @@ internal sealed class AddHostsDialog : DialogWindow
 
     private static Control Dock(Control control) { DockPanel.SetDock(control, Avalonia.Controls.Dock.Top); return control; }
 
-    private static Grid PreviewGrid() => new() { ColumnDefinitions = new ColumnDefinitions("56,170,*,150,120,220"), Height = 34 };
+    private static Grid PreviewGrid() => new() { ColumnDefinitions = new ColumnDefinitions("56,150,2*,130,*,200"), Height = 38 };
 
     private Control BuildRow()
     {
@@ -138,13 +150,34 @@ internal sealed class AddHostsDialog : DialogWindow
         string[] keys = { nameof(PreviewRow.Address), nameof(PreviewRow.Label), nameof(PreviewRow.Site), nameof(PreviewRow.Group), nameof(PreviewRow.Status) };
         for (int i = 0; i < keys.Length; i++)
         {
-            var text = Ui.Text("", Tokens.Body, mono: i == 0);
-            text.Bind(TextBlock.TextProperty, new Binding(keys[i]));
-            text.Bind(ToolTip.TipProperty, new Binding(keys[i]));
-            text.Margin = new Thickness(0, 0, Tokens.Space2, 0);
-            if (i == 4) text.Bind(TextBlock.ForegroundProperty, new Binding(nameof(PreviewRow.StatusKey)) { Converter = StatusBrush.Instance });
-            Grid.SetColumn(text, i + 1);
-            grid.Children.Add(text);
+            Control cell;
+            if (keys[i] is nameof(PreviewRow.Address) or nameof(PreviewRow.Label) or nameof(PreviewRow.Group))
+            {
+                var box = new TextBox
+                {
+                    MinHeight = 26,
+                    Padding = new Thickness(6, 2),
+                    FontSize = Tokens.Body,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center
+                };
+                if (i == 0) box.FontFamily = Tokens.Mono;
+                box.Bind(TextBox.TextProperty, new Binding(keys[i]) { Mode = BindingMode.TwoWay });
+                Avalonia.Automation.AutomationProperties.SetName(box, keys[i]);
+                ClipboardText.Attach(box);
+                cell = box;
+            }
+            else
+            {
+                var text = Ui.Text("", Tokens.Body);
+                text.Bind(TextBlock.TextProperty, new Binding(keys[i]));
+                text.Bind(ToolTip.TipProperty, new Binding(keys[i]));
+                if (i == 4) text.Bind(TextBlock.ForegroundProperty, new Binding(nameof(PreviewRow.StatusKey)) { Converter = StatusBrush.Instance });
+                cell = text;
+            }
+            cell.Margin = new Thickness(0, 0, Tokens.Space2, 0);
+            Grid.SetColumn(cell, i + 1);
+            grid.Children.Add(cell);
         }
         return new Border { Child = grid, BorderThickness = new Thickness(0, 0, 0, 1) }.Res(Border.BorderBrushProperty, "Pw.Border");
     }
@@ -170,30 +203,67 @@ internal sealed class AddHostsDialog : DialogWindow
         return existing is null ? (typed, typed.Length > 0) : (existing.Name, false);
     }
 
+    private bool _validating;
+
     private void Parse()
     {
         _error.IsVisible = false;
-        var parsed = HostImport.Parse(_input.Text ?? "");
-        var snapshot = _engine.Snapshot();
-        var existing = snapshot.Sites.SelectMany(s => s.Hosts).ToList();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        string site = TargetSite;
+        foreach (var row in _rows) row.PropertyChanged -= RowEdited;
         _rows.Clear();
-        foreach (var item in parsed)
+        foreach (var item in HostImport.Parse(_input.Text ?? ""))
         {
             bool valid = string.IsNullOrEmpty(item.Error);
-            string address = valid ? item.Address : item.Address;
-            string status, key;
-            if (!valid) { status = item.Error; key = "error"; }
-            else if (!seen.Add(address)) { status = "Duplicate in preview"; key = "warn"; }
-            else if (!_temporary && existing.FirstOrDefault(h => h.Address.Equals(address, StringComparison.OrdinalIgnoreCase)) is { } found)
-            {
-                status = found.Label != item.Label && item.Label.Length > 0 ? "Label conflict • " + found.Site : "Already exists • " + found.Site;
-                key = "plain";
-            }
-            else { status = "New"; key = "new"; }
-            _rows.Add(new PreviewRow { Address = address, Label = item.Label, Site = site, Status = status, StatusKey = key, Valid = valid, Group = item.Group, Use = valid });
+            var row = new PreviewRow { Address = item.Address, Label = item.Label, Group = item.Group, Valid = valid, Status = item.Error };
+            row.Use = valid;
+            row.PropertyChanged += RowEdited;
+            _rows.Add(row);
         }
+        Validate();
+    }
+
+    // An edited address, label or group re-checks every row, as the Windows preview does.
+    private void RowEdited(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_validating || e.PropertyName is not (nameof(PreviewRow.Address) or nameof(PreviewRow.Label) or nameof(PreviewRow.Use))) return;
+        Validate();
+    }
+
+    private void Validate()
+    {
+        _validating = true;
+        try
+        {
+            var existing = _engine.Snapshot().Sites.SelectMany(s => s.Hosts).ToList();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string site = TargetSite;
+            foreach (var row in _rows)
+            {
+                string address = row.Address.Trim();
+                string normal = HostImport.Valid(address) ? HostImport.Normalize(address) : address;
+                bool wasValid = row.Valid;
+                row.Site = site;
+                if (!HostImport.Valid(address))
+                {
+                    row.Valid = false;
+                    row.Use = false;
+                    // Keep the parser's own message (CIDR or range errors) until the address is edited.
+                    if (row.Status.Length == 0 || row.StatusKey is "new" or "warn" or "plain") row.Status = "Invalid IP address or hostname.";
+                    row.StatusKey = "error";
+                    continue;
+                }
+                row.Valid = true;
+                if (!wasValid) row.Use = true;
+                if (!seen.Add(normal)) { row.Status = "Duplicate in preview"; row.StatusKey = "warn"; }
+                else if (!_temporary && existing.FirstOrDefault(h => h.Address.Equals(normal, StringComparison.OrdinalIgnoreCase)) is { } found)
+                {
+                    string label = row.Label.Trim();
+                    row.Status = found.Label != label && label.Length > 0 ? "Label conflict • " + found.Site : "Already exists • " + found.Site;
+                    row.StatusKey = "plain";
+                }
+                else { row.Status = "New"; row.StatusKey = "new"; }
+            }
+        }
+        finally { _validating = false; }
         int fresh = _rows.Count(r => r.StatusKey == "new"), conflicts = _rows.Count(r => r.StatusKey is "warn" or "plain"), invalid = _rows.Count(r => !r.Valid);
         _summary.Text = _rows.Count == 0 ? "" : $"{fresh} new · {conflicts} duplicates/conflicts · {invalid} invalid";
         var (siteName, isNew) = ResolveSite();
@@ -229,8 +299,8 @@ internal sealed class AddHostsDialog : DialogWindow
 
     private void Accept()
     {
-        Parse();
-        var rows = _rows.Where(r => r.Use && r.StatusKey == "new").Select(r => new ImportedHost(r.Address, r.Label, r.Group, "")).ToList();
+        Validate();
+        var rows = _rows.Where(r => r.Use && r.StatusKey == "new").Select(r => new ImportedHost(HostImport.Normalize(r.Address.Trim()), r.Label.Trim(), r.Group.Trim(), "")).ToList();
         if (rows.Count == 0) { ShowError("Select at least one new, valid host."); return; }
         var (siteName, isNew) = ResolveSite();
         if (!_temporary && siteName.Length == 0) { ShowError("Enter a site name first."); _site.Focus(); return; }

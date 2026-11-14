@@ -24,6 +24,8 @@ Joseph: "Ping Watchdog just needs its linux build in line then it's going into m
 
 **Released:** `v1.16.0-untested-linux` (release run 43541098084): all seven Linux assets plus feed, delta from 1.15.15 and checksums verified after publishing; pre-release, not Latest.
 
+**1.16.1 (2026-11-14):** Joseph's first Lappy note, "I couldn't edit the label" in Quick Add: preview rows now have Address, Label and Group text boxes (`PreviewRow` notifies; `Validate()` re-checks rows on edit, separate from `Parse()`). Status colors repaint on a theme switch.
+
 **Next:** Joseph installs the .deb (or AppImage) on Lappy and runs the five checks in issue #46. If it holds, the next Linux version ships as a tested release and the landing page can offer Linux.
 
 ## Maintenance baseline (2026-11-13)

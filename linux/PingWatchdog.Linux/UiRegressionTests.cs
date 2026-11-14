@@ -216,9 +216,21 @@ internal static class LinuxUiRegressionTests
         Check(add.PreviewRows.Count == 5 && add.SummaryText == "2 new · 2 duplicates/conflicts · 1 invalid", "Quick Add previews new, duplicate and invalid rows: " + add.SummaryText);
         Check(add.PreviewRows.Single(r => r.Address == "172.20.3.21").Status == "Label conflict • Branch 3", "Existing hosts with a different label are flagged as conflicts");
         await CaptureBoth(add, "dialog-quick-add");
+        // Preview cells are editable, as in the Windows grid (Joseph, Linux 1.16.0 test: "I couldn't edit the label").
+        var editable = add.GetVisualDescendants().OfType<ListBox>().SelectMany(l => l.GetVisualDescendants().OfType<TextBox>()).ToList();
+        Check(editable.Count == 15 && editable.All(t => !t.IsReadOnly && t.IsEnabled), $"Address, label and group are editable in every preview row ({editable.Count})");
+        var labelBox = editable.First(t => Avalonia.Automation.AutomationProperties.GetName(t) == "Label");
+        labelBox.Text = "Edge router";
+        add.PreviewRows[3].Address = "192.0.2.99";
+        await Settle();
+        Check(add.PreviewRows[0].Label == "Edge router", "Typing in a preview label cell changes the row");
+        Check(add.PreviewRows[3].Valid && add.PreviewRows[3].Use && add.PreviewRows[3].Status == "New" && add.SummaryText == "3 new · 2 duplicates/conflicts · 0 invalid",
+            "Fixing an invalid address re-checks the row: " + add.SummaryText);
         add.AcceptForTest();
         await Settle();
-        Check(engine.SiteDefinitions().Single(s => s.Name == "Branch 3").Labels["192.0.2.20"] == "Printer & scanner", "Quick Add saves labels with & intact");
+        var branch3 = engine.SiteDefinitions().Single(s => s.Name == "Branch 3");
+        Check(branch3.Labels["192.0.2.20"] == "Printer & scanner", "Quick Add saves labels with & intact");
+        Check(branch3.Labels["192.0.2.10"] == "Edge router" && branch3.Hosts.Contains("192.0.2.99"), "Edited preview labels and addresses are saved");
         var edit = new EditHostDialog(engine.Snapshot().Hosts.Single(h => h.Address == "192.0.2.20"), (_, _) => null);
         edit.Show(main);
         await Settle();

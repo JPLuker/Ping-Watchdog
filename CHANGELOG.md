@@ -2,6 +2,11 @@
 
 Selected changes in recent releases. Linux releases are published separately and marked UNTESTED until a person has run them. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
+## Linux [1.16.1] — 2026-11-14
+### Fixed
+- Quick Add and Quick Monitor: the preview's address, label and group can be edited in place, as on Windows (Joseph's Lappy test). Fixing an invalid address re-checks the row.
+- "Already exists" and "Label conflict" kept the light-mode text color after switching to dark.
+
 ## Linux [1.16.0] — 2026-11-13
 Brings Linux in line with the accepted Windows v1.19.32, then into maintenance mode.
 ### Changed

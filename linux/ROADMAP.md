@@ -6,6 +6,10 @@ From 1.16.0 (2026-11-13) the Linux build matches the accepted Windows v1.19.32 b
 
 Linux releases ship as separate **UNTESTED** pre-releases until a person has installed and run that build (RELEASES.md Part 2). When Joseph confirms a build on his machine, the next version is published as a tested Linux release and that confirmation is recorded in [TESTING.md](../TESTING.md).
 
+## Fixed after release
+
+- 1.16.1: Quick Add preview cells editable, as on Windows (first Lappy note).
+
 ## Done for 1.16.0
 
 - Quiet Precision in light and dark, following the desktop setting by default; the connected map with whole addresses; the Windows sidebar, header and Map/List layout.
