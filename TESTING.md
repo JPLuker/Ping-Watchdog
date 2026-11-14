@@ -1,5 +1,23 @@
 # Testing and acceptance
 
+## Linux 1.16.0: automated only, not yet run by a person
+
+Linux releases are published as separate UNTESTED pre-releases until Joseph installs and runs one (RELEASES.md Part 2). No person has run 1.16.0 yet.
+
+What CI proved (validation run [43539284943](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43539284943)):
+
+- Engine and desktop-service regressions (145 checks): monitoring transitions, stale probes, history and CSV, Windows-configuration compatibility, host editing and Undo, Quick Monitor, snooze/disable/priority probe rules, backups and restore, Delete saved data keeping foreign files and link targets, autostart, clipboard parsing, theme contrast, map aggregation, the priority alarm.
+- The real windows under Xvfb at 100%, 150% and 200% render scale and under headless Weston (native Wayland): map fit and whole addresses (including a crowded 30-host site), List filters, search and columns, host menus, Undo, dialogs, staged Settings, appearance switching, History, Organize sites, the Wallboard, the priority bar, the update popup and tray fallback. Light and dark captures were reviewed.
+- Packages: the AppImage's own self-test and desktop suite; the .deb installed with apt, run and removed; the .rpm's binary byte-identical to the tested build and run; the .tar.gz run from its folder; the Flatpak installed and run in its sandbox.
+
+Not established by CI:
+
+- Real desktop integration on elementary OS, GNOME or KDE: tray icon, notifications, the alarm sound, sign-in autostart, the app-menu entry and icon.
+- An AppImage update from one Linux release to the next on a real machine.
+- Physical multi-monitor Wallboard placement, mixed DPI, screen readers (AT-SPI) and real ICMP on a desktop network (CI uses a scripted probe for the UI suite).
+- Restoring a backup across the relaunch on a real desktop.
+
+
 ## Accepted Windows baseline: v1.19.32
 
 Joseph reported on 2026-11-13:

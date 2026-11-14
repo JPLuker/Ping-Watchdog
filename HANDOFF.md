@@ -2,7 +2,7 @@
 
 ## The project
 
-Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site, and shows outages and recoveries on a Map, a List and a full-screen Wallboard. Windows, .NET 8 WinForms, installed and updated through Velopack. Feature-complete; since 2026-11-11 it's the test project for Joseph's new standards (Quiet Precision look plus everything else the standards recommend, functionality unchanged).
+Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site, and shows outages and recoveries on a Map, a List and a full-screen Wallboard. Windows, .NET 8 WinForms, installed and updated through Velopack. The Linux build (`linux/`, Avalonia) matches it. Feature-complete; since 2026-11-11 it's the test project for Joseph's new standards (Quiet Precision look plus everything else the standards recommend, functionality unchanged).
 
 ## Rules box
 
@@ -10,7 +10,19 @@ Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site
 - Ask before any visual change beyond Quiet Precision as recorded in AGENTS.md → Identity.
 - Every push bumps the version; passing pushes to `main` publish a release Joseph updates to from the app.
 - Proof before claims: tests plus captures you've looked at. The validation workflow prints captures to its log (`REVIEW_IMAGE_BEGIN…`); artifacts aren't reachable from the agent sandbox.
-- Proprietary license stays. Windows and Linux stay separate.
+- Proprietary license stays. Windows and Linux code stay separate; Linux releases stay UNTESTED pre-releases until Joseph runs one.
+
+## Linux in line, then maintenance (2026-11-13)
+
+Joseph: "Ping Watchdog just needs its linux build in line then it's going into maintenance mode", and chose **full parity** when asked. Linux **1.16.0** rebuilds the Avalonia frontend to match Windows v1.19.32 and adds the standard Linux packages. Both platforms are now in maintenance mode.
+
+- **Engine:** `Engine.cs` (sites, hosts, options, monitoring, Undo stack of 30), `Models.cs` (Windows JSON shape incl. `HostDetails`; `LinuxPreferences` in `preferences.json`). Snoozed and disabled hosts aren't probed; a 5-second timer picks hosts back up when a snooze ends. Priority DOWN/RECOVERED raises `PriorityStateChanged` instead of an ordinary notification.
+- **UI:** `MainWindow`, `TopologyView` (port of `AdaptiveTopology`: whole addresses, zoom-to-fit, keyboard focus that fades after 8 s), `HostListView`, `HostActions` (one menu for List/Map/Wallboard), `WallboardWindow`, `SettingsWindow` (staged, nine pages), `HistoryWindow`, `OrganizationWindow`, `AddHostsDialog` (Windows rules: only new rows are added; label conflicts flagged; typed site names create a site), `Dialogs`, `Components` (Ping activity, priority bar, update popup, Undo toast, version overlay), `Tokens` (Quiet Precision resources), `DesktopIntegration` (clipboard, autostart, alarm sound, diagnostics, backups/restore/delete).
+- **Shared with Windows, unchanged:** `HostImport.cs`, `DisplayTime.cs` are compiled into the Linux project. `Shared/Presentation.cs` is now Windows-only.
+- **Packaging:** `linux/build-packages.sh validate|release` builds, tests and exercises the AppImage (Velopack), .deb, .rpm, .tar.gz and Flatpak, stages `dist/`, writes `SHA256SUMS.txt` and checks the required assets. `tools/package_linux.sh` makes the non-AppImage packages; `tools/collect_linux_notices.py` the notices. `build-linux.yml` publishes `vX-untested-linux` (pre-release, never Latest, warning block), then re-verifies assets, flags and checksums.
+- **Tests:** `--self-test` (engine, Windows-config compatibility, host editing, Quick Monitor, probe rules, backups, desktop services, contrast, topology, alarm) and `--ui-regression-test` (real windows, light/dark captures).
+
+**Next:** Joseph installs the .deb (or AppImage) on Lappy and runs the five checks in `linux/ROADMAP.md`. If it holds, the next Linux version ships as a tested release and the landing page can offer Linux.
 
 ## Maintenance baseline (2026-11-13)
 

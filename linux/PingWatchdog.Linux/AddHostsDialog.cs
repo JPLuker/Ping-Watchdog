@@ -37,7 +37,7 @@ internal sealed class AddHostsDialog : DialogWindow
         AcceptsReturn = true,
         TextWrapping = TextWrapping.NoWrap,
         Height = 120,
-        Watermark = "192.168.1.10\tFront desk printer\n10.0.0.0/28\n10.0.5.20-30"
+        PlaceholderText = "192.168.1.10\tFront desk printer\n10.0.0.0/28\n10.0.5.20-30"
     };
     private readonly ComboBox _site = new() { Width = 240, IsEditable = true };
     private readonly TextBlock _siteStatus = Ui.Text("", Tokens.Label, "Pw.Text2");
@@ -155,7 +155,7 @@ internal sealed class AddHostsDialog : DialogWindow
         public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
         {
             var p = Tokens.Current;
-            return new SolidColorBrush(value as string switch { "new" => p.Success, "warn" => p.Warning, "error" => p.Danger, _ => p.Text });
+            return new SolidColorBrush((value as string) switch { "new" => p.Success, "warn" => p.Warning, "error" => p.Danger, _ => p.Text });
         }
         public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) => throw new NotSupportedException();
     }

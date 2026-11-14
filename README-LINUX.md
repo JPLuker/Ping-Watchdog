@@ -1,113 +1,78 @@
 # Ping Watchdog for Linux
 
-Ping Watchdog now has a native Linux desktop build. It is not a Wine wrapper around the Windows WinForms application; the Linux frontend is built with Avalonia and uses the same Ping Watchdog configuration model and monitoring philosophy.
+The Linux build is a native Avalonia app with the same look and features as the Windows app: Map, List, Wallboard, Outage history and Settings, in light and dark. It reads and writes the same `.pingwatch.json` configuration, so you can move sites and hosts between the two.
 
-## Current release
+**Status:** the Linux build is in maintenance mode alongside Windows. Each Linux release is published as a separate **UNTESTED** pre-release until it has been installed and run on a real machine ([RELEASES.md Part 2](https://github.com/JPLuker/InternalDesignGuidelines/blob/main/RELEASES.md)).
 
-The Linux build is currently a **beta** and targets **64-bit x86 Linux (`linux-x64`)**.
+## Download
 
-Download `PingWatchdog.AppImage` from the latest release whose tag ends in `-linux`.
+Open the newest release whose title starts with **UNTESTED — Linux builds** on the [releases page](https://github.com/JPLuker/Ping-Watchdog/releases). Every file is 64-bit x86 (`x64`) and includes the .NET runtime.
 
-If the AppImage is not already executable:
-
-```bash
-chmod +x PingWatchdog.AppImage
-./PingWatchdog.AppImage
-```
-
-The AppImage is self-contained and includes the .NET runtime.
-
-## Feature coverage
-
-The Linux build includes:
-
-- Multi-site ICMP monitoring.
-- ONLINE / SUSPECT / OFFLINE state handling.
-- Configurable interval, timeout, failure threshold, and recovery threshold.
-- Live site and host edits while monitoring.
-- Host labels / nicknames.
-- Persistent nested folders and site organization.
-- Persistent outage history with 24-hour, 7-day, 30-day, and all-time filtering.
-- Optional SUSPECT-event filtering.
-- CSV history export.
-- Live Linux ping-command trace.
-- Fullscreen Wallboard.
-- Site majority-health coloring.
-- Individual topology nodes for monitored hosts, including nickname/label and IP/hostname.
-- Settings UI.
-- Background GitHub update checks and self-updating AppImage packages on the Linux beta channel.
-- Desktop outage/recovery notifications through `notify-send` when it is available.
-
-Press **O** or right-click the Wallboard to open Operations. **Esc** or **F11** returns to the main window. In the main host list, select a host to edit or clear its label.
-
-## Windows layout alignment
-
-The Windows application is the visual reference. Linux now follows its compact header and More menu, site sidebar, host-column table, separate Start/Stop controls, Settings page navigation, history table, folder tree, and radial Wallboard layout. Both builds embed the same dog artwork.
-
-`Shared/Presentation.cs` is compiled by both applications. It owns the main palette, table headers and dimensions, responsive header/sidebar widths, Settings/history navigation, Wallboard colors and bands, and site/host orbit geometry. Shared changes trigger both release workflows. Keep future visual changes in this file when they apply to both frontends, then adapt any platform-specific widgets in WinForms and Avalonia.
-
-The native frontends remain separate. Window decorations, file pickers, system fonts, and some control rendering vary between desktops; pixel-identical rendering is not guaranteed. Monitoring implementations also remain separate, with compatible configuration files.
-
-## Desktop verification
-
-The validation workflow runs the full Linux core and desktop suites on X11 at 100%, 150%, and 200% rendering scale, plus native Wayland under headless Weston. It verifies the actual render scale, normal/minimum window layouts, every Settings page, numeric typing/spinning, stable host rows and selection, folder hierarchy, history, Wallboard operations/shortcuts, and tray fallback. Rendered screenshots are uploaded as workflow artifacts. Windows self-tests and UI smoke tests validate the shared definitions too.
-
-Injected probes exercise UNKNOWN/ONLINE/SUSPECT/OFFLINE/recovery transitions, consecutive recovery thresholds, event deduplication, and pending results after Stop/restart or host removal. Stale probes cannot change a new monitoring session.
-
-X11/XWayland remains the default backend. To try the optional native Wayland backend inside a Wayland session:
+| File | Use it when | Updates |
+| --- | --- | --- |
+| `PingWatchdog-<version>-Linux-x64.AppImage` | You want one file that runs anywhere | Updates itself from inside the app |
+| `PingWatchdog-<version>-Linux-x64.deb` | Debian, Ubuntu, elementary OS, Mint, Pop!_OS | Install the next .deb |
+| `PingWatchdog-<version>-Linux-x64.rpm` | Fedora, openSUSE, RHEL and similar | Install the next .rpm |
+| `PingWatchdog-<version>-Linux-x64.flatpak` | You prefer Flatpak | Install the next bundle |
+| `PingWatchdog-<version>-Linux-x64.tar.gz` | You want a folder you can run from anywhere | Download the next one |
 
 ```bash
-WATCHDOG_BACKEND=wayland ./PingWatchdog.AppImage
+# AppImage
+chmod +x PingWatchdog-*-Linux-x64.AppImage && ./PingWatchdog-*-Linux-x64.AppImage
+
+# .deb (installs the ping-watchdog command and an app menu entry)
+sudo apt install ./PingWatchdog-*-Linux-x64.deb
+
+# .rpm
+sudo dnf install ./PingWatchdog-*-Linux-x64.rpm
+
+# Flatpak (needs the Flathub org.freedesktop.Platform 24.08 runtime)
+flatpak install --user ./PingWatchdog-*-Linux-x64.flatpak
 ```
 
-Native Wayland is experimental. Headless Weston does not implement desktop minimization, so that job exercises an explicit tray-service request; the title-bar minimize path needs a real desktop check.
+The builds are unsigned. Compare `sha256sum <file>` with the line for that file in the release's `SHA256SUMS.txt`.
 
-Headless compositor tests do not certify physical monitor moves or every GNOME/KDE desktop integration. Notification delivery, real tray hosts, mixed-DPI monitor moves, and AppImage/updater round trips remain runtime acceptance checks.
+## What's the same as Windows
 
-## Configuration and history locations
+Everything in the main [README](README.md) applies: Add hosts (Quick Add and Quick Monitor), the connected Map, the List with search, filter chips, multi-select, F2, Delete and Ctrl+Z, right-click host actions, priority alarms, snooze, per-host monitoring, the display-only Wallboard (Esc or F11 to return), Outage history with CSV export, and staged Settings.
 
-Ping Watchdog follows the XDG directory conventions when the matching environment variables are present.
+Linux differs in a few places on purpose:
 
-Default configuration path:
+- **Ping in terminal** opens a continuous `ping` in your desktop's terminal, instead of a Windows command window.
+- **Open Ping Watchdog when you sign in** writes `~/.config/autostart/ping-watchdog.desktop`.
+- **Notifications** use `notify-send` (`sudo apt install libnotify-bin` on Debian-based systems). Priority alarms play through `pw-play`, `paplay` or `canberra-gtk-play`, with any WAV, OGG, FLAC or MP3 you choose.
+- **Minimize to the system tray** needs a tray host (most desktops have one; GNOME needs the AppIndicator extension). Without one, minimizing uses the taskbar and monitoring keeps running.
+- There's no portable-storage mode, no Export monitoring batch (that creates a Windows .bat file), and no Loading cover.
 
-```text
-~/.config/PingWatchdog/autosave.pingwatch.json
-```
+## Files
 
-Default persistent event-history path:
+Ping Watchdog follows the XDG conventions.
 
-```text
-~/.local/state/PingWatchdog/event-history.json
-```
+| What | Where |
+| --- | --- |
+| Sites, hosts and settings | `~/.config/PingWatchdog/autosave.pingwatch.json` |
+| Display and startup choices | `~/.config/PingWatchdog/preferences.json` |
+| Outage history | `~/.local/state/PingWatchdog/event-history.json` |
+| Copies kept before a restore | `~/.local/state/PingWatchdog/backups/` |
 
-If `XDG_CONFIG_HOME` or `XDG_STATE_HOME` is set, Ping Watchdog uses those roots instead.
+`XDG_CONFIG_HOME` and `XDG_STATE_HOME` move these when they're set. **Settings → Data and storage** creates and restores backups and deletes saved data; files that aren't Ping Watchdog's are left alone.
 
-The Linux configuration schema is intentionally compatible with the Windows `.pingwatch.json` format, including sites, hosts, labels, folders, thresholds, and display/history preferences.
+## Wayland
 
-## Notifications
-
-Ping Watchdog attempts to use the standard `notify-send` command for desktop outage and recovery notifications. Monitoring does not depend on it: if `notify-send` is unavailable, monitoring and persistent event history continue normally.
-
-On Debian/Ubuntu-derived distributions, `notify-send` is commonly provided by:
+The app runs through X11 or XWayland by default. To try the native Wayland backend:
 
 ```bash
-sudo apt install libnotify-bin
+WATCHDOG_BACKEND=wayland ./PingWatchdog-*-Linux-x64.AppImage
 ```
 
-## Updating
+## ICMP
 
-Linux releases use a separate Velopack `linux` channel and are currently published as GitHub prereleases while the native Linux frontend is in beta.
+ICMP can be filtered by a host, firewall, VPN or container policy. Inside the Flatpak sandbox, ping needs unprivileged ICMP sockets, which most distributions allow (`net.ipv4.ping_group_range`).
 
-The managed AppImage checks the Linux beta release feed in the background. When a new Linux build is downloaded, Ping Watchdog can restart into the staged update. Windows releases remain on their separate Windows channel.
+## How it's checked
 
-## Compatibility notes
-
-- Current packaged target: `linux-x64`.
-- ICMP can still be filtered by a host, firewall, network policy, VPN, or container/sandbox policy; a successful service connection does not guarantee that the target will answer ICMP.
-- Desktop integration can vary by distribution and desktop environment, which is why the first native Linux releases are marked beta.
+Every Linux build runs the engine and desktop-service regressions, then drives the real windows under Xvfb at 100%, 150% and 200% scale and under headless Weston (native Wayland), saving light and dark captures that are reviewed. The release build installs the .deb with apt, extracts the .rpm and .tar.gz and runs each, runs the AppImage's own regressions, installs the Flatpak, and checks every asset and checksum after publishing. [TESTING.md](TESTING.md) lists what that doesn't cover.
 
 ## Copyright
 
-Copyright © 2026 Joseph Luker. All rights reserved.
-
-See [LICENSE](LICENSE) for the repository's permissions and restrictions.
+Copyright © 2026 Joseph Luker. All rights reserved. See [LICENSE](LICENSE). Third-party notices ship in each package's `ThirdPartyNotices` folder.

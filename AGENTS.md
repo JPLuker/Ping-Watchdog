@@ -1,10 +1,10 @@
 # Working agreement
 
-Standalone Ping Watchdog for Windows. Linux is a separate beta track under `linux/`; keep Windows work separate unless Joseph changes the scope.
+Ping Watchdog for Windows (repo root, WinForms) and Linux (`linux/`, Avalonia). Two native apps with the same look, features and configuration format. Keep their code separate: a Linux change never touches Windows files, and the reverse. The Linux project compiles two framework-free Windows files unchanged (`HostImport.cs`, `DisplayTime.cs`); changing either rebuilds both.
 
 ## Current scope
 
-Windows is in maintenance mode from 2026-11-13. v1.19.32 is the accepted baseline. Respond to new/reopened bugs and security issues; no planned features or general redesign/refactor work. Linux remains separate. See TESTING.md for acceptance limits.
+Both platforms are in maintenance mode. Windows v1.19.32 is the accepted baseline (2026-11-13). Linux 1.16.0 (2026-11-13) matches it; Linux releases are published as separate UNTESTED pre-releases until Joseph runs one. Respond to new/reopened bugs and security issues; no planned features or general redesign/refactor work. See TESTING.md for acceptance limits.
 
 ## Read first, every session
 
@@ -28,9 +28,9 @@ Keep the product, docs and release materials about Ping Watchdog only: no cross-
 
 ## Every push
 
-1. Bump `Version` in `PingWatchdog.csproj` (patch for fixes and small changes, minor for features; 1.20.0 and other milestone numbers are Joseph's to call). Never reuse a published version.
-2. Update the release notes step in `.github/workflows/build-windows.yml`, `CHANGELOG.md`, `HANDOFF.md` and `ROADMAP.md` in the same commit.
-3. Validate on a branch first (`gh workflow run validate-windows.yml --ref <branch>`), read the log, and look at the screenshots it prints. Then merge to `main`; the build workflow publishes an updater-accessible release with installer, portable package and update feed.
+1. Bump the version of the platform you changed (patch for fixes and small changes, minor for features; 1.20.0 and other milestone numbers are Joseph's to call). Windows: `Version` in `PingWatchdog.csproj`. Linux: `Version` in `linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj` (its own 1.16.x line). Never reuse a published version.
+2. Update the release notes (Windows: the step in `.github/workflows/build-windows.yml`; Linux: `linux/RELEASE-NOTES.md`), `CHANGELOG.md`, `HANDOFF.md` and `ROADMAP.md` in the same commit.
+3. Validate on a branch first, read the log, and look at the screenshots it prints. Windows: `gh workflow run validate-windows.yml --ref <branch>`. Linux: push a `linux/<name>` branch; `validate-linux.yml` runs the suites at three scales and on Wayland, builds and exercises every package, and prints captures (`REVIEW_IMAGE_BEGIN…`). Locally, `linux/build-packages.sh validate` does the same. Then merge to `main`; the build workflows publish (Windows: updater-accessible release; Linux: the UNTESTED Linux pre-release).
 4. Confirm the push landed (`git ls-remote origin refs/heads/main`) and the release published. Documentation-only changes need no binary release.
 
 Report actual validation and its limits honestly. CI captures are "rendered on the CI runner", not device tests.
@@ -47,3 +47,11 @@ From the standards' defaults, on purpose. Don't "fix" these.
 - **Focused Windows distribution:** the Velopack installer, portable ZIP and update feed keep their current names (`PingWatchdog-win-Setup.exe`, `PingWatchdog-win-Portable.zip`, feed files), because the updater and existing installs depend on them. No MSI or extra formats without a concrete need.
 - **Push-to-main publication:** passing pushes to `main` publish a release (with a version-uniqueness guard) instead of tag-triggered releases, so Joseph can update from inside the app after every build.
 - **Proprietary license:** `LICENSE` is proprietary by Joseph's choice. Retained during the authorized maintenance finalization; never relicense.
+
+### Linux deviations
+
+- **Desktop type:** the Linux desktop's own UI font (Quiet Precision B7 allows it for native apps) and a monospace fallback list for addresses and logs (`Tokens.Mono`). Geist isn't bundled.
+- **Separate version line:** Linux is 1.16.x and Windows 1.19.x. Tags never collide (`vX-untested-linux`).
+- **Untested Linux releases:** every Linux build ships as `UNTESTED — Linux builds for vX`, a pre-release that is never Latest, with the RELEASES.md 2.3 warning. When Joseph confirms a build, the next version ships as a tested Linux release (RELEASES.md 2.5) and the landing page can offer Linux.
+- **Updates by package:** only the AppImage updates itself (Velopack `linux` channel). The .deb, .rpm, .tar.gz and Flatpak say where updates come from. Velopack's feed files keep their names (`releases.linux.json`, `PingWatchdog-X-linux-full.nupkg`, `-delta.nupkg`) because installed AppImages look for them; every other asset follows RELEASES.md Part 5.
+- **Linux equivalents:** Ping in terminal instead of a command window; an XDG autostart entry instead of the Run key; `notify-send` and `pw-play`/`paplay` for alerts. No portable-storage mode, no Export monitoring batch (a Windows .bat), and no Loading cover.

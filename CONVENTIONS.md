@@ -28,3 +28,13 @@ Code rules for Ping Watchdog (Windows, .NET 8 WinForms). The standards' SOP.md P
 - `--self-test` runs logic and layout tests; `--ui-smoke-test` drives the real window and saves captures to `ui-smoke-test/`.
 - A bug gets a test that fails before the fix. A removed thing gets a guard in NO_LIST.md.
 - Never catch and ignore without a reason in a comment and a narrow exception filter.
+
+## Linux (`linux/PingWatchdog.Linux`, Avalonia 12)
+
+- Code-only UI, no XAML. One window or feature per file: `MainWindow`, `TopologyView` (the map), `HostListView`, `HostActions` (the one host menu for List, Map and Wallboard), `WallboardWindow`, `SettingsWindow`, `HistoryWindow`, `OrganizationWindow`, `AddHostsDialog`, `Dialogs`, `Components`.
+- `Engine.cs` owns sites, hosts, options, monitoring and Undo; every edit goes through it and returns an error string or null. `Models.cs` holds the saved shapes, which match the Windows JSON.
+- Colors, spacing, radii and type come from `Tokens` (named so it doesn't collide with Avalonia's `StyledElement.Theme`). Controls bind to resources with `.Res(property, "Pw.<Role>")`, so light/dark and the desktop setting recolor every open window. Buttons use classes: `primary` (one per view), `ghost`, `nav`, `pill`, `destructive`; chips are `ToggleButton.chip`.
+- User text goes into a `TextBlock`, never a bare string `Content`, so `_` and `&` show as typed; menu headers with user text go through `HostActions.MenuText`.
+- Pasted text goes through `ClipboardText` (plain text first, then HTML-only clipboards).
+- Read window state (screens, positions) in `Closing`, not `Closed`: the platform window is gone by then.
+- `--self-test` runs engine and desktop-service regressions; `--ui-regression-test` drives the real windows and saves captures to `ui-regression-images/`. `linux/build-packages.sh validate` builds and exercises every package.

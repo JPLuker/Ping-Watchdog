@@ -200,7 +200,7 @@ internal sealed class StatusToast : Border
 {
     private readonly TextBlock _text = Ui.Text("");
     private readonly Button _undo = Ui.Button("Undo", "ghost");
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(6) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(8) };
 
     public StatusToast(Action undo)
     {

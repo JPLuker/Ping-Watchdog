@@ -67,7 +67,7 @@ internal sealed class TopologyView : Control
     private static FormattedText Format(string text, Typeface face, double size, IBrush brush) =>
         new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, face, size, brush);
 
-    private static double Width(string text, Typeface face, double size) => Format(text, face, size, Brushes.Black).WidthIncludingTrailingWhitespace;
+    private static double MeasureWidth(string text, Typeface face, double size) => Format(text, face, size, Brushes.Black).WidthIncludingTrailingWhitespace;
 
     // Same rule as Windows: a site is degraded while a strict majority of its hosts still reply.
     internal static HostState AggregateSiteState(SiteSnapshot site)
@@ -137,11 +137,11 @@ internal sealed class TopologyView : Control
         double bestGutter = rowGutter, relaxedGutter = rowGutter, fullGutter = rowGutter;
         double[] bestHeights = Array.Empty<double>(), relaxedHeights = Array.Empty<double>(), fullHeights = Array.Empty<double>();
         int[] bestColumns = new int[sites.Count], relaxedColumns = new int[sites.Count], fullColumns = new int[sites.Count];
-        var nameWidths = sites.Select(site => Width(site.Name, siteFace, siteSize) + 4).ToArray();
-        var addressWidths = sites.Select(site => site.Hosts.Max(h => Width(h.Address, MonoFace, addressSize)) + 40).ToArray();
+        var nameWidths = sites.Select(site => MeasureWidth(site.Name, siteFace, siteSize) + 4).ToArray();
+        var addressWidths = sites.Select(site => site.Hosts.Max(h => MeasureWidth(h.Address, MonoFace, addressSize)) + 40).ToArray();
         // What a cell needs for a whole address: the text plus the marker lead-in.
         var addressNeeds = sites.Select((site, i) => Math.Max(addressWidths[i] - 40,
-            site.Hosts.Max(h => Width(h.Label ?? "", UiFace(), labelSize))) + 30).ToArray();
+            site.Hosts.Max(h => MeasureWidth(h.Label ?? "", UiFace(), labelSize))) + 30).ToArray();
 
         static double Gutter(double height, int rows) => rows <= 3 ? 24 : Math.Clamp(height * 0.15 / rows, 10, 24);
 

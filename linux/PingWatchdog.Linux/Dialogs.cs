@@ -187,7 +187,7 @@ internal sealed class EditHostDialog : DialogWindow
 internal sealed class ChooseSiteDialog : DialogWindow
 {
     private readonly ComboBox _sites = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly TextBox _newSite = new() { Watermark = "New site name" };
+    private readonly TextBox _newSite = new() { PlaceholderText = "New site name" };
     private readonly RadioButton _existing = new() { Content = "Existing site", GroupName = "site", IsChecked = true };
     private readonly RadioButton _create = new() { Content = "New site", GroupName = "site" };
     private readonly TextBlock _error = Ui.Text("", Tokens.Label, "Pw.Danger");

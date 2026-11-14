@@ -1,13 +1,30 @@
-# Windows changelog
+# Changelog
 
-Selected changes in recent Windows releases. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
+Selected changes in recent releases. Linux releases are published separately and marked UNTESTED until a person has run them. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
 
-## Maintenance designation — 2026-11-13
+## Linux [1.16.0] — 2026-11-13
+Brings Linux in line with the accepted Windows v1.19.32, then into maintenance mode.
+### Changed
+- New look: Quiet Precision in light and dark, following your desktop, with color kept for host status.
+- The connected map replaces the radial map. Every host fits and every address is drawn whole.
+- The Windows layout: All sites and sites in the sidebar, Map and List over one Ping activity pane, one Start monitoring button.
+- The Wallboard is display-only: counts and the clock, the map, active outages and Ping activity. Esc or F11 returns.
+### Added
+- List with search, filter chips, multi-select, sortable columns, a Columns menu, F2, Delete and Ctrl+Z Undo.
+- Right-click host actions: edit address and label, group, Ping in terminal, snooze, priority, disable, move to site, per-host monitoring, keep temporary hosts, remove.
+- Priority alarms that repeat every 15 seconds until acknowledged.
+- Quick Add and Quick Monitor: pasted rows (including HTML-only clipboards), CSV, CIDR blocks and ranges, with a preview.
+- Settings with nine pages and Save changes; sign-in autostart; backups, restore and Delete saved data; diagnostic info; version overlay.
+- .deb, .rpm, .tar.gz and Flatpak packages next to the self-updating AppImage, with checksums and third-party notices.
+### Fixed
+- Host options from a Windows configuration (priority, disabled, snooze, per-host timing) are kept instead of dropped on the next save.
+
+## Windows maintenance designation — 2026-11-13
 - Accepted v1.19.32 after Joseph's focused map checks and full-day use.
 - Entered Windows maintenance mode; bugs, security and compatibility remain supported.
 - Documentation-only change. The tested binaries, version and license are unchanged.
 
-## [1.19.32] — 2026-11-12
+## Windows [1.19.32] — 2026-11-12
 ### Fixed
 - Fit full site names, host labels and addresses before scaling crowded maps (#42, #43).
 - Keep host selection and context-menu targets aligned when the map scales.

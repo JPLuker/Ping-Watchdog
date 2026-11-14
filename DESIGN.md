@@ -32,6 +32,10 @@ Online, Suspect (missed a reply, not yet an outage), Offline, plus Idle, Disable
 - **Focus:** a 2px blue ring (`focus`), never the accent.
 - **Motion:** none except the update popup and the loading cover's bar.
 
+## Linux
+
+The Linux build has the same screens, rules and tokens (`linux/PingWatchdog.Linux/Tokens.cs`, the B3 palette exactly). It uses the desktop's UI font, a monospace face for addresses, logs and timestamps, and native window chrome. Appearance follows the desktop's light/dark setting by default. Linux-specific deviations are in AGENTS.md.
+
 ## Behavior worth knowing
 
 - **Loading cover:** if the window doesn't answer for 0.4 s, a dimmed "Loading" cover appears over it from a separate thread and disappears when the app answers. Waits over a second go to `Logs\responsiveness.log` with what the app was doing (#40).

@@ -2,7 +2,7 @@
 
 Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices by site, watch missed replies become outages, and see when a host recovers. A device that blocks ICMP can appear offline even while its services are running.
 
-**Windows is in maintenance mode.** v1.19.32 is the accepted baseline. Bugs, security issues and compatibility fixes remain supported; no new features are planned. Linux remains a separate beta.
+**Ping Watchdog is in maintenance mode.** Windows v1.19.32 is the accepted baseline, and Linux 1.16.0 matches it. Bugs, security issues and compatibility fixes remain supported; no new features are planned.
 
 ## Download
 
@@ -10,7 +10,7 @@ Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices 
 
 For Windows x64, run the [installer](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Setup.exe) or extract the [portable ZIP](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Portable.zip) and open `PingWatchdog.exe`. Both include the .NET runtime. The Windows builds are unsigned. To verify a download, compare its PowerShell `Get-FileHash` result with the matching filename in the release's [SHA256SUMS.txt](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/SHA256SUMS.txt).
 
-Linux has a separate beta and installation guide. [Linux beta](README-LINUX.md)
+Linux builds (AppImage, .deb, .rpm, Flatpak and .tar.gz) are published as separate releases marked UNTESTED until they have been run on a real machine. [Linux guide](README-LINUX.md)
 
 ## Run your first monitor
 
