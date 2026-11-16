@@ -8,7 +8,11 @@ No planned feature work. Fix reported bugs, security problems, data-loss risks a
 
 ## Linux: maintenance mode
 
-Linux 1.16.0 (2026-11-13) matches the Windows v1.19.32 baseline: Quiet Precision, the connected map, the List and host actions, priority alarms, staged Settings and data tools, plus AppImage, .deb, .rpm, .tar.gz and Flatpak packages. Same maintenance policy as Windows. Linux releases stay separate UNTESTED pre-releases until Joseph runs one; the checks that need a real desktop are listed in [linux/ROADMAP.md](linux/ROADMAP.md).
+Linux 1.16.0 (2026-11-13) established parity with Windows v1.19.32; Linux 1.16.1 followed on 2026-11-14. Joseph accepted Linux after a full day of real-device use on 2026-11-16. The Linux app includes: Quiet Precision, the connected map, the List and host actions, priority alarms, staged Settings and data tools, plus AppImage, .deb, .rpm, .tar.gz and Flatpak packages. Same maintenance policy as Windows. Older Linux UNTESTED releases retain their historical labels. Future tested release publication follows the standards; acceptance limits are documented in [TESTING.md](TESTING.md).
+
+## Final combined release — pending
+
+Issue [#47](https://github.com/JPLuker/Ping-Watchdog/issues/47) tracks a single Windows-and-Linux release. Do not mark it complete until verified assets, checksums, update feeds and release flags are published. The website now lists both operating systems, with Linux downloads pointing to the releases index until final links exist.
 
 ## Completed release work
 
