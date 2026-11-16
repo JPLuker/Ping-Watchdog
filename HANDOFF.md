@@ -10,7 +10,7 @@ Ping Watchdog watches IP addresses and hostnames with ICMP ping, grouped by site
 - Ask before any visual change beyond Quiet Precision as recorded in AGENTS.md → Identity.
 - Every push bumps the version; passing pushes to `main` publish a release Joseph updates to from the app.
 - Proof before claims: tests plus captures you've looked at. The validation workflow prints captures to its log (`REVIEW_IMAGE_BEGIN…`); artifacts aren't reachable from the agent sandbox.
-- Proprietary license stays. Windows and Linux code stay separate; Linux releases stay UNTESTED pre-releases until Joseph runs one.
+- Proprietary license stays. Windows and Linux code stay separate; Linux was accepted after full-day use on 2026-11-16; previously published UNTESTED releases retain their historical labels.
 
 ## Linux in line, then maintenance (2026-11-13)
 
@@ -26,7 +26,7 @@ Joseph: "Ping Watchdog just needs its linux build in line then it's going into m
 
 **1.16.1 (2026-11-14):** Joseph's first Lappy note, "I couldn't edit the label" in Quick Add: preview rows now have Address, Label and Group text boxes (`PreviewRow` notifies; `Validate()` re-checks rows on edit, separate from `Parse()`). Status colors repaint on a theme switch.
 
-**Next:** Joseph installs the .deb (or AppImage) on Lappy and runs the five checks in issue #46. If it holds, the next Linux version ships as a tested release and the landing page can offer Linux.
+**Acceptance:** On 2026-11-16 Joseph confirmed a full day of Linux use and approved maintenance mode. Issue #46 is closed. The exact Linux package and desktop environment were not individually recorded. The landing page now offers a Linux releases link; the combined final release is tracked in issue #47.
 
 ## Maintenance baseline (2026-11-13)
 
@@ -34,7 +34,7 @@ Joseph: "Ping Watchdog just needs its linux build in line then it's going into m
 
 #42/#43 fixes are in `AdaptiveTopology.cs`: measure complete captions, give busy site rows more height, then scale the map and hit regions together. Validation run 43212934329 passed; the previous renderer failed with 0/68 addresses. Light/dark captures were reviewed. Release run 43213403550 succeeded, and all seven release assets were verified present. Source: `4c0cd57ad32976fe30775571877d5100e3d9dd0a`.
 
-Private vulnerability reporting is enabled: the public Security page exposes Report a vulnerability (verified 2026-11-13). No new monitoring features, styling passes or general refactors are planned. Handle new/reopened bugs and security reports. Linux remains separate.
+Private vulnerability reporting is enabled: the public Security page exposes Report a vulnerability (verified 2026-11-13). No new monitoring features, styling passes or general refactors are planned. Handle new/reopened bugs and security reports. Linux artifacts remain in their original releases until a verified combined release is published.
 
 `TESTING.md` records acceptance and its limits. Do not claim fresh-install, every DPI, Narrator or backup/restore device coverage from the general full-day test. Third-party notices remain bundled; no license or third-party contractual terms were changed.
 
@@ -56,6 +56,7 @@ Standards pass, released as **1.19.29** (features and look) and **1.19.30** (cod
 
 ## What's next
 
+- **Final combined release:** Issue #47 tracks packaging and verified publication of Windows and Linux assets in one release; do not claim this is published until the release exists and checksums are verified.
 - **1.19.30:** `Program.cs` is now `Program`, `Models`, `HostDialogs`, `MainForm` and `MainForm.*.cs` feature partials (Sites, Organization, Monitoring, History, WallboardBridge, SettingsBridge, Updates, PingLog, LegacyGridMenu, SelfTests, UiSmokeTest). `WallboardCanvas.cs` split from `WallboardForm.cs`. `DesignChecks.cs` runs in the UI smoke test. The smoke test also renders `page-map-*` / `page-list-*` (example network, monitoring) used for `docs/` and README screenshots. Landing page CSS uses the Quiet Precision tokens.
 
 **Next:** respond to new/reopened issues under SUPPORT.md.
