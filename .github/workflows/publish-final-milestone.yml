@@ -1,0 +1,119 @@
+name: Publish accepted Windows and Linux 1.0 milestone
+
+# Copies the already-published binaries. Does not rebuild, modify, or move either update feed.
+# The milestone is intentionally not "Latest": Windows Velopack uses the existing
+# v1.19.32 release, and Linux's existing v1.16.1 channel remains untouched.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ping-watchdog-final-milestone
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      WIN_TAG: v1.19.32
+      LINUX_TAG: v1.16.1-untested-linux
+      FINAL_TAG: final-1.0
+    steps:
+      - name: Fetch and validate published release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh api "repos/$REPO/releases/tags/$WIN_TAG" > windows.json
+          gh api "repos/$REPO/releases/tags/$LINUX_TAG" > linux.json
+          python3 - <<'PY'
+          import json
+          w=json.load(open('windows.json'))
+          l=json.load(open('linux.json'))
+          expected={
+            'windows': ['PingWatchdog-win-Setup.exe','PingWatchdog-win-Portable.zip'],
+            'linux': [f'PingWatchdog-1.16.1-Linux-x64.{ext}' for ext in ('AppImage','deb','rpm','flatpak','tar.gz')]
+          }
+          for kind, release in (('windows',w),('linux',l)):
+            assets={a['name']:a for a in release['assets']}
+            for name in expected[kind]:
+              a=assets.get(name)
+              if not a or a['size']<=0 or not a.get('digest','').startswith('sha256:'):
+                raise SystemExit(f'Missing, empty or unverified asset: {kind}/{name}')
+          with open('manifest.tsv','w') as f:
+            for kind,release in (('windows',w),('linux',l)):
+              assets={a['name']:a for a in release['assets']}
+              for name in expected[kind]:
+                a=assets[name]
+                f.write(f"{release['tag_name']}\t{name}\t{a['digest'][7:]}\n")
+          PY
+          while IFS=$'\t' read -r tag name digest; do
+            gh release download "$tag" --repo "$REPO" --pattern "$name" --dir dist
+            printf '%s  %s\n' "$digest" "dist/$name" | sha256sum --check --status
+            test -s "dist/$name"
+          done < manifest.tsv
+          (cd dist && sha256sum PingWatchdog* > SHA256SUMS.txt)
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 8
+
+      - name: Prepare notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<'EOF'
+          # Ping Watchdog — 1.0 Final
+
+          The feature-complete Ping Watchdog desktop app is accepted for Windows and Linux and is now in maintenance mode.
+
+          **Accepted application versions:** Windows v1.19.32; Linux v1.16.1. This is a distribution milestone, not an application version downgrade. These files are copies of previously published builds; the original update releases remain in place.
+
+          **Windows:** Installer and portable ZIP are available below. The installer is unsigned; Windows SmartScreen may warn.
+
+          **Linux:** AppImage, .deb, .rpm, Flatpak and .tar.gz are available below. Packages are unsigned. Linux was accepted after a full day of real-device use on November 16, 2026; individual package formats were not all separately documented as tested.
+
+          Verify your download with SHA256SUMS.txt.
+
+          ## Downloads
+          **Windows:** PingWatchdog-win-Setup.exe (installer) · PingWatchdog-win-Portable.zip (portable)
+
+          **Linux:** PingWatchdog-1.16.1-Linux-x64.AppImage · .deb · .rpm · .flatpak · .tar.gz
+
+          For automatic updates, the original [Windows release](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.19.32) and [Linux release](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.16.1-untested-linux) remain unchanged.
+          EOF
+
+      - name: Publish combined milestone without replacing updater latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$FINAL_TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::error::The final milestone tag already exists; refusing to overwrite release assets."
+            exit 1
+          fi
+          gh release create "$FINAL_TAG" dist/* --repo "$REPO" --target "${{ github.sha }}" \
+            --title "Ping Watchdog — 1.0 Final (Windows + Linux)" \
+            --notes-file release-notes.md --latest=false
+
+      - name: Verify published release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/releases/tags/$FINAL_TAG" > final.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('final.json'))
+          assert not j['draft'] and not j['prerelease']
+          assert len(j['assets']) == 8
+          assert all(a['size']>0 for a in j['assets'])
+          assets={a['name']:a for a in j['assets']}
+          for line in open('manifest.tsv'):
+            _,name,digest=line.rstrip('\n').split('\t')
+            assert assets[name]['digest'].lower()==('sha256:'+digest).lower(),name
+          assert 'SHA256SUMS.txt' in assets
+          print('Verified final release assets and original SHA256 digests.')
+          PY
+          latest="$(gh api "repos/$REPO/releases/latest" --jq .tag_name)"
+          test "$latest" != "$FINAL_TAG" || { echo "::error::Milestone must not replace the updater's Latest release"; exit 1; }
+          echo "Final milestone: https://github.com/$REPO/releases/tag/$FINAL_TAG"
