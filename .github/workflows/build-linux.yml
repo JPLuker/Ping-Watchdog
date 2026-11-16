@@ -7,7 +7,9 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - "linux/**"
+      - "linux/PingWatchdog.Linux/**"
+      - "linux/build-packages.sh"
+      - "linux/RELEASE-NOTES.md"
       - "HostImport.cs"
       - "DisplayTime.cs"
       - "Assets/**"
@@ -51,7 +53,7 @@ jobs:
             if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then published=1; fi
           done
           if [[ $published == 0 ]]; then exit 0; fi
-          app=$(git diff --name-only HEAD~1 HEAD | grep -Ev '^\.github/' | grep -E '^(linux/|HostImport\.cs$|DisplayTime\.cs$|Assets/|default\.pingwatch\.json$|LICENSE$|tools/)' || true)
+          app=$(git diff --name-only HEAD~1 HEAD | grep -Ev '^\.github/' | grep -E '^(linux/PingWatchdog\.Linux/|linux/build-packages\.sh$|linux/RELEASE-NOTES\.md$|HostImport\.cs$|DisplayTime\.cs$|Assets/|default\.pingwatch\.json$|LICENSE$|tools/)' || true)
           if [[ -n "$app" ]]; then
             echo "::error::v$version is already published for Linux but app files changed: $app. Increment Version in linux/PingWatchdog.Linux/PingWatchdog.Linux.csproj."
             exit 1
