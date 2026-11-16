@@ -4,7 +4,7 @@ Ping Watchdog for Windows (repo root, WinForms) and Linux (`linux/`, Avalonia). 
 
 ## Current scope
 
-Both platforms are in maintenance mode. Windows v1.19.32 is the accepted baseline (2026-11-13). Linux 1.16.0 (2026-11-13) matches it; Linux releases are published as separate UNTESTED pre-releases until Joseph runs one. Respond to new/reopened bugs and security issues; no planned features or general redesign/refactor work. See TESTING.md for acceptance limits.
+Both platforms are in maintenance mode. Windows v1.19.32 is the accepted baseline (2026-11-13). Linux v1.16.1 was accepted after Joseph's full-day Linux test on 2026-11-16. Historical UNTESTED release labels remain as published. Respond to new/reopened bugs and security issues; no planned features or general redesign/refactor work. See TESTING.md for acceptance limits.
 
 ## Read first, every session
 
@@ -52,6 +52,6 @@ From the standards' defaults, on purpose. Don't "fix" these.
 
 - **Desktop type:** the Linux desktop's own UI font (Quiet Precision B7 allows it for native apps) and a monospace fallback list for addresses and logs (`Tokens.Mono`). Geist isn't bundled.
 - **Separate version line:** Linux is 1.16.x and Windows 1.19.x. Tags never collide (`vX-untested-linux`).
-- **Untested Linux releases:** every Linux build ships as `UNTESTED — Linux builds for vX`, a pre-release that is never Latest, with the RELEASES.md 2.3 warning. When Joseph confirms a build, the next version ships as a tested Linux release (RELEASES.md 2.5) and the landing page can offer Linux.
+- **Untested Linux releases:** every Linux build ships as `UNTESTED — Linux builds for vX`, a pre-release that is never Latest, with the RELEASES.md 2.3 warning. Joseph confirmed full-day Linux acceptance on 2026-11-16. Future Linux releases follow RELEASES.md 2.5 for tested publication; do not relabel old assets without verification.
 - **Updates by package:** only the AppImage updates itself (Velopack `linux` channel). The .deb, .rpm, .tar.gz and Flatpak say where updates come from. Velopack's feed files keep their names (`releases.linux.json`, `PingWatchdog-X-linux-full.nupkg`, `-delta.nupkg`) because installed AppImages look for them; every other asset follows RELEASES.md Part 5.
 - **Linux equivalents:** Ping in terminal instead of a command window; an XDG autostart entry instead of the Run key; `notify-send` and `pw-play`/`paplay` for alerts. No portable-storage mode, no Export monitoring batch (a Windows .bat), and no Loading cover.
