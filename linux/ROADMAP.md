@@ -4,7 +4,7 @@
 
 From 1.16.0 (2026-11-13) the Linux build matches the accepted Windows v1.19.32 baseline and joins it in maintenance mode: no planned features, but reported bugs, security problems, data-loss risks and compatibility regressions get fixed. Joseph chose full parity before maintenance: "Ping Watchdog just needs its linux build in line then it's going into maintenance mode."
 
-Linux releases ship as separate **UNTESTED** pre-releases until a person has installed and run that build (RELEASES.md Part 2). When Joseph confirms a build on his machine, the next version is published as a tested Linux release and that confirmation is recorded in [TESTING.md](../TESTING.md).
+Joseph accepted Linux after a full day of real-device use on 2026-11-16. Older releases marked **UNTESTED** retain their historical publication status. Future Linux releases follow the tested-release promotion requirements in RELEASES.md Part 2.5; see [TESTING.md](../TESTING.md) for evidence and limits. The combined Windows/Linux final release is tracked in [issue #47](https://github.com/JPLuker/Ping-Watchdog/issues/47).
 
 ## Fixed after release
 
@@ -22,9 +22,9 @@ Linux releases ship as separate **UNTESTED** pre-releases until a person has ins
 - The Windows `HostDetails` configuration shape, so options survive moving between builds.
 - AppImage (self-updating), .deb, .rpm, .tar.gz and Flatpak with standard names, notices, checksums and a required-asset check.
 
-## Waiting on a real machine
+## Specific device checks not individually documented
 
-These need a person on a Linux desktop; CI can't certify them. One pass on Lappy (elementary OS) covers most:
+The full-day Linux acceptance is recorded, but it did not itemize each of these integration checks. They remain useful for regression investigations:
 
 1. Install the .deb, open Ping Watchdog from the app menu, add a few hosts, start monitoring.
 2. Let a host go offline: notification, priority alarm sound, Acknowledge.
