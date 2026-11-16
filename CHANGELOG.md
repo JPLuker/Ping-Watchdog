@@ -1,6 +1,10 @@
 # Changelog
 
-Selected changes in recent releases. Linux releases are published separately and marked UNTESTED until a person has run them. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
+Selected changes in recent releases. Older Linux releases labeled UNTESTED retain their historical publication labels. Linux was accepted after full-day real-device use on 2026-11-16. [Full release history](https://github.com/JPLuker/Ping-Watchdog/releases)
+
+## Maintenance acceptance — 2026-11-16
+- Joseph completed a full day of Linux testing and accepted Ping Watchdog for maintenance alongside Windows.
+- Documentation records acceptance; no application binary or published release asset was changed.
 
 ## Linux [1.16.1] — 2026-11-14
 ### Fixed
