@@ -2,7 +2,7 @@
 
 Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices by site, watch missed replies become outages, and see when a host recovers. A device that blocks ICMP can appear offline even while its services are running.
 
-**Ping Watchdog is in maintenance mode.** Windows v1.19.32 is the accepted baseline, and Linux 1.16.0 matches it. Bugs, security issues and compatibility fixes remain supported; no new features are planned.
+**Ping Watchdog is in maintenance mode.** Windows v1.19.32 is the accepted baseline, and Linux v1.16.1 has also been accepted after a full day of real-device use on 2026-11-16. Bugs, security issues and compatibility fixes remain supported; no new features are planned.
 
 ## Download
 
@@ -10,7 +10,7 @@ Ping Watchdog monitors IP addresses and hostnames with ICMP ping. Group devices 
 
 For Windows x64, run the [installer](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Setup.exe) or extract the [portable ZIP](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/PingWatchdog-win-Portable.zip) and open `PingWatchdog.exe`. Both include the .NET runtime. The Windows builds are unsigned. To verify a download, compare its PowerShell `Get-FileHash` result with the matching filename in the release's [SHA256SUMS.txt](https://github.com/JPLuker/Ping-Watchdog/releases/latest/download/SHA256SUMS.txt).
 
-Linux builds (AppImage, .deb, .rpm, Flatpak and .tar.gz) are published as separate releases marked UNTESTED until they have been run on a real machine. [Linux guide](README-LINUX.md)
+Linux builds are available as AppImage, .deb, .rpm, Flatpak and .tar.gz. Joseph accepted Linux after a full day of use on 2026-11-16. Older releases carrying an UNTESTED label retain that historical label; check the [releases page](https://github.com/JPLuker/Ping-Watchdog/releases) for the latest published Linux package. [Linux guide](README-LINUX.md)
 
 ## Run your first monitor
 
@@ -65,7 +65,7 @@ Turn off automatic checks in **Settings → Updates**. To remove active saved da
 
 Use **Check for updates** in the sidebar or **Settings → Updates**. When automatic checks are enabled, Ping Watchdog checks at most once a day and downloads available updates in the background. Choose **Restart now** to apply a downloaded update, or **Later** to keep working. A failed restart offers **Retry restart**. An organization policy can disable update checks.
 
-For a problem report, include the version from **Settings → About**, your Windows version and the steps that reproduce it. You can review diagnostic information in About before copying it. [Report an issue](https://github.com/JPLuker/Ping-Watchdog/issues) · [Changelog](CHANGELOG.md)
+Issues are monitored. Report bugs or request features at [GitHub Issues](https://github.com/JPLuker/Ping-Watchdog/issues/new/choose). For a problem report, include the version from **Settings → About**, your Windows version and the steps that reproduce it. You can review diagnostic information in About before copying it. [Report an issue](https://github.com/JPLuker/Ping-Watchdog/issues) · [Changelog](CHANGELOG.md)
 
 For support, maintenance scope and private security reporting, see the project policies. [Support](SUPPORT.md) · [Security](SECURITY.md) · [Third-party notices](THIRD-PARTY-NOTICES.md)
 
