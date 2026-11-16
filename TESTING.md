@@ -1,8 +1,8 @@
 # Testing and acceptance
 
-## Linux 1.16.0: automated only, not yet run by a person
+## Linux acceptance: 2026-11-16
 
-Linux releases are published as separate UNTESTED pre-releases until Joseph installs and runs one (RELEASES.md Part 2). No person has run 1.16.0 yet. The device checks are in issue #46.
+Joseph reported completing a full day of Linux testing and confirmed the application was good to finish. This is real-device user acceptance for the Linux application, following the Linux 1.16.1 changes documented in CHANGELOG.md. The exact package, desktop environment and results of each individual check in issue #46 were not supplied. Do not represent every specific integration check as individually verified. The historical 1.16.0 UNTESTED release label remains a record of its publication status.
 
 What CI proved (validation run [43540639276](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43540639276), release run [43541098084](https://github.com/JPLuker/Ping-Watchdog/actions/runs/43541098084), published as [v1.16.0-untested-linux](https://github.com/JPLuker/Ping-Watchdog/releases/tag/v1.16.0-untested-linux)):
 
@@ -10,7 +10,7 @@ What CI proved (validation run [43540639276](https://github.com/JPLuker/Ping-Wat
 - The real windows under Xvfb at 100%, 150% and 200% render scale and under headless Weston (native Wayland): map fit and whole addresses (including a crowded 30-host site), List filters, search and columns, host menus, Undo, dialogs, staged Settings, appearance switching, History, Organize sites, the Wallboard, the priority bar, the update popup and tray fallback. Light and dark captures were reviewed.
 - Packages: the AppImage's own self-test and desktop suite; the .deb installed with apt, run and removed; the .rpm's binary byte-identical to the tested build and run; the .tar.gz run from its folder; the Flatpak installed and run in its sandbox.
 
-Not established by CI:
+Not established by CI (and not individually itemized in the full-day user acceptance):
 
 - Real desktop integration on elementary OS, GNOME or KDE: tray icon, notifications, the alarm sound, sign-in autostart, the app-menu entry and icon.
 - An AppImage update from one Linux release to the next on a real machine.
