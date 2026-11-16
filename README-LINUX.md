@@ -2,11 +2,11 @@
 
 The Linux build is a native Avalonia app with the same look and features as the Windows app: Map, List, Wallboard, Outage history and Settings, in light and dark. It reads and writes the same `.pingwatch.json` configuration, so you can move sites and hosts between the two.
 
-**Status:** the Linux build is in maintenance mode alongside Windows. Each Linux release is published as a separate **UNTESTED** pre-release until it has been installed and run on a real machine ([RELEASES.md Part 2](https://github.com/JPLuker/InternalDesignGuidelines/blob/main/RELEASES.md)).
+**Status:** Linux is accepted for maintenance following Joseph's full-day real-device test on 2026-11-16. The latest documented Linux version is 1.16.1. Older release assets labeled UNTESTED retain their historical designation; acceptance does not retroactively rename or republish them. Future releases must pass their own release checks.
 
 ## Download
 
-Open the newest release whose title starts with **UNTESTED — Linux builds** on the [releases page](https://github.com/JPLuker/Ping-Watchdog/releases). Every file is 64-bit x86 (`x64`) and includes the .NET runtime.
+Find the Linux assets on the [releases page](https://github.com/JPLuker/Ping-Watchdog/releases). Some older Linux releases are labeled UNTESTED because that was their status when published. Every file is 64-bit x86 (`x64`) and includes the .NET runtime.
 
 | File | Use it when | Updates |
 | --- | --- | --- |
